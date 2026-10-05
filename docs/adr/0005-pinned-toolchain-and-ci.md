@@ -1,0 +1,3 @@
+# Pinned Go toolchain and CI without CD
+
+The Go version is pinned by the `go` directive in `go.mod`, and CI reads it via `go-version-file` so local and CI cannot drift. `go.sum` is committed. Front-end assets (HTMX, Chart.js) will be vendored into the repo at a fixed version rather than loaded from a CDN, so the Pi works offline and there is no JS build chain (ADR 0004). CI (GitHub Actions) runs gofmt, `go vet`, the tests, and a CGO-free `linux/arm64` build for the Raspberry Pi 4 running Pi OS 64-bit. We chose no continuous deployment: the Pi is reachable only over Tailscale (ADR 0003), so deploying stays a manual binary copy plus systemd restart.

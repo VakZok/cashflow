@@ -21,3 +21,9 @@ database, driven through `httptest`. Add new tests with the helpers in
 - `cmd/moneymanager` – entry point
 - `internal/store` – SQLite access and versioned migrations (`migrations/NNNN_name.sql`, applied in order at startup, version kept in `PRAGMA user_version`)
 - `internal/web` – routes, handlers, `html/template` templates (`templates/`)
+
+## Toolchain and CI
+
+The Go version is pinned in `go.mod` (see ADR 0005). CI runs gofmt, vet, tests and a Pi build on every push and pull request. Build for the Raspberry Pi 4 (Pi OS 64-bit):
+
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o moneymanager ./cmd/moneymanager
