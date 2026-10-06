@@ -52,3 +52,38 @@ jobs:
         with:
           go-version-file: go.mod
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /dev/null ./cmd/moneymanager
+
+  deps:
+    name: deps (go mod tidy + verify)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go mod tidy
+      - name: go.mod and go.sum must be tidy
+        run: git diff --exit-code go.mod go.sum
+      - run: go mod verify
+
+  report-failure:
+    name: report (weekly failure issue)
+    needs: [style, test, security, build, deps]
+    if: ${{ always() && github.event_name == 'schedule' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      TITLE: Scheduled CI run failed
+    steps:
+      - name: Open an issue, or comment on the open one
+        run: |
+          existing=$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --title "$TITLE" --label needs-triage --body "The weekly scheduled CI run failed: $RUN_URL"
+          fi
