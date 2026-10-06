@@ -31,7 +31,7 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	if err := migrate(db, migrationFS); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	return &Store{db: db}, nil
@@ -72,11 +72,11 @@ func migrate(db *sql.DB, fsys fs.FS) error {
 			return err
 		}
 		if _, err := tx.Exec(string(body)); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("%s: %w", name, err)
 		}
 		if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d", version)); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("%s: %w", name, err)
 		}
 		if err := tx.Commit(); err != nil {

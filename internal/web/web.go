@@ -41,7 +41,7 @@ func New(cfg Config) (*App, error) {
 	}
 	tmpl, err := template.New("").Funcs(template.FuncMap{"euro": formatEuro}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
-		st.Close()
+		_ = st.Close()
 		return nil, err
 	}
 	a := &App{store: st, tmpl: tmpl, now: cfg.Now, mux: http.NewServeMux()}

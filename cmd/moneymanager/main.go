@@ -18,7 +18,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer app.Close()
+	defer func() { _ = app.Close() }()
 
 	log.Printf("listening on http://%s (db: %s)", *addr, *dbPath)
 	log.Fatal(http.ListenAndServe(*addr, app.Handler()))

@@ -44,7 +44,7 @@ func (ta *testApp) start() {
 
 func (ta *testApp) stop() {
 	if ta.app != nil {
-		ta.app.Close()
+		_ = ta.app.Close()
 		ta.app = nil
 	}
 }
@@ -67,7 +67,7 @@ func (ta *testApp) do(req *http.Request) response {
 	rec := httptest.NewRecorder()
 	ta.app.Handler().ServeHTTP(rec, req)
 	res := rec.Result()
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	b, err := io.ReadAll(res.Body)
 	if err != nil {
 		ta.t.Fatalf("read body: %v", err)

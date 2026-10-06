@@ -66,7 +66,7 @@ func (s *Store) ListTransactions() ([]TransactionRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []TransactionRow
 	for rows.Next() {
 		var r TransactionRow
@@ -106,7 +106,7 @@ func (s *Store) listNamed(table string) ([]Named, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []Named
 	for rows.Next() {
 		var n Named
