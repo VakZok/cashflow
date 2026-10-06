@@ -2,6 +2,20 @@
 
 Personal finance manager; purposefully simple
 
+## Features
+
+- less features (you read that right)
+- integer only tracking (who needs cents anyways)
+- each transaction has a main and a subcategory for more granular tracking
+- track how much you invest and divest
+
+## Divestments are built different (always two "transactions")
+
+Given 100€ invested:
+
+- sold with gain of 20€ -> 100€ divestment, 20€ income
+- sold with loss of 20€ -> 100€ divestment, 20€ expense
+
 ## Run
 
 ```zsh

@@ -8,6 +8,10 @@ Branch protection is not enforced while the repo is private on the Free plan, so
 
 Storage tests use real SQLite (in-memory or a temp file), not mocks, as long as they stay fast.
 
+## Working location
+
+Stay inside the project folder. Never create directories, worktrees, or notes outside it. Git worktrees go in `.worktrees/` (excluded via `.git/info/exclude`), agent notes in `.worktrees/notes/`. Only use `unsandboxed` for git metadata writes, never to write outside the project.
+
 ## Agent skills
 
 ### Issue tracker
