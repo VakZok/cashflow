@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/VakZok/money_manager_app/internal/store"
 )
@@ -121,15 +122,25 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		NewSubcategory: strings.TrimSpace(r.PostFormValue("new_subcategory")),
 	}
 
-	if _, err := time.Parse(dateLayout, form.Date); err != nil {
+	if d, err := time.Parse(dateLayout, form.Date); err != nil {
 		form.Errors = append(form.Errors, "Date must be in the format YYYY-MM-DD.")
+	} else if f := d.Format(dateLayout); f < store.MinDate || f > store.MaxDate {
+		form.Errors = append(form.Errors, "Date must be between 2000 and 2200.")
 	}
 	amount, err := strconv.ParseInt(form.Amount, 10, 64)
-	if !wholeNumber.MatchString(form.Amount) || err != nil || amount <= 0 {
-		form.Errors = append(form.Errors, "Amount must be a whole number of euros greater than zero.")
+	if !wholeNumber.MatchString(form.Amount) || err != nil || amount < 1 || amount > store.MaxAmount {
+		form.Errors = append(form.Errors, "Amount must be a whole number of euros between 1 and 100.000.000.")
 	}
 	if form.Description == "" {
 		form.Errors = append(form.Errors, "Description is required.")
+	} else if utf8.RuneCountInString(form.Description) > store.MaxDescriptionLen {
+		form.Errors = append(form.Errors, "Description must be at most 100 characters.")
+	}
+	if utf8.RuneCountInString(form.NewCategory) > store.MaxNameLen {
+		form.Errors = append(form.Errors, "Category name must be at most 50 characters.")
+	}
+	if utf8.RuneCountInString(form.NewSubcategory) > store.MaxNameLen {
+		form.Errors = append(form.Errors, "Subcategory name must be at most 50 characters.")
 	}
 	catOK, err := a.validChoice(form.Category, form.NewCategory, a.store.CategoryExists)
 	if err != nil {

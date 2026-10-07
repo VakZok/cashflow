@@ -16,10 +16,10 @@ Given 100€ invested:
 - sold with gain of 20€ -> 100€ divestment, 20€ income
 - sold with loss of 20€ -> 100€ divestment, 20€ expense
 
-## Run
+## Run (compiled binary)
 
 ```zsh
-go run ./cmd/moneymanager -addr 127.0.0.1:47613 -db money_manager.db
+./moneymanager -addr 0.0.0.0:47613 -db money_manager.db
 ```
 
 The SQLite database is created and migrated on startup.

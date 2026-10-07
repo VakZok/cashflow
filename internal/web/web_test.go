@@ -71,20 +71,78 @@ func TestPastAndFutureDatesAreAccepted(t *testing.T) {
 }
 
 func TestInvalidAmountsAreRejectedWithMessage(t *testing.T) {
-	for _, amount := range []string{"0", "-5", "12.50", "12,50", "abc", ""} {
+	for _, amount := range []string{"0", "-5", "+5", "12.50", "12,50", "1.000", "1e3", "0x10", "５", "abc", "", "100000001", "99999999999999999999"} {
 		t.Run("amount="+amount, func(t *testing.T) {
 			ta := newTestApp(t)
 			r := ta.post("/transactions", expenseForm("2026-10-05", amount, "Lunch", "new", "Food", "new", "Restaurant"))
 			if r.Status != http.StatusUnprocessableEntity {
 				t.Fatalf("status %d, want 422", r.Status)
 			}
-			if !strings.Contains(r.Body, "Amount must be a whole number of euros greater than zero") {
+			if !strings.Contains(r.Body, "Amount must be a whole number of euros between 1 and 100.000.000") {
 				t.Errorf("missing amount message in:\n%s", r.Body)
 			}
 			if strings.Contains(ta.get("/").Body, "Lunch") {
 				t.Error("rejected expense was stored")
 			}
 		})
+	}
+}
+
+func TestAmountBoundsAreInclusive(t *testing.T) {
+	ta := newTestApp(t)
+	for _, amount := range []string{"1", "100000000"} {
+		r := ta.post("/transactions", expenseForm("2026-10-05", amount, "Big", "new", "Misc", "new", "Other"))
+		if r.Status != http.StatusSeeOther {
+			t.Errorf("amount %s: status %d, want 303", amount, r.Status)
+		}
+	}
+}
+
+func TestDateRangeIsInclusive(t *testing.T) {
+	ta := newTestApp(t)
+	for _, date := range []string{"2000-01-01", "2200-12-31"} {
+		r := ta.post("/transactions", expenseForm(date, "5", "Edge", "new", "Misc", "new", "Other"))
+		if r.Status != http.StatusSeeOther {
+			t.Errorf("date %s: status %d, want 303", date, r.Status)
+		}
+	}
+	for _, date := range []string{"1999-12-31", "2201-01-01", "0001-01-01", "9999-12-31", "2026-13-01", "2026-00-10", "2026-10-00", "2026-10-32", "2026-04-31", "2025-02-29"} {
+		r := ta.post("/transactions", expenseForm(date, "5", "Edge", "new", "Misc", "new", "Other"))
+		if r.Status != http.StatusUnprocessableEntity {
+			t.Errorf("date %s: status %d, want 422", date, r.Status)
+		}
+	}
+}
+
+func TestTextLengthLimits(t *testing.T) {
+	ta := newTestApp(t)
+	ok := strings.Repeat("ä", 50) // limits count characters, not bytes
+	r := ta.post("/transactions", expenseForm("2026-10-05", "5", strings.Repeat("d", 100), "new", ok, "new", ok))
+	if r.Status != http.StatusSeeOther {
+		t.Fatalf("at-limit values: status %d, want 303", r.Status)
+	}
+	cases := map[string]url.Values{
+		"description": expenseForm("2026-10-05", "5", strings.Repeat("d", 101), "new", "A", "new", "B"),
+		"category":    expenseForm("2026-10-05", "5", "x", "new", strings.Repeat("a", 51), "new", "B"),
+		"subcategory": expenseForm("2026-10-05", "5", "x", "new", "A", "new", strings.Repeat("b", 51)),
+	}
+	for name, form := range cases {
+		if r := ta.post("/transactions", form); r.Status != http.StatusUnprocessableEntity {
+			t.Errorf("%s too long: status %d, want 422", name, r.Status)
+		}
+	}
+}
+
+func TestHostileInputIsStoredAsPlainTextAndEscaped(t *testing.T) {
+	ta := newTestApp(t)
+	evil := "x'); DROP TABLE transactions;--"
+	ta.post("/transactions", expenseForm("2026-10-05", "5", evil, "new", "<script>alert(1)</script>", "new", "B"))
+	body := ta.get("/").Body
+	if strings.Contains(body, "<script>alert(1)</script>") {
+		t.Error("category name rendered unescaped")
+	}
+	if !strings.Contains(body, "DROP TABLE transactions") {
+		t.Error("transactions table or row lost")
 	}
 }
 

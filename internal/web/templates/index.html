@@ -29,10 +29,10 @@
   <input id="date" type="date" name="date" value="{{.Form.Date}}">
 
   <label for="amount">Amount (€)</label>
-  <input id="amount" type="text" inputmode="numeric" name="amount" value="{{.Form.Amount}}" autocomplete="off">
+  <input id="amount" type="text" inputmode="numeric" name="amount" maxlength="9" value="{{.Form.Amount}}" autocomplete="off">
 
   <label for="description">Description</label>
-  <input id="description" type="text" name="description" value="{{.Form.Description}}" autocomplete="off">
+  <input id="description" type="text" name="description" maxlength="100" value="{{.Form.Description}}" autocomplete="off">
 
   <label for="category">Category</label>
   <select id="category" name="category" onchange="document.getElementById('new_category').hidden = this.value !== 'new'">
@@ -40,7 +40,7 @@
     {{range .Categories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.Category}} selected{{end}}>{{.Name}}</option>{{end}}
     <option value="new"{{if eq .Form.Category "new"}} selected{{end}}>new…</option>
   </select>
-  <input id="new_category" type="text" name="new_category" placeholder="New category name" value="{{.Form.NewCategory}}"{{if ne .Form.Category "new"}} hidden{{end}}>
+  <input id="new_category" type="text" name="new_category" maxlength="50" placeholder="New category name" value="{{.Form.NewCategory}}"{{if ne .Form.Category "new"}} hidden{{end}}>
 
   <label for="subcategory">Subcategory</label>
   <select id="subcategory" name="subcategory" onchange="document.getElementById('new_subcategory').hidden = this.value !== 'new'">
@@ -48,7 +48,7 @@
     {{range .Subcategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.Subcategory}} selected{{end}}>{{.Name}}</option>{{end}}
     <option value="new"{{if eq .Form.Subcategory "new"}} selected{{end}}>new…</option>
   </select>
-  <input id="new_subcategory" type="text" name="new_subcategory" placeholder="New subcategory name" value="{{.Form.NewSubcategory}}"{{if ne .Form.Subcategory "new"}} hidden{{end}}>
+  <input id="new_subcategory" type="text" name="new_subcategory" maxlength="50" placeholder="New subcategory name" value="{{.Form.NewSubcategory}}"{{if ne .Form.Subcategory "new"}} hidden{{end}}>
 
   <button type="submit">Add Expense</button>
 </form>

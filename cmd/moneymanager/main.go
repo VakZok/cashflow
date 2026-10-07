@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:47613", "address to listen on")
+	addr := flag.String("addr", "0.0.0.0:47613", "address to listen on")
 	dbPath := flag.String("db", "money_manager.db", "path to the SQLite database file")
 	flag.Parse()
 
