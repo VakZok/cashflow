@@ -18,6 +18,10 @@ Stay inside the project folder. Never create directories, worktrees, or notes ou
 
 Go build cache must live inside the project under `.gocache/`. `.gocache/` is gitignored. Never request write access to outside the project.
 
+## Editing files
+
+Use the Edit/Write tools to change files. Do not use Python (or other scripts) for file edits.
+
 ## Agent skills
 
 ### Issue tracker
