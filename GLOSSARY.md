@@ -9,12 +9,9 @@ A single manually entered record of money moving, with a date, a whole-euro amou
 _Avoid_: Entry, booking, payment
 
 **Type**:
-The nature of a Transaction: Opening balance, Income, Expense, Investment, or Divestment.
+The nature of a Transaction: Income, Expense, Investment, or Divestment.
 _Avoid_: Kind
 
-**Opening balance**:
-The Type of the single Transaction that states the user's cash on its date, from which all later Transactions are counted. It is not Income and is excluded from Income and Expense reports.
-_Avoid_: Start, initial deposit
 
 **Income**:
 Money received (salary, gifts, investment profit).

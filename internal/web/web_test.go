@@ -522,15 +522,6 @@ func TestIncomeAndExpenseRejectHolding(t *testing.T) {
 	}
 }
 
-func TestOpeningBalanceIsRejectedUntilItHasItsOwnFlow(t *testing.T) {
-	ta := newTestApp(t)
-	f := expenseForm("2026-10-05", "5", "Start", "new", "A", "new", "B")
-	f.Set("type", "opening_balance")
-	if r := ta.post("/transactions", f); r.Status != http.StatusUnprocessableEntity {
-		t.Errorf("status %d, want 422", r.Status)
-	}
-}
-
 func TestFormOffersAllFourTypes(t *testing.T) {
 	body := newTestApp(t).get("/").Body
 	for _, v := range allTypes {
@@ -538,9 +529,7 @@ func TestFormOffersAllFourTypes(t *testing.T) {
 			t.Errorf("Type %s not offered", v)
 		}
 	}
-	if strings.Contains(body, `value="opening_balance"`) {
-		t.Error("opening balance offered before its ticket")
-	}
+
 }
 
 // The form groups are shown or hidden by Type on the server side (and by a

@@ -29,8 +29,7 @@ func open(t *testing.T) (*store.Store, *sql.DB) {
 
 // tx builds a Transaction that satisfies the per-Type field rules: Income and
 // Expense get a Category and Subcategory plus the description, Investment and
-// Divestment get a Holding and no description, Opening balance gets only the
-// description.
+// Divestment get a Holding and no description.
 func tx(t *testing.T, s *store.Store, date string, amount int64, desc, typ string) store.NewTransaction {
 	t.Helper()
 	n := store.NewTransaction{Date: date, Amount: amount, Description: desc, Type: typ}
@@ -88,8 +87,16 @@ func TestAmountConstraint(t *testing.T) {
 		}
 	}
 	// SQLite would happily store these in an INTEGER column without typeof().
+	cat, err := s.EnsureCategory("C")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub, err := s.EnsureSubcategory("S")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, a := range []any{"12,5", "abc", "1.5", 1.5, "", "-5", "5"} {
-		_, err := raw.Exec(`INSERT INTO transactions (date, amount, description, type) VALUES ('2026-10-05', ?, 'x', 'opening_balance')`, a)
+		_, err := raw.Exec(`INSERT INTO transactions (date, amount, description, type, category_id, subcategory_id) VALUES ('2026-10-05', ?, 'x', 'income', ?, ?)`, a, cat, sub)
 		if a == "5" {
 			// Numeric text is converted to an integer by column affinity: fine.
 			if err != nil {
@@ -133,7 +140,7 @@ func TestTextLengthConstraints(t *testing.T) {
 
 func TestTypeConstraint(t *testing.T) {
 	s, _ := open(t)
-	for _, typ := range []string{store.TypeOpeningBalance, store.TypeIncome, store.TypeExpense, store.TypeInvestment, store.TypeDivestment} {
+	for _, typ := range []string{store.TypeIncome, store.TypeExpense, store.TypeInvestment, store.TypeDivestment} {
 		if _, err := s.AddTransaction(tx(t, s, "2026-10-05", 5, "ok", typ)); err != nil {
 			t.Errorf("type %q rejected: %v", typ, err)
 		}
@@ -228,7 +235,6 @@ func TestTypeFieldRules(t *testing.T) {
 		{"divestment with category", "divestment", nil, 1, nil, 1, false},
 		{"divestment with subcategory", "divestment", nil, nil, 1, 1, false},
 		{"investment unknown holding", "investment", nil, nil, nil, 99, false},
-		{"opening balance unconstrained", "opening_balance", "x", nil, nil, nil, true},
 	}
 	for _, c := range cases {
 		err := insert(c.typ, c.desc, c.cat, c.sub, c.hld)
