@@ -7,11 +7,10 @@ import (
 
 // Transaction types, as stored in the database.
 const (
-	TypeOpeningBalance = "opening_balance"
-	TypeIncome         = "income"
-	TypeExpense        = "expense"
-	TypeInvestment     = "investment"
-	TypeDivestment     = "divestment"
+	TypeIncome     = "income"
+	TypeExpense    = "expense"
+	TypeInvestment = "investment"
+	TypeDivestment = "divestment"
 )
 
 // Limits enforced by the database (see migrations/0001_init.sql) and
