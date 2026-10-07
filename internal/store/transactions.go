@@ -124,7 +124,7 @@ func (s *Store) Breakdown(typ string, bySubcategory bool, from, to string) ([]Sl
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []Slice
 	for rows.Next() {
 		var sl Slice
