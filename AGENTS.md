@@ -12,6 +12,8 @@ Storage tests use real SQLite (in-memory or a temp file), not mocks, as long as 
 
 Stay inside the project folder. Never create directories, worktrees, or notes outside it. Git worktrees go in `.worktrees/` (excluded via `.git/info/exclude`), agent notes in `.worktrees/notes/`. Only use `unsandboxed` for git metadata writes, never to write outside the project.
 
+Go build cache must live inside the project under `.gocache/`. `.gocache/` is gitignored. Never request write access to outside the project.
+
 ## Agent skills
 
 ### Issue tracker
