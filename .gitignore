@@ -6,6 +6,9 @@
 *.sqlite
 *.sqlite3
 
+# Project-local Go build cache
+/.gocache/
+
 # Binaries
 /moneymanager
 /bin/

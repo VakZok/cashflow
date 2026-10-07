@@ -14,6 +14,17 @@ const (
 	TypeDivestment     = "divestment"
 )
 
+// Limits enforced by the database (see migrations/0001_init.sql) and
+// checked by the web layer first so users get a message instead of an error.
+const (
+	MaxAmount         = 100_000_000
+	MaxNameLen        = 50 // Category and Subcategory, in characters
+	MaxDescriptionLen = 100
+
+	MinDate = "2000-01-01"
+	MaxDate = "2200-12-31"
+)
+
 // Named is an entry of a flat named list (Category, Subcategory).
 type Named struct {
 	ID   int64
