@@ -339,3 +339,243 @@ func TestInvalidIncomeKeepsSelectedType(t *testing.T) {
 		t.Errorf("income not preselected:\n%s", r.Body)
 	}
 }
+
+// holdingForm builds an Investment or Divestment submission. holding is an
+// existing id or "new" together with the new name.
+func holdingForm(typ, date, amount, holding, newHolding string) url.Values {
+	return url.Values{
+		"type":        {typ},
+		"date":        {date},
+		"amount":      {amount},
+		"holding":     {holding},
+		"new_holding": {newHolding},
+	}
+}
+
+var allTypes = []string{"expense", "income", "investment", "divestment"}
+
+// validForm is a valid submission of the given Type; label ends up in the
+// Description (Income, Expense) or the new Holding's name (Investment,
+// Divestment).
+func validForm(typ, date, amount, label string) url.Values {
+	if typ == "investment" || typ == "divestment" {
+		return holdingForm(typ, date, amount, "new", label)
+	}
+	f := expenseForm(date, amount, label, "new", "Misc", "new", "Other")
+	f.Set("type", typ)
+	return f
+}
+
+func TestSharedValidationRunsForAllTypes(t *testing.T) {
+	for _, typ := range allTypes {
+		t.Run(typ, func(t *testing.T) {
+			ta := newTestApp(t)
+			for _, amount := range []string{"0", "-5", "12.50", "1e3", "abc", "", "100000001"} {
+				r := ta.post("/transactions", validForm(typ, "2026-10-05", amount, "Label"))
+				if r.Status != http.StatusUnprocessableEntity || !strings.Contains(r.Body, "Amount must be a whole number of euros") {
+					t.Errorf("amount %q: status %d", amount, r.Status)
+				}
+			}
+			for _, amount := range []string{"1", "100000000"} {
+				if r := ta.post("/transactions", validForm(typ, "2026-10-05", amount, "Label")); r.Status != http.StatusSeeOther {
+					t.Errorf("amount %s: status %d, want 303", amount, r.Status)
+				}
+			}
+			for _, date := range []string{"1999-12-31", "2201-01-01", "2026-13-01", "2026-02-30", "05/10/2026", ""} {
+				if r := ta.post("/transactions", validForm(typ, date, "5", "Label")); r.Status != http.StatusUnprocessableEntity {
+					t.Errorf("date %q: status %d, want 422", date, r.Status)
+				}
+			}
+			for _, date := range []string{"2000-01-01", "2200-12-31"} {
+				if r := ta.post("/transactions", validForm(typ, date, "5", "Label")); r.Status != http.StatusSeeOther {
+					t.Errorf("date %s: status %d, want 303", date, r.Status)
+				}
+			}
+		})
+	}
+}
+
+func TestInvestmentAndDivestmentShowInListWithHolding(t *testing.T) {
+	for typ, label := range map[string]string{"investment": "Investment", "divestment": "Divestment"} {
+		t.Run(typ, func(t *testing.T) {
+			ta := newTestApp(t)
+			r := ta.post("/transactions", holdingForm(typ, "2026-10-03", "1500", "new", "ETF World"))
+			if r.Status != http.StatusSeeOther || r.Location != "/" {
+				t.Fatalf("POST = %d -> %q, want 303 -> /", r.Status, r.Location)
+			}
+			body := ta.follow(r).Body
+			if !strings.Contains(body, "<span>ETF World</span>") || !strings.Contains(body, ">€1.500<") ||
+				!strings.Contains(body, "2026-10-03 · "+label+"</span>") {
+				t.Errorf("list entry wrong in:\n%s", body)
+			}
+		})
+	}
+}
+
+func TestHoldingsAreReusedAndMatchedCaseInsensitively(t *testing.T) {
+	ta := newTestApp(t)
+	ta.post("/transactions", holdingForm("investment", "2026-10-01", "100", "new", "ETF World"))
+	ta.post("/transactions", holdingForm("divestment", "2026-10-02", "50", "new", "etf WORLD"))
+	body := ta.get("/").Body
+	if n := strings.Count(strings.ToLower(body), `>etf world</option>`); n != 1 {
+		t.Errorf("Holding offered %d times, want 1", n)
+	}
+	id := optionValue(t, body, "holding", "ETF World")
+	if r := ta.post("/transactions", holdingForm("investment", "2026-10-03", "10", id, "")); r.Status != http.StatusSeeOther {
+		t.Fatalf("existing holding id: status %d, want 303", r.Status)
+	}
+	if n := strings.Count(ta.get("/").Body, "<span>ETF World</span>"); n != 3 {
+		t.Errorf("list shows ETF World %d times, want 3 (first spelling kept)", n)
+	}
+}
+
+func TestHoldingValidation(t *testing.T) {
+	cases := map[string]struct {
+		form url.Values
+		msg  string
+	}{
+		"missing":       {holdingForm("investment", "2026-10-05", "5", "", ""), "Holding is required."},
+		"empty new":     {holdingForm("investment", "2026-10-05", "5", "new", "  "), "Holding is required."},
+		"unknown id":    {holdingForm("divestment", "2026-10-05", "5", "999", ""), "Holding is required."},
+		"name too long": {holdingForm("investment", "2026-10-05", "5", "new", strings.Repeat("a", 51)), "Holding name must be at most 50 characters."},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			ta := newTestApp(t)
+			r := ta.post("/transactions", c.form)
+			if r.Status != http.StatusUnprocessableEntity || !strings.Contains(r.Body, c.msg) {
+				t.Errorf("status %d, want 422 with %q", r.Status, c.msg)
+			}
+		})
+	}
+	ta := newTestApp(t)
+	if r := ta.post("/transactions", holdingForm("investment", "2026-10-05", "5", "new", strings.Repeat("ä", 50))); r.Status != http.StatusSeeOther {
+		t.Errorf("50-char holding: status %d, want 303", r.Status)
+	}
+}
+
+func TestRejectedSubmissionCreatesNoHolding(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.post("/transactions", holdingForm("investment", "2026-10-05", "0", "new", "Ghost Fund"))
+	if r.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("status %d, want 422", r.Status)
+	}
+	if !strings.Contains(r.Body, `value="Ghost Fund"`) {
+		t.Error("rejected form lost the entered Holding name")
+	}
+	if strings.Contains(ta.get("/").Body, ">Ghost Fund</option>") {
+		t.Error("rejected submission created a Holding")
+	}
+}
+
+func TestInvestmentRejectsCategoryDescriptionAndSubcategory(t *testing.T) {
+	for _, typ := range []string{"investment", "divestment"} {
+		for field, value := range map[string]string{
+			"description": "Oops", "category": "new", "new_category": "Food",
+			"subcategory": "new", "new_subcategory": "Restaurant",
+		} {
+			t.Run(typ+"/"+field, func(t *testing.T) {
+				ta := newTestApp(t)
+				f := holdingForm(typ, "2026-10-05", "5", "new", "Fund")
+				f.Set(field, value)
+				if r := ta.post("/transactions", f); r.Status != http.StatusUnprocessableEntity {
+					t.Errorf("status %d, want 422", r.Status)
+				}
+				if strings.Contains(ta.get("/").Body, ">Fund</option>") {
+					t.Error("rejected submission created a Holding")
+				}
+			})
+		}
+	}
+}
+
+func TestIncomeAndExpenseRejectHolding(t *testing.T) {
+	for _, typ := range []string{"income", "expense"} {
+		for field, value := range map[string]string{"holding": "new", "new_holding": "Fund"} {
+			t.Run(typ+"/"+field, func(t *testing.T) {
+				ta := newTestApp(t)
+				f := validForm(typ, "2026-10-05", "5", "Thing")
+				f.Set(field, value)
+				if r := ta.post("/transactions", f); r.Status != http.StatusUnprocessableEntity {
+					t.Errorf("status %d, want 422", r.Status)
+				}
+				if body := ta.get("/").Body; strings.Contains(body, ">Fund</option>") || strings.Contains(body, ">Misc</option>") {
+					t.Error("rejected submission created a Holding, Category or Subcategory")
+				}
+			})
+		}
+		t.Run(typ+"/still requires fields", func(t *testing.T) {
+			ta := newTestApp(t)
+			f := validForm(typ, "2026-10-05", "5", " ")
+			f.Set("category", "")
+			f.Set("new_category", "")
+			r := ta.post("/transactions", f)
+			if r.Status != http.StatusUnprocessableEntity {
+				t.Fatalf("status %d, want 422", r.Status)
+			}
+			for _, want := range []string{"Description is required.", "Category is required."} {
+				if !strings.Contains(r.Body, want) {
+					t.Errorf("missing %q", want)
+				}
+			}
+		})
+	}
+}
+
+func TestOpeningBalanceIsRejectedUntilItHasItsOwnFlow(t *testing.T) {
+	ta := newTestApp(t)
+	f := expenseForm("2026-10-05", "5", "Start", "new", "A", "new", "B")
+	f.Set("type", "opening_balance")
+	if r := ta.post("/transactions", f); r.Status != http.StatusUnprocessableEntity {
+		t.Errorf("status %d, want 422", r.Status)
+	}
+}
+
+func TestFormOffersAllFourTypes(t *testing.T) {
+	body := newTestApp(t).get("/").Body
+	for _, v := range allTypes {
+		if !strings.Contains(body, `<option value="`+v+`"`) {
+			t.Errorf("Type %s not offered", v)
+		}
+	}
+	if strings.Contains(body, `value="opening_balance"`) {
+		t.Error("opening balance offered before its ticket")
+	}
+}
+
+// The form groups are shown or hidden by Type on the server side (and by a
+// script on change); hidden inputs are disabled so they are not submitted.
+func TestFormDisablesHiddenFieldGroupsByType(t *testing.T) {
+	ta := newTestApp(t)
+	for typ, wantDisabled := range map[string][]string{
+		"expense":    {"holding", "new_holding"},
+		"income":     {"holding", "new_holding"},
+		"investment": {"description", "category", "new_category", "subcategory", "new_subcategory"},
+		"divestment": {"description", "category", "new_category", "subcategory", "new_subcategory"},
+	} {
+		r := ta.post("/transactions", holdingForm(typ, "2026-10-05", "0", "", ""))
+		for _, field := range []string{"description", "category", "new_category", "subcategory", "new_subcategory", "holding", "new_holding"} {
+			tag := regexp.MustCompile(`<(?:input|select)[^>]*name="` + field + `"[^>]*>`).FindString(r.Body)
+			if tag == "" {
+				t.Fatalf("%s: no input %q", typ, field)
+			}
+			want := false
+			for _, d := range wantDisabled {
+				want = want || d == field
+			}
+			if got := regexp.MustCompile(`\sdisabled[\s>]`).MatchString(tag); got != want {
+				t.Errorf("%s: %s disabled = %v, want %v", typ, field, got, want)
+			}
+		}
+	}
+}
+
+func TestInvalidInvestmentKeepsEnteredValues(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.post("/transactions", holdingForm("divestment", "2026-09-01", "0", "new", "Gold"))
+	for _, want := range []string{`value="divestment" selected`, `value="2026-09-01"`, `value="Gold"`} {
+		if !strings.Contains(r.Body, want) {
+			t.Errorf("form lost %s", want)
+		}
+	}
+}

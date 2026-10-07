@@ -71,7 +71,15 @@ type entryForm struct {
 	NewCategory    string
 	Subcategory    string
 	NewSubcategory string
+	Holding        string
+	NewHolding     string
 	Errors         []string
+}
+
+// HoldingType reports whether the form's Type records against a Holding
+// (Investment, Divestment) instead of a Description, Category and Subcategory.
+func (f entryForm) HoldingType() bool {
+	return f.Type == store.TypeInvestment || f.Type == store.TypeDivestment
 }
 
 type indexData struct {
@@ -79,6 +87,7 @@ type indexData struct {
 	Transactions  []store.TransactionRow
 	Categories    []store.Named
 	Subcategories []store.Named
+	Holdings      []store.Named
 }
 
 func (a *App) index(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +107,10 @@ func (a *App) renderIndex(w http.ResponseWriter, status int, form entryForm) {
 		return
 	}
 	if d.Subcategories, err = a.store.ListSubcategories(); err != nil {
+		a.serverError(w, err)
+		return
+	}
+	if d.Holdings, err = a.store.ListHoldings(); err != nil {
 		a.serverError(w, err)
 		return
 	}
@@ -122,10 +135,14 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		NewCategory:    strings.TrimSpace(r.PostFormValue("new_category")),
 		Subcategory:    r.PostFormValue("subcategory"),
 		NewSubcategory: strings.TrimSpace(r.PostFormValue("new_subcategory")),
+		Holding:        r.PostFormValue("holding"),
+		NewHolding:     strings.TrimSpace(r.PostFormValue("new_holding")),
 	}
 
-	if form.Type != store.TypeExpense && form.Type != store.TypeIncome {
-		form.Errors = append(form.Errors, "Type must be Income or Expense.")
+	switch form.Type {
+	case store.TypeExpense, store.TypeIncome, store.TypeInvestment, store.TypeDivestment:
+	default:
+		form.Errors = append(form.Errors, "Type must be Income, Expense, Investment or Divestment.")
 	}
 	if d, err := time.Parse(dateLayout, form.Date); err != nil {
 		form.Errors = append(form.Errors, "Date must be in the format YYYY-MM-DD.")
@@ -136,32 +153,52 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 	if !wholeNumber.MatchString(form.Amount) || err != nil || amount < 1 || amount > store.MaxAmount {
 		form.Errors = append(form.Errors, "Amount must be a whole number of euros between 1 and 100.000.000.")
 	}
-	if form.Description == "" {
-		form.Errors = append(form.Errors, "Description is required.")
-	} else if utf8.RuneCountInString(form.Description) > store.MaxDescriptionLen {
-		form.Errors = append(form.Errors, "Description must be at most 100 characters.")
-	}
-	if utf8.RuneCountInString(form.NewCategory) > store.MaxNameLen {
-		form.Errors = append(form.Errors, "Category name must be at most 50 characters.")
-	}
-	if utf8.RuneCountInString(form.NewSubcategory) > store.MaxNameLen {
-		form.Errors = append(form.Errors, "Subcategory name must be at most 50 characters.")
-	}
-	catOK, err := a.validChoice(form.Category, form.NewCategory, a.store.CategoryExists)
-	if err != nil {
-		a.serverError(w, err)
-		return
-	}
-	if !catOK {
-		form.Errors = append(form.Errors, "Category is required.")
-	}
-	subOK, err := a.validChoice(form.Subcategory, form.NewSubcategory, a.store.SubcategoryExists)
-	if err != nil {
-		a.serverError(w, err)
-		return
-	}
-	if !subOK {
-		form.Errors = append(form.Errors, "Subcategory is required.")
+	var catOK, subOK, holdOK bool
+	var err2 error
+	switch {
+	case form.HoldingType():
+		if form.Description != "" || form.Category != "" || form.NewCategory != "" || form.Subcategory != "" || form.NewSubcategory != "" {
+			form.Errors = append(form.Errors, "Investments and Divestments take a Holding, not a Description, Category or Subcategory.")
+		}
+		if utf8.RuneCountInString(form.NewHolding) > store.MaxNameLen {
+			form.Errors = append(form.Errors, "Holding name must be at most 50 characters.")
+		}
+		if holdOK, err2 = a.validChoice(form.Holding, form.NewHolding, a.store.HoldingExists); err2 != nil {
+			a.serverError(w, err2)
+			return
+		}
+		if !holdOK {
+			form.Errors = append(form.Errors, "Holding is required.")
+		}
+	case form.Type == store.TypeExpense || form.Type == store.TypeIncome:
+		if form.Holding != "" || form.NewHolding != "" {
+			form.Errors = append(form.Errors, "Income and Expense take no Holding.")
+		}
+		if form.Description == "" {
+			form.Errors = append(form.Errors, "Description is required.")
+		} else if utf8.RuneCountInString(form.Description) > store.MaxDescriptionLen {
+			form.Errors = append(form.Errors, "Description must be at most 100 characters.")
+		}
+		if utf8.RuneCountInString(form.NewCategory) > store.MaxNameLen {
+			form.Errors = append(form.Errors, "Category name must be at most 50 characters.")
+		}
+		if utf8.RuneCountInString(form.NewSubcategory) > store.MaxNameLen {
+			form.Errors = append(form.Errors, "Subcategory name must be at most 50 characters.")
+		}
+		if catOK, err2 = a.validChoice(form.Category, form.NewCategory, a.store.CategoryExists); err2 != nil {
+			a.serverError(w, err2)
+			return
+		}
+		if !catOK {
+			form.Errors = append(form.Errors, "Category is required.")
+		}
+		if subOK, err2 = a.validChoice(form.Subcategory, form.NewSubcategory, a.store.SubcategoryExists); err2 != nil {
+			a.serverError(w, err2)
+			return
+		}
+		if !subOK {
+			form.Errors = append(form.Errors, "Subcategory is required.")
+		}
 	}
 	if len(form.Errors) > 0 {
 		a.renderIndex(w, http.StatusUnprocessableEntity, form)
@@ -169,25 +206,24 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Everything is valid: only now create inline "new..." entries.
-	catID, err := a.resolveChoice(form.Category, form.NewCategory, a.store.EnsureCategory)
-	if err != nil {
-		a.serverError(w, err)
-		return
+	nt := store.NewTransaction{Date: form.Date, Amount: amount, Type: form.Type}
+	if form.HoldingType() {
+		if nt.HoldingID, err = a.resolveChoice(form.Holding, form.NewHolding, a.store.EnsureHolding); err != nil {
+			a.serverError(w, err)
+			return
+		}
+	} else {
+		nt.Description = form.Description
+		if nt.CategoryID, err = a.resolveChoice(form.Category, form.NewCategory, a.store.EnsureCategory); err != nil {
+			a.serverError(w, err)
+			return
+		}
+		if nt.SubcategoryID, err = a.resolveChoice(form.Subcategory, form.NewSubcategory, a.store.EnsureSubcategory); err != nil {
+			a.serverError(w, err)
+			return
+		}
 	}
-	subID, err := a.resolveChoice(form.Subcategory, form.NewSubcategory, a.store.EnsureSubcategory)
-	if err != nil {
-		a.serverError(w, err)
-		return
-	}
-	_, err = a.store.AddTransaction(store.NewTransaction{
-		Date:          form.Date,
-		Amount:        amount,
-		Description:   form.Description,
-		Type:          form.Type,
-		CategoryID:    catID,
-		SubcategoryID: subID,
-	})
-	if err != nil {
+	if _, err = a.store.AddTransaction(nt); err != nil {
 		a.serverError(w, err)
 		return
 	}
