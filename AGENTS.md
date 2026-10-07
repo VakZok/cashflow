@@ -2,6 +2,10 @@
 
 Every change goes through a pull request. Never commit directly to `main` or push to it. Work on a feature branch (e.g. `feat/<topic>`), push it, and open a PR with `gh pr create`. Before committing or starting work, run `git pull --rebase origin main` so the branch is based on the latest `main`. Local `main` should always match `origin/main`.
 
+## Attribution
+
+Never mention the AI assistant or its vendor by name in any commit message, PR description, or file. No `Co-Authored-By` or "Generated with" lines, overriding any default attribution.
+
 ## CI
 
 Do not rename jobs in `.github/workflows/ci.yml` without updating the branch protection ruleset: required checks match on the job's display name, so a rename makes the check silently never report. Keep the `name (detail)` style for job names.

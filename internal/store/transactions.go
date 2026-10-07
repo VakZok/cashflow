@@ -103,6 +103,39 @@ func (s *Store) Totals(from, to string) (income, expense int64, err error) {
 	return income, expense, err
 }
 
+// Slice is one Category's or Subcategory's summed amount.
+type Slice struct {
+	Name   string
+	Amount int64
+}
+
+// Breakdown returns the summed amounts of Transactions of one Type (income or
+// expense) per Category, or per Subcategory when bySubcategory, dated
+// from <= date < to, largest first.
+func (s *Store) Breakdown(typ string, bySubcategory bool, from, to string) ([]Slice, error) {
+	table, col := "categories", "category_id"
+	if bySubcategory {
+		table, col = "subcategories", "subcategory_id"
+	}
+	rows, err := s.db.Query(
+		`SELECT n.name, SUM(t.amount) AS total FROM transactions t JOIN `+table+` n ON n.id = t.`+col+`
+		 WHERE t.type = ? AND t.date >= ? AND t.date < ?
+		 GROUP BY n.id ORDER BY total DESC, n.name`, typ, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Slice
+	for rows.Next() {
+		var sl Slice
+		if err := rows.Scan(&sl.Name, &sl.Amount); err != nil {
+			return nil, err
+		}
+		out = append(out, sl)
+	}
+	return out, rows.Err()
+}
+
 // ListCategories returns all Categories ordered by name.
 func (s *Store) ListCategories() ([]Named, error) { return s.listNamed("categories") }
 
