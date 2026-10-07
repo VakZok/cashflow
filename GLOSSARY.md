@@ -5,7 +5,7 @@ A personal, single-user tracker of money the user has actually moved. It only kn
 ## Language
 
 **Transaction**:
-A single manually entered record of money moving, with a date, a whole-euro amount, a description, and a Type. Income and Expense Transactions also have a Category and a Subcategory; Investment and Divestment Transactions have a Holding.
+A single manually entered record of money moving, with a date, a whole-euro amount, and a Type. Income and Expense Transactions also have a description, a Category and a Subcategory; Investment and Divestment Transactions have a Holding instead, and no description, Category or Subcategory.
 _Avoid_: Entry, booking, payment
 
 **Type**:

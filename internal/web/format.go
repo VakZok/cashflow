@@ -13,6 +13,10 @@ func typeLabel(t string) string {
 		return "Income"
 	case store.TypeExpense:
 		return "Expense"
+	case store.TypeInvestment:
+		return "Investment"
+	case store.TypeDivestment:
+		return "Divestment"
 	}
 	return t
 }
