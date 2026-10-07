@@ -50,6 +50,7 @@ func New(cfg Config) (*App, error) {
 		a.now = time.Now
 	}
 	a.mux.HandleFunc("GET /{$}", a.index)
+	a.mux.HandleFunc("GET /report", a.report)
 	a.mux.HandleFunc("POST /transactions", a.createTransaction)
 	return a, nil
 }

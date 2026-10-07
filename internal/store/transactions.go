@@ -92,6 +92,17 @@ func (s *Store) ListTransactions() ([]TransactionRow, error) {
 	return out, rows.Err()
 }
 
+// Totals returns the summed Income and Expense (whole euros) of Transactions
+// dated from <= date < to (YYYY-MM-DD). Investments and Divestments are ignored.
+func (s *Store) Totals(from, to string) (income, expense int64, err error) {
+	err = s.db.QueryRow(
+		`SELECT COALESCE(SUM(CASE WHEN type = ? THEN amount END), 0),
+		        COALESCE(SUM(CASE WHEN type = ? THEN amount END), 0)
+		 FROM transactions WHERE date >= ? AND date < ?`,
+		TypeIncome, TypeExpense, from, to).Scan(&income, &expense)
+	return income, expense, err
+}
+
 // ListCategories returns all Categories ordered by name.
 func (s *Store) ListCategories() ([]Named, error) { return s.listNamed("categories") }
 

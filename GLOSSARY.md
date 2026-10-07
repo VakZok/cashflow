@@ -33,6 +33,18 @@ _Avoid_: Disinvestment, withdrawal, sale
 A named investment (e.g. "ETF World") that Investments and Divestments are recorded against. Its invested amount is the sum of its Investments minus its Divestments.
 _Avoid_: Asset, position, portfolio item
 
+**Period**:
+A calendar month or a calendar year that a Report covers.
+_Avoid_: Range, timeframe
+
+**Report**:
+The page showing figures for one Period, covering Income and Expense.
+_Avoid_: Dashboard, summary
+
+**Net**:
+Income minus Expense for a Period. Positive, negative, or exactly zero.
+_Avoid_: Net saved, balance, profit
+
 **Category**:
 A grouping of an Income or Expense Transaction (e.g. "Food"). The same Categories are shared by Income and Expense. Investments and Divestments have no Category.
 _Avoid_: Label, group
