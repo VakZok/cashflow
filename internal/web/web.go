@@ -40,7 +40,7 @@ func New(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	tmpl, err := template.New("").Funcs(template.FuncMap{"euro": formatEuro}).ParseFS(templateFS, "templates/*.html")
+	tmpl, err := template.New("").Funcs(template.FuncMap{"euro": formatEuro, "typeLabel": typeLabel}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		_ = st.Close()
 		return nil, err
@@ -60,9 +60,10 @@ func (a *App) Handler() http.Handler { return a.mux }
 // Close releases the database.
 func (a *App) Close() error { return a.store.Close() }
 
-// entryForm is the Expense entry form: submitted values (so a rejected
+// entryForm is the Income/Expense entry form: submitted values (so a rejected
 // submission keeps what was typed) and validation messages.
 type entryForm struct {
+	Type           string
 	Date           string
 	Amount         string
 	Description    string
@@ -81,7 +82,7 @@ type indexData struct {
 }
 
 func (a *App) index(w http.ResponseWriter, r *http.Request) {
-	form := entryForm{Date: a.now().Format(dateLayout)}
+	form := entryForm{Type: store.TypeExpense, Date: a.now().Format(dateLayout)}
 	a.renderIndex(w, http.StatusOK, form)
 }
 
@@ -113,6 +114,7 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	form := entryForm{
+		Type:           r.PostFormValue("type"),
 		Date:           strings.TrimSpace(r.PostFormValue("date")),
 		Amount:         strings.TrimSpace(r.PostFormValue("amount")),
 		Description:    strings.TrimSpace(r.PostFormValue("description")),
@@ -122,6 +124,9 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		NewSubcategory: strings.TrimSpace(r.PostFormValue("new_subcategory")),
 	}
 
+	if form.Type != store.TypeExpense && form.Type != store.TypeIncome {
+		form.Errors = append(form.Errors, "Type must be Income or Expense.")
+	}
 	if d, err := time.Parse(dateLayout, form.Date); err != nil {
 		form.Errors = append(form.Errors, "Date must be in the format YYYY-MM-DD.")
 	} else if f := d.Format(dateLayout); f < store.MinDate || f > store.MaxDate {
@@ -178,7 +183,7 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		Date:          form.Date,
 		Amount:        amount,
 		Description:   form.Description,
-		Type:          store.TypeExpense,
+		Type:          form.Type,
 		CategoryID:    catID,
 		SubcategoryID: subID,
 	})

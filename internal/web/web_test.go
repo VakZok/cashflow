@@ -12,6 +12,7 @@ import (
 // either an existing id or "new" together with the new name.
 func expenseForm(date, amount, desc, category, newCategory, subcategory, newSubcategory string) url.Values {
 	return url.Values{
+		"type":            {"expense"},
 		"date":            {date},
 		"amount":          {amount},
 		"description":     {desc},
@@ -276,4 +277,65 @@ func optionValue(t *testing.T, html, selectName, label string) string {
 		t.Fatalf("no option %q in select %q:\n%s", label, selectName, sel)
 	}
 	return m[1]
+}
+
+func incomeForm(date, amount, desc, category, newCategory, subcategory, newSubcategory string) url.Values {
+	f := expenseForm(date, amount, desc, category, newCategory, subcategory, newSubcategory)
+	f.Set("type", "income")
+	return f
+}
+
+func TestAddIncomeShowsInListWithType(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.post("/transactions", incomeForm("2026-10-02", "2500", "Salary", "new", "Work", "new", "Employer"))
+	if r.Status != http.StatusSeeOther {
+		t.Fatalf("POST = %d, want 303", r.Status)
+	}
+	body := ta.follow(r).Body
+	for _, want := range []string{"Salary", "€2.500", "Work", "Employer", "Income"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("list missing %q in:\n%s", want, body)
+		}
+	}
+}
+
+func TestIncomeSharesCategoriesWithExpense(t *testing.T) {
+	ta := newTestApp(t)
+	ta.post("/transactions", expenseForm("2026-10-01", "10", "Lunch", "new", "Shared", "new", "Sub"))
+	body := ta.get("/").Body
+	cat, sub := optionValue(t, body, "category", "Shared"), optionValue(t, body, "subcategory", "Sub")
+	r := ta.post("/transactions", incomeForm("2026-10-02", "5", "Refund", cat, "", sub, ""))
+	if r.Status != http.StatusSeeOther {
+		t.Fatalf("income with existing category = %d", r.Status)
+	}
+}
+
+func TestIncomeRequiresCategoryAndSubcategory(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.post("/transactions", incomeForm("2026-10-02", "5", "Gift", "", "", "", ""))
+	if r.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", r.Status)
+	}
+	for _, want := range []string{"Category is required.", "Subcategory is required."} {
+		if !strings.Contains(r.Body, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+}
+
+func TestUnknownTypeIsRejected(t *testing.T) {
+	ta := newTestApp(t)
+	f := expenseForm("2026-10-02", "5", "X", "new", "A", "new", "B")
+	f.Set("type", "bogus")
+	if r := ta.post("/transactions", f); r.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", r.Status)
+	}
+}
+
+func TestInvalidIncomeKeepsSelectedType(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.post("/transactions", incomeForm("2026-10-02", "x", "X", "new", "A", "new", "B"))
+	if !regexp.MustCompile(`value="income" selected`).MatchString(r.Body) {
+		t.Errorf("income not preselected:\n%s", r.Body)
+	}
 }

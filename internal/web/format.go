@@ -1,6 +1,21 @@
 package web
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/VakZok/money_manager_app/internal/store"
+)
+
+// typeLabel is the display name of a stored Transaction type.
+func typeLabel(t string) string {
+	switch t {
+	case store.TypeIncome:
+		return "Income"
+	case store.TypeExpense:
+		return "Expense"
+	}
+	return t
+}
 
 // formatEuro renders whole euros as €1.234 (dot as thousands separator).
 func formatEuro(amount int64) string {
