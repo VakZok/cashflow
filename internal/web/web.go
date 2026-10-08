@@ -19,6 +19,9 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
+//go:embed static
+var staticFS embed.FS
+
 // Config configures an App.
 type Config struct {
 	DBPath string
@@ -50,6 +53,7 @@ func New(cfg Config) (*App, error) {
 		a.now = time.Now
 	}
 	a.mux.HandleFunc("GET /{$}", a.index)
+	a.mux.Handle("GET /static/", http.FileServerFS(staticFS))
 	a.mux.HandleFunc("GET /report", a.report)
 	a.mux.HandleFunc("POST /transactions", a.createTransaction)
 	return a, nil
