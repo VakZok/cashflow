@@ -16,6 +16,12 @@
   .net-negative { color: #b91c1c; }
   .net-zero { color: #000; }
   .totals { text-align: center; color: #000; margin: 0; }
+  form.chart-controls { display: flex; gap: .5rem; margin: 1.5rem 0 .5rem; }
+  form.chart-controls select, form.chart-controls button { padding: .6rem; font-size: 1rem; }
+  .chart-box { max-width: 20rem; margin: 0 auto; }
+  table.legend { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+  table.legend td { padding: .25rem; }
+  table.legend td:nth-child(n+2) { text-align: right; }
 </style>
 </head>
 <body>
@@ -26,6 +32,8 @@
   {{if .Prev}}<a href="{{.Prev}}" aria-label="Previous">‹</a>{{end}}
   <form class="picker" method="get" action="/report">
     <input type="hidden" name="period" value="{{.Period.Kind}}">
+    <input type="hidden" name="type" value="{{.Chart.Type}}">
+    <input type="hidden" name="group" value="{{.Chart.Group}}">
     {{if .PickerYear}}<input type="number" name="date" min="{{.PickerMin}}" max="{{.PickerMax}}" value="{{.Period.Value}}" aria-label="Year">
     {{else}}<input type="month" name="date" min="{{.PickerMin}}-01" max="{{.PickerMax}}-12" value="{{.Period.Value}}" aria-label="Month">{{end}}
     <button type="submit">Go</button>
@@ -36,5 +44,35 @@
 
 <p class="net {{.NetClass}}">{{.Net}}</p>
 <p class="totals">Income {{.Income}} · Expense {{.Expense}}</p>
+
+<form class="chart-controls" method="get" action="/report">
+  <input type="hidden" name="period" value="{{.Period.Kind}}">
+  <input type="hidden" name="date" value="{{.Period.Value}}">
+  <select name="type" aria-label="Type">
+    <option value="expense"{{if eq .Chart.Type "expense"}} selected{{end}}>Expense</option>
+    <option value="income"{{if eq .Chart.Type "income"}} selected{{end}}>Income</option>
+  </select>
+  <select name="group" aria-label="Group by">
+    <option value="category"{{if eq .Chart.Group "category"}} selected{{end}}>Category</option>
+    <option value="subcategory"{{if eq .Chart.Group "subcategory"}} selected{{end}}>Subcategory</option>
+  </select>
+  <button type="submit">Show</button>
+</form>
+
+<div class="chart-box"><canvas id="pie" role="img" aria-label="Breakdown chart"></canvas></div>
+<script type="application/json" id="chart-data">{{.ChartData}}</script>
+<table class="legend">
+  {{range .Legend}}<tr><td>{{.Label}}</td><td>{{.Amount}}</td><td>{{.Share}}</td></tr>
+  {{end}}
+</table>
+<script src="/static/chart.umd.js"></script>
+<script>
+  var data = JSON.parse(document.getElementById("chart-data").textContent);
+  new Chart(document.getElementById("pie"), {
+    type: "pie",
+    data: { labels: data.labels, datasets: [{ data: data.amounts }] },
+    options: { plugins: { legend: { display: false } } }
+  });
+</script>
 </body>
 </html>
