@@ -24,6 +24,12 @@ Given 100€ invested:
 
 The SQLite database is created and migrated on startup.
 
+Dummy data for trying out the Report (refuses a non-empty database):
+
+```zsh
+go run ./cmd/seed -db money_manager.db -months 3
+```
+
 
 ## Project structure
 
