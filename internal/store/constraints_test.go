@@ -142,8 +142,10 @@ func TestTextLengthConstraints(t *testing.T) {
 
 func TestTypeConstraint(t *testing.T) {
 	s, _ := open(t)
-	for _, typ := range []string{store.TypeIncome, store.TypeExpense, store.TypeInvestment, store.TypeDivestment} {
-		if _, err := s.AddTransaction(tx(t, s, "2026-10-05", 5, "ok "+typ, typ)); err != nil {
+	for i, typ := range []string{store.TypeIncome, store.TypeExpense, store.TypeInvestment, store.TypeDivestment} {
+		// Own date per Type: Investment and Divestment of one Holding must not collide.
+		date := fmt.Sprintf("2026-10-%02d", 5+i)
+		if _, err := s.AddTransaction(tx(t, s, date, 5, "ok "+typ, typ)); err != nil {
 			t.Errorf("type %q rejected: %v", typ, err)
 		}
 	}
@@ -212,9 +214,11 @@ func TestTypeFieldRules(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	calls := 0
 	insert := func(typ string, desc, cat, sub, hold any) error {
+		calls++ // own date per call, so only the field rules can reject
 		_, err := raw.Exec(`INSERT INTO transactions (date, amount, description, type, category_id, subcategory_id, holding_id)
-			VALUES ('2026-10-05', 5, ?, ?, ?, ?, ?)`, desc, typ, cat, sub, hold)
+			VALUES (?, 5, ?, ?, ?, ?, ?)`, fmt.Sprintf("2026-10-%02d", calls), desc, typ, cat, sub, hold)
 		return err
 	}
 	cases := []struct {
@@ -300,11 +304,47 @@ func TestDuplicateDateAndDescriptionIsRejected(t *testing.T) {
 	}
 }
 
-func TestInvestmentsAreExemptFromDuplicateRule(t *testing.T) {
+func TestDuplicateDateAndHoldingIsRejected(t *testing.T) {
+	s, raw := open(t)
+	if _, err := s.AddTransaction(tx(t, s, "2026-10-05", 5, "", store.TypeInvestment)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Same date and Holding collide, whatever the Type.
+	for _, typ := range []string{store.TypeInvestment, store.TypeDivestment} {
+		if _, err := s.AddTransaction(tx(t, s, "2026-10-05", 7, "", typ)); !errors.Is(err, store.ErrDuplicate) {
+			t.Errorf("%s: err = %v, want ErrDuplicate", typ, err)
+		}
+	}
+
+	// A different date or a different Holding is fine.
+	other := tx(t, s, "2026-10-05", 5, "", store.TypeInvestment)
+	var err error
+	if other.HoldingID, err = s.EnsureHolding("Other"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddTransaction(other); err != nil {
+		t.Errorf("other Holding rejected: %v", err)
+	}
+	if _, err := s.AddTransaction(tx(t, s, "2026-10-06", 5, "", store.TypeDivestment)); err != nil {
+		t.Errorf("other date rejected: %v", err)
+	}
+
+	// Editing a Transaction so that it collides is rejected too.
+	id, err := s.AddTransaction(tx(t, s, "2026-10-07", 5, "", store.TypeDivestment))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`UPDATE transactions SET date = '2026-10-05' WHERE id = ?`, id); err == nil {
+		t.Error("edit into a duplicate accepted")
+	}
+}
+
+func TestIncomeAndExpenseAreExemptFromHoldingRule(t *testing.T) {
 	s, _ := open(t)
 	for i := 0; i < 2; i++ {
-		for _, typ := range []string{store.TypeInvestment, store.TypeDivestment} {
-			if _, err := s.AddTransaction(tx(t, s, "2026-10-05", 5, "", typ)); err != nil {
+		for _, typ := range []string{store.TypeIncome, store.TypeExpense} {
+			if _, err := s.AddTransaction(tx(t, s, "2026-10-05", 5, fmt.Sprintf("%s %d", typ, i), typ)); err != nil {
 				t.Errorf("%s #%d rejected: %v", typ, i, err)
 			}
 		}

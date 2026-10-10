@@ -598,11 +598,49 @@ func TestDuplicateDateAndDescriptionIsRejectedWithMessage(t *testing.T) {
 	}
 }
 
-func TestInvestmentsWithSameDateAreNotDuplicates(t *testing.T) {
+func TestDuplicateDateAndHoldingIsRejectedWithMessage(t *testing.T) {
 	ta := newTestApp(t)
-	for i := 0; i < 2; i++ {
-		if r := ta.post("/transactions", holdingForm("investment", "2026-10-01", "50", "new", "ETF")); r.Status != http.StatusSeeOther {
-			t.Errorf("investment #%d POST = %d, want 303", i, r.Status)
+	if r := ta.post("/transactions", holdingForm("investment", "2026-10-01", "50", "new", "ETF")); r.Status != http.StatusSeeOther {
+		t.Fatalf("first POST = %d, want 303", r.Status)
+	}
+
+	// Same date and Holding (name matched ignoring case) collide, whichever the
+	// Type; the typed values are kept.
+	for _, typ := range []string{"investment", "divestment"} {
+		r := ta.post("/transactions", holdingForm(typ, "2026-10-01", "70", "new", "etf"))
+		if r.Status != http.StatusUnprocessableEntity {
+			t.Fatalf("%s POST = %d, want 422", typ, r.Status)
+		}
+		if !strings.Contains(r.Body, "An entry for this date and holding already exists, edit it instead") {
+			t.Errorf("%s: missing duplicate message in:\n%s", typ, r.Body)
+		}
+		if !strings.Contains(r.Body, `value="70"`) {
+			t.Errorf("%s: entered amount not kept in:\n%s", typ, r.Body)
+		}
+	}
+
+	// A different date or a different Holding is accepted.
+	for _, form := range []url.Values{
+		holdingForm("investment", "2026-10-02", "50", "new", "ETF"),
+		holdingForm("investment", "2026-10-01", "50", "new", "Gold"),
+	} {
+		if r := ta.post("/transactions", form); r.Status != http.StatusSeeOther {
+			t.Errorf("POST %v = %d, want 303", form, r.Status)
+		}
+	}
+}
+
+func TestIncomeAndExpenseAreNotHoldingDuplicates(t *testing.T) {
+	ta := newTestApp(t)
+	if r := ta.post("/transactions", holdingForm("investment", "2026-10-01", "50", "new", "ETF")); r.Status != http.StatusSeeOther {
+		t.Fatalf("investment POST = %d, want 303", r.Status)
+	}
+	for i, form := range []url.Values{
+		expenseForm("2026-10-01", "4", "Coffee", "new", "Food", "new", "Cafes"),
+		incomeForm("2026-10-01", "9", "Tip", "new", "Other", "new", "Misc"),
+	} {
+		if r := ta.post("/transactions", form); r.Status != http.StatusSeeOther {
+			t.Errorf("entry #%d POST = %d, want 303", i, r.Status)
 		}
 	}
 }

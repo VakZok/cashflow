@@ -125,7 +125,10 @@ func (a *App) renderIndex(w http.ResponseWriter, status int, form entryForm) {
 
 const dateLayout = "2006-01-02"
 
-const errDuplicate = "An entry for this date and description already exists, edit it instead."
+const (
+	errDuplicate        = "An entry for this date and description already exists, edit it instead."
+	errDuplicateHolding = "An entry for this date and holding already exists, edit it instead."
+)
 
 var wholeNumber = regexp.MustCompile(`^[0-9]+$`)
 
@@ -242,8 +245,14 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if _, err = a.store.AddTransaction(nt); err != nil {
-		if errors.Is(err, store.ErrDuplicate) { // lost a race with another submission
-			form.Errors = append(form.Errors, errDuplicate)
+		if errors.Is(err, store.ErrDuplicate) {
+			// A Holding collision is only caught here; for Income and Expense this
+			// means a race with another submission.
+			msg := errDuplicate
+			if form.HoldingType() {
+				msg = errDuplicateHolding
+			}
+			form.Errors = append(form.Errors, msg)
 			a.renderIndex(w, http.StatusUnprocessableEntity, form)
 			return
 		}
