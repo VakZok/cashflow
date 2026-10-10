@@ -92,7 +92,7 @@ func TestInvalidAmountsAreRejectedWithMessage(t *testing.T) {
 func TestAmountBoundsAreInclusive(t *testing.T) {
 	ta := newTestApp(t)
 	for _, amount := range []string{"1", "100000000"} {
-		r := ta.post("/transactions", expenseForm("2026-10-05", amount, "Big", "new", "Misc", "new", "Other"))
+		r := ta.post("/transactions", expenseForm("2026-10-05", amount, "Big "+amount, "new", "Misc", "new", "Other"))
 		if r.Status != http.StatusSeeOther {
 			t.Errorf("amount %s: status %d, want 303", amount, r.Status)
 		}
@@ -377,7 +377,7 @@ func TestSharedValidationRunsForAllTypes(t *testing.T) {
 				}
 			}
 			for _, amount := range []string{"1", "100000000"} {
-				if r := ta.post("/transactions", validForm(typ, "2026-10-05", amount, "Label")); r.Status != http.StatusSeeOther {
+				if r := ta.post("/transactions", validForm(typ, "2026-10-05", amount, "Label "+amount)); r.Status != http.StatusSeeOther {
 					t.Errorf("amount %s: status %d, want 303", amount, r.Status)
 				}
 			}
@@ -565,6 +565,44 @@ func TestInvalidInvestmentKeepsEnteredValues(t *testing.T) {
 	for _, want := range []string{`value="divestment" selected`, `value="2026-09-01"`, `value="Gold"`} {
 		if !strings.Contains(r.Body, want) {
 			t.Errorf("form lost %s", want)
+		}
+	}
+}
+
+func TestDuplicateDateAndDescriptionIsRejectedWithMessage(t *testing.T) {
+	ta := newTestApp(t)
+	if r := ta.post("/transactions", expenseForm("2026-10-01", "4", "Coffee", "new", "Food", "new", "Cafes")); r.Status != http.StatusSeeOther {
+		t.Fatalf("first POST = %d, want 303", r.Status)
+	}
+
+	// Same date, description differing only in ASCII case, other Type and
+	// Category: still a duplicate, and the typed values are kept.
+	dup := incomeForm("2026-10-01", "9", "coffee", "new", "Other", "new", "Misc")
+	r := ta.post("/transactions", dup)
+	if r.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("duplicate POST = %d, want 422", r.Status)
+	}
+	if !strings.Contains(r.Body, "An entry for this date and description already exists, edit it instead") {
+		t.Errorf("missing duplicate message in:\n%s", r.Body)
+	}
+	if !strings.Contains(r.Body, `value="coffee"`) {
+		t.Errorf("entered description not kept in:\n%s", r.Body)
+	}
+	if strings.Contains(ta.get("/").Body, "Misc") {
+		t.Error("rejected submission created a Subcategory")
+	}
+
+	// A different date is accepted.
+	if r := ta.post("/transactions", expenseForm("2026-10-02", "4", "Coffee", "new", "Food", "new", "Cafes")); r.Status != http.StatusSeeOther {
+		t.Errorf("different date POST = %d, want 303", r.Status)
+	}
+}
+
+func TestInvestmentsWithSameDateAreNotDuplicates(t *testing.T) {
+	ta := newTestApp(t)
+	for i := 0; i < 2; i++ {
+		if r := ta.post("/transactions", holdingForm("investment", "2026-10-01", "50", "new", "ETF")); r.Status != http.StatusSeeOther {
+			t.Errorf("investment #%d POST = %d, want 303", i, r.Status)
 		}
 	}
 }

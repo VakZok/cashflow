@@ -2,6 +2,8 @@ package store_test
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -77,7 +79,7 @@ func TestDateConstraint(t *testing.T) {
 func TestAmountConstraint(t *testing.T) {
 	s, raw := open(t)
 	for _, a := range []int64{1, 100_000_000} {
-		if _, err := s.AddTransaction(tx(t, s, "2026-10-05", a, "ok", store.TypeIncome)); err != nil {
+		if _, err := s.AddTransaction(tx(t, s, "2026-10-05", a, fmt.Sprintf("ok %d", a), store.TypeIncome)); err != nil {
 			t.Errorf("amount %d rejected: %v", a, err)
 		}
 	}
@@ -141,7 +143,7 @@ func TestTextLengthConstraints(t *testing.T) {
 func TestTypeConstraint(t *testing.T) {
 	s, _ := open(t)
 	for _, typ := range []string{store.TypeIncome, store.TypeExpense, store.TypeInvestment, store.TypeDivestment} {
-		if _, err := s.AddTransaction(tx(t, s, "2026-10-05", 5, "ok", typ)); err != nil {
+		if _, err := s.AddTransaction(tx(t, s, "2026-10-05", 5, "ok "+typ, typ)); err != nil {
 			t.Errorf("type %q rejected: %v", typ, err)
 		}
 	}
@@ -222,7 +224,7 @@ func TestTypeFieldRules(t *testing.T) {
 		ok                  bool
 	}{
 		{"income complete", "income", "x", 1, 1, nil, true},
-		{"expense complete", "expense", "x", 1, 1, nil, true},
+		{"expense complete", "expense", "y", 1, 1, nil, true},
 		{"income without description", "income", nil, 1, 1, nil, false},
 		{"income without category", "income", "x", nil, 1, nil, false},
 		{"expense without subcategory", "expense", "x", 1, nil, nil, false},
@@ -255,5 +257,56 @@ func TestListShowsHoldingForInvestments(t *testing.T) {
 	rows, err := s.ListTransactions()
 	if err != nil || len(rows) != 1 || rows[0].Holding != "H" || rows[0].Description != "" {
 		t.Errorf("rows = %+v, err = %v", rows, err)
+	}
+}
+
+func TestDuplicateDateAndDescriptionIsRejected(t *testing.T) {
+	s, raw := open(t)
+	if _, err := s.AddTransaction(tx(t, s, "2026-10-05", 5, "Coffee", store.TypeExpense)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Same date and description collide, ignoring ASCII case and regardless of
+	// Type, Category or Subcategory.
+	for _, typ := range []string{store.TypeExpense, store.TypeIncome} {
+		for _, desc := range []string{"Coffee", "coffee", "COFFEE"} {
+			n := tx(t, s, "2026-10-05", 7, desc, typ)
+			if typ == store.TypeIncome {
+				var err error
+				if n.CategoryID, err = s.EnsureCategory("Other"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := s.AddTransaction(n); !errors.Is(err, store.ErrDuplicate) {
+				t.Errorf("%s %q: err = %v, want ErrDuplicate", typ, desc, err)
+			}
+		}
+	}
+
+	// A different date or description is fine.
+	for _, c := range []struct{ date, desc string }{{"2026-10-06", "Coffee"}, {"2026-10-05", "Tea"}} {
+		if _, err := s.AddTransaction(tx(t, s, c.date, 5, c.desc, store.TypeExpense)); err != nil {
+			t.Errorf("%v rejected: %v", c, err)
+		}
+	}
+
+	// Editing a Transaction so that it collides is rejected too.
+	id, err := s.AddTransaction(tx(t, s, "2026-10-07", 5, "Coffee", store.TypeExpense))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`UPDATE transactions SET date = '2026-10-05' WHERE id = ?`, id); err == nil {
+		t.Error("edit into a duplicate accepted")
+	}
+}
+
+func TestInvestmentsAreExemptFromDuplicateRule(t *testing.T) {
+	s, _ := open(t)
+	for i := 0; i < 2; i++ {
+		for _, typ := range []string{store.TypeInvestment, store.TypeDivestment} {
+			if _, err := s.AddTransaction(tx(t, s, "2026-10-05", 5, "", typ)); err != nil {
+				t.Errorf("%s #%d rejected: %v", typ, i, err)
+			}
+		}
 	}
 }

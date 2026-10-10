@@ -2,6 +2,8 @@
 
 Every change goes through a pull request. Never commit directly to `main` or push to it. Work on a feature branch (e.g. `feat/<topic>`), push it, and open a PR with `gh pr create`. Before committing or starting work, run `git pull --rebase origin main` so the branch is based on the latest `main`. Local `main` should always match `origin/main`.
 
+Never merge a PR (no `gh pr merge`, no merging via the web UI or API, no auto-merge). Open it and leave merging to the user.
+
 ## Attribution
 
 Never mention the AI assistant or its vendor by name in any commit message, PR description, or file. No `Co-Authored-By` or "Generated with" lines, overriding any default attribution.
