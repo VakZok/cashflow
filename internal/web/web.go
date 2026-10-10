@@ -4,6 +4,7 @@ package web
 
 import (
 	"embed"
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
@@ -124,6 +125,8 @@ func (a *App) renderIndex(w http.ResponseWriter, status int, form entryForm) {
 
 const dateLayout = "2006-01-02"
 
+const errDuplicate = "An entry for this date and description already exists, edit it instead."
+
 var wholeNumber = regexp.MustCompile(`^[0-9]+$`)
 
 func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
@@ -204,6 +207,16 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		if !subOK {
 			form.Errors = append(form.Errors, "Subcategory is required.")
 		}
+		if len(form.Errors) == 0 {
+			taken, err := a.store.DescriptionTaken(form.Date, form.Description)
+			if err != nil {
+				a.serverError(w, err)
+				return
+			}
+			if taken {
+				form.Errors = append(form.Errors, errDuplicate)
+			}
+		}
 	}
 	if len(form.Errors) > 0 {
 		a.renderIndex(w, http.StatusUnprocessableEntity, form)
@@ -229,6 +242,11 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if _, err = a.store.AddTransaction(nt); err != nil {
+		if errors.Is(err, store.ErrDuplicate) { // lost a race with another submission
+			form.Errors = append(form.Errors, errDuplicate)
+			a.renderIndex(w, http.StatusUnprocessableEntity, form)
+			return
+		}
 		a.serverError(w, err)
 		return
 	}

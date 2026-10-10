@@ -52,3 +52,7 @@ _Avoid_: Label, group
 **Subcategory**:
 A second, independent grouping of an Income or Expense Transaction (e.g. "Restaurant"). It is not nested under a Category: any Subcategory can be combined with any Category. Each Income or Expense Transaction has exactly one Category and exactly one Subcategory, and each is reported on separately. A Category or Subcategory that still has Transactions cannot be deleted until they are reassigned.
 _Avoid_: Child category, tag
+
+**Duplicate**:
+An Income or Expense Transaction with the same date and description (ignoring ASCII case) as an existing one, whatever its Type, Category or Subcategory. It is rejected on create and on edit; the user merges by hand by editing the existing Transaction so its amount is the sum of both. Investments and Divestments have no description and are never Duplicates.
+_Avoid_: Conflict, clash

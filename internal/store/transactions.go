@@ -62,7 +62,7 @@ func (s *Store) AddTransaction(t NewTransaction) (int64, error) {
 		t.Date, t.Amount, nullString(t.Description), t.Type,
 		nullID(t.CategoryID), nullID(t.SubcategoryID), nullID(t.HoldingID))
 	if err != nil {
-		return 0, err
+		return 0, translate(err)
 	}
 	return res.LastInsertId()
 }
@@ -222,4 +222,14 @@ func nullString(v string) any {
 		return nil
 	}
 	return v
+}
+
+// DescriptionTaken reports whether an Income or Expense with the date and
+// description (ignoring ASCII case) exists.
+func (s *Store) DescriptionTaken(date, description string) (bool, error) {
+	var n int
+	err := s.db.QueryRow(
+		"SELECT COUNT(*) FROM transactions WHERE date = ? AND description = ? COLLATE NOCASE",
+		date, description).Scan(&n)
+	return n > 0, err
 }

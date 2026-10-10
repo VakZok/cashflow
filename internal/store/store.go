@@ -5,13 +5,14 @@ package store
 import (
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"sort"
 	"strconv"
 	"strings"
 
-	_ "modernc.org/sqlite" // pure-Go driver, no CGO
+	"modernc.org/sqlite" // pure-Go driver, no CGO
 )
 
 //go:embed migrations/*.sql
@@ -84,4 +85,21 @@ func migrate(db *sql.DB, fsys fs.FS) error {
 		}
 	}
 	return nil
+}
+
+// sqliteConstraintUnique is SQLITE_CONSTRAINT_UNIQUE, the extended result code
+// of a violated UNIQUE constraint or index.
+const sqliteConstraintUnique = 2067
+
+// ErrDuplicate means an Income or Expense with the same date and description
+// (ignoring ASCII case) already exists.
+var ErrDuplicate = errors.New("duplicate date and description")
+
+// translate maps a unique-constraint violation to ErrDuplicate.
+func translate(err error) error {
+	var se *sqlite.Error
+	if errors.As(err, &se) && se.Code() == sqliteConstraintUnique {
+		return ErrDuplicate
+	}
+	return err
 }
