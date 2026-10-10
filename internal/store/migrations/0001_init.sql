@@ -54,4 +54,7 @@ CREATE TABLE transactions (
 CREATE UNIQUE INDEX transactions_date_description ON transactions (date, description COLLATE NOCASE);
 CREATE INDEX transactions_category ON transactions (category_id);
 CREATE INDEX transactions_subcategory ON transactions (subcategory_id);
+-- Investments and Divestments are unique per (date, holding_id), whatever the Type (ADR 0006).
+-- Income and Expense have a NULL holding_id, which SQLite treats as distinct.
+CREATE UNIQUE INDEX transactions_date_holding ON transactions (date, holding_id);
 CREATE INDEX transactions_holding ON transactions (holding_id);

@@ -54,5 +54,5 @@ A second, independent grouping of an Income or Expense Transaction (e.g. "Restau
 _Avoid_: Child category, tag
 
 **Duplicate**:
-An Income or Expense Transaction with the same date and description (ignoring ASCII case) as an existing one, whatever its Type, Category or Subcategory. It is rejected on create and on edit; the user merges by hand by editing the existing Transaction so its amount is the sum of both. Investments and Divestments have no description and are never Duplicates.
+A Transaction that collides with an existing one, in one of two independent ways. An Income or Expense with the same date and description (ignoring ASCII case) as an existing Income or Expense, whatever its Type, Category or Subcategory. An Investment or Divestment with the same date and Holding as an existing Investment or Divestment, whatever its Type. It is rejected on create and on edit; the user merges by hand by editing the existing Transaction so its amount is the sum of both. Income and Expense have no Holding and Investments and Divestments have no description, so the two rules never apply to each other's Transactions.
 _Avoid_: Conflict, clash
