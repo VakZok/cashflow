@@ -290,7 +290,7 @@ func TestDuplicateDateAndDescriptionIsRejected(t *testing.T) {
 		}
 	}
 
-	// Editing an entry so that it collides is rejected too.
+	// Editing a Transaction so that it collides is rejected too.
 	id, err := s.AddTransaction(tx(t, s, "2026-10-07", 5, "Coffee", store.TypeExpense))
 	if err != nil {
 		t.Fatal(err)
