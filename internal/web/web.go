@@ -44,7 +44,7 @@ func New(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	tmpl, err := template.New("").Funcs(template.FuncMap{"euro": formatEuro, "typeLabel": typeLabel}).ParseFS(templateFS, "templates/*.html")
+	tmpl, err := template.New("").Funcs(template.FuncMap{"euro": formatEuro, "typeLabel": typeLabel, "specsJSON": specsJSON}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		_ = st.Close()
 		return nil, err
@@ -66,10 +66,11 @@ func (a *App) Handler() http.Handler { return a.mux }
 // Close releases the database.
 func (a *App) Close() error { return a.store.Close() }
 
-// entryForm is the Income/Expense entry form: submitted values (so a rejected
+// entryForm is the Transaction entry form: submitted values (so a rejected
 // submission keeps what was typed) and validation messages.
 type entryForm struct {
 	Type           string
+	Spec           store.TypeSpec // the fields Type takes
 	Date           string
 	Amount         string
 	Description    string
@@ -82,14 +83,29 @@ type entryForm struct {
 	Errors         []string
 }
 
-// HoldingType reports whether the form's Type records against a Holding
-// (Investment, Divestment) instead of a Description, Category and Subcategory.
-func (f entryForm) HoldingType() bool {
-	return f.Type == store.TypeInvestment || f.Type == store.TypeDivestment
+// choice is the value of a select with an inline "new..." option, bound to
+// the list it draws from.
+type choice struct {
+	list    store.List
+	value   string
+	newName string
+}
+
+func (f entryForm) category(set store.ListSet) choice {
+	return choice{set.Category, f.Category, f.NewCategory}
+}
+
+func (f entryForm) subcategory(set store.ListSet) choice {
+	return choice{set.Subcategory, f.Subcategory, f.NewSubcategory}
+}
+
+func (f entryForm) holding() choice {
+	return choice{store.HoldingList, f.Holding, f.NewHolding}
 }
 
 type indexData struct {
 	Form          entryForm
+	Types         []store.TypeSpec
 	Transactions  []store.TransactionRow
 	Categories    []store.Named
 	Subcategories []store.Named
@@ -102,21 +118,26 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) renderIndex(w http.ResponseWriter, status int, form entryForm) {
-	d := indexData{Form: form}
+	// An unknown Type is rendered with the fields of the default one.
+	form.Spec, _ = store.SpecFor(form.Type)
+	if form.Spec.Type == "" {
+		form.Spec = store.Types[0]
+	}
+	d := indexData{Form: form, Types: store.Types}
 	var err error
 	if d.Transactions, err = a.store.ListTransactions(); err != nil {
 		a.serverError(w, err)
 		return
 	}
-	if d.Categories, err = a.store.ListCategories(); err != nil {
+	if d.Categories, err = a.store.ListNamed(store.DefaultListSet.Category); err != nil {
 		a.serverError(w, err)
 		return
 	}
-	if d.Subcategories, err = a.store.ListSubcategories(); err != nil {
+	if d.Subcategories, err = a.store.ListNamed(store.DefaultListSet.Subcategory); err != nil {
 		a.serverError(w, err)
 		return
 	}
-	if d.Holdings, err = a.store.ListHoldings(); err != nil {
+	if d.Holdings, err = a.store.ListNamed(store.HoldingList); err != nil {
 		a.serverError(w, err)
 		return
 	}
@@ -150,10 +171,9 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		NewHolding:     strings.TrimSpace(r.PostFormValue("new_holding")),
 	}
 
-	switch form.Type {
-	case store.TypeExpense, store.TypeIncome, store.TypeInvestment, store.TypeDivestment:
-	default:
-		form.Errors = append(form.Errors, "Type must be Income, Expense, Investment or Divestment.")
+	spec, known := store.SpecFor(form.Type)
+	if !known {
+		form.Errors = append(form.Errors, "Type must be "+typeChoices()+".")
 	}
 	if d, err := time.Parse(dateLayout, form.Date); err != nil {
 		form.Errors = append(form.Errors, "Date must be in the format YYYY-MM-DD.")
@@ -164,53 +184,12 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 	if !wholeNumber.MatchString(form.Amount) || err != nil || amount < 1 || amount > store.MaxAmount {
 		form.Errors = append(form.Errors, "Amount must be a whole number of euros between 1 and 100.000.000.")
 	}
-	var catOK, subOK, holdOK bool
-	var err2 error
-	switch {
-	case form.HoldingType():
-		if form.Description != "" || form.Category != "" || form.NewCategory != "" || form.Subcategory != "" || form.NewSubcategory != "" {
-			form.Errors = append(form.Errors, "Investments and Divestments take a Holding, not a Description, Category or Subcategory.")
-		}
-		if utf8.RuneCountInString(form.NewHolding) > store.MaxNameLen {
-			form.Errors = append(form.Errors, "Holding name must be at most 50 characters.")
-		}
-		if holdOK, err2 = a.validChoice(form.Holding, form.NewHolding, a.store.HoldingExists); err2 != nil {
-			a.serverError(w, err2)
+	if known {
+		if err := a.validateFields(&form, spec); err != nil {
+			a.serverError(w, err)
 			return
 		}
-		if !holdOK {
-			form.Errors = append(form.Errors, "Holding is required.")
-		}
-	case form.Type == store.TypeExpense || form.Type == store.TypeIncome:
-		if form.Holding != "" || form.NewHolding != "" {
-			form.Errors = append(form.Errors, "Income and Expense take no Holding.")
-		}
-		if form.Description == "" {
-			form.Errors = append(form.Errors, "Description is required.")
-		} else if utf8.RuneCountInString(form.Description) > store.MaxDescriptionLen {
-			form.Errors = append(form.Errors, "Description must be at most 100 characters.")
-		}
-		if utf8.RuneCountInString(form.NewCategory) > store.MaxNameLen {
-			form.Errors = append(form.Errors, "Category name must be at most 50 characters.")
-		}
-		if utf8.RuneCountInString(form.NewSubcategory) > store.MaxNameLen {
-			form.Errors = append(form.Errors, "Subcategory name must be at most 50 characters.")
-		}
-		if catOK, err2 = a.validChoice(form.Category, form.NewCategory, a.store.CategoryExists); err2 != nil {
-			a.serverError(w, err2)
-			return
-		}
-		if !catOK {
-			form.Errors = append(form.Errors, "Category is required.")
-		}
-		if subOK, err2 = a.validChoice(form.Subcategory, form.NewSubcategory, a.store.SubcategoryExists); err2 != nil {
-			a.serverError(w, err2)
-			return
-		}
-		if !subOK {
-			form.Errors = append(form.Errors, "Subcategory is required.")
-		}
-		if len(form.Errors) == 0 {
+		if len(form.Errors) == 0 && spec.Description {
 			taken, err := a.store.DescriptionTaken(form.Date, form.Description)
 			if err != nil {
 				a.serverError(w, err)
@@ -228,28 +207,31 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 
 	// Everything is valid: only now create inline "new..." entries.
 	nt := store.NewTransaction{Date: form.Date, Amount: amount, Type: form.Type}
-	if form.HoldingType() {
-		if nt.HoldingID, err = a.resolveChoice(form.Holding, form.NewHolding, a.store.EnsureHolding); err != nil {
-			a.serverError(w, err)
-			return
-		}
-	} else {
+	if spec.Description {
 		nt.Description = form.Description
-		if nt.CategoryID, err = a.resolveChoice(form.Category, form.NewCategory, a.store.EnsureCategory); err != nil {
+	}
+	if spec.Lists != nil {
+		if nt.CategoryID, err = a.resolveChoice(form.category(*spec.Lists)); err != nil {
 			a.serverError(w, err)
 			return
 		}
-		if nt.SubcategoryID, err = a.resolveChoice(form.Subcategory, form.NewSubcategory, a.store.EnsureSubcategory); err != nil {
+		if nt.SubcategoryID, err = a.resolveChoice(form.subcategory(*spec.Lists)); err != nil {
+			a.serverError(w, err)
+			return
+		}
+	}
+	if spec.Holding {
+		if nt.HoldingID, err = a.resolveChoice(form.holding()); err != nil {
 			a.serverError(w, err)
 			return
 		}
 	}
 	if _, err = a.store.AddTransaction(nt); err != nil {
 		if errors.Is(err, store.ErrDuplicate) {
-			// A Holding collision is only caught here; for Income and Expense this
-			// means a race with another submission.
+			// A Holding collision is only caught here; for Types with a
+			// Description this means a race with another submission.
 			msg := errDuplicate
-			if form.HoldingType() {
+			if spec.Holding {
 				msg = errDuplicateHolding
 			}
 			form.Errors = append(form.Errors, msg)
@@ -262,25 +244,73 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// validChoice checks a select value ("new" with a name, or an existing id).
-func (a *App) validChoice(choice, newName string, exists func(int64) (bool, error)) (bool, error) {
-	if choice == newOption {
-		return newName != "", nil
+// validateFields appends an error for every field the Type does not take but
+// was submitted, and for every field it takes but is missing or too long.
+func (a *App) validateFields(form *entryForm, spec store.TypeSpec) error {
+	set := store.DefaultListSet
+	if spec.Lists != nil {
+		set = *spec.Lists
 	}
-	id, err := strconv.ParseInt(choice, 10, 64)
+	if !spec.Description && form.Description != "" {
+		form.Errors = append(form.Errors, spec.Label+" takes no Description.")
+	}
+	if spec.Lists == nil && (form.Category != "" || form.NewCategory != "" || form.Subcategory != "" || form.NewSubcategory != "") {
+		form.Errors = append(form.Errors, spec.Label+" takes no Category or Subcategory.")
+	}
+	if !spec.Holding && (form.Holding != "" || form.NewHolding != "") {
+		form.Errors = append(form.Errors, spec.Label+" takes no Holding.")
+	}
+
+	if spec.Description {
+		if form.Description == "" {
+			form.Errors = append(form.Errors, "Description is required.")
+		} else if utf8.RuneCountInString(form.Description) > store.MaxDescriptionLen {
+			form.Errors = append(form.Errors, "Description must be at most 100 characters.")
+		}
+	}
+	var required []choice
+	if spec.Lists != nil {
+		required = append(required, form.category(set), form.subcategory(set))
+	}
+	if spec.Holding {
+		required = append(required, form.holding())
+	}
+	for _, c := range required {
+		if utf8.RuneCountInString(c.newName) > store.MaxNameLen {
+			form.Errors = append(form.Errors, c.list.Label+" name must be at most 50 characters.")
+		}
+	}
+	for _, c := range required {
+		ok, err := a.validChoice(c)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			form.Errors = append(form.Errors, c.list.Label+" is required.")
+		}
+	}
+	return nil
+}
+
+// validChoice checks a select value ("new" with a name, or an existing id).
+func (a *App) validChoice(c choice) (bool, error) {
+	if c.value == newOption {
+		return c.newName != "", nil
+	}
+	id, err := strconv.ParseInt(c.value, 10, 64)
 	if err != nil {
 		return false, nil
 	}
-	return exists(id)
+	return a.store.NamedExists(c.list, id)
 }
 
 // resolveChoice turns a validated select value into an id, creating the
 // entry for the inline "new..." choice.
-func (a *App) resolveChoice(choice, newName string, ensure func(string) (int64, error)) (int64, error) {
-	if choice == newOption {
-		return ensure(newName)
+func (a *App) resolveChoice(c choice) (int64, error) {
+	if c.value == newOption {
+		return a.store.EnsureNamed(c.list, c.newName)
 	}
-	return strconv.ParseInt(choice, 10, 64)
+	return strconv.ParseInt(c.value, 10, 64)
 }
 
 // newOption is the select value of the inline "new..." choice.

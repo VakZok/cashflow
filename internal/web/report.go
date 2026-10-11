@@ -96,20 +96,41 @@ const (
 	otherThresholdPct = 3
 )
 
-// chartSel is the pie chart's Type (income or expense) and Group-by.
+// chartSel is the pie chart's Type (one with a Category pair) and Group-by.
 type chartSel struct{ Type, Group string }
+
+// chartTypes lists the Types the pie chart can break down: those with a
+// Category and Subcategory pair.
+func chartTypes() []store.TypeSpec {
+	var out []store.TypeSpec
+	for _, s := range store.Types {
+		if s.Lists != nil {
+			out = append(out, s)
+		}
+	}
+	return out
+}
 
 // parseChartSel reads ?type=&group=; anything missing or invalid yields the
 // defaults (expense, category).
 func parseChartSel(q url.Values) chartSel {
 	c := chartSel{Type: store.TypeExpense, Group: groupCategory}
-	if q.Get("type") == store.TypeIncome {
-		c.Type = store.TypeIncome
+	if s, ok := store.SpecFor(q.Get("type")); ok && s.Lists != nil {
+		c.Type = s.Type
 	}
 	if q.Get("group") == groupSubcategory {
 		c.Group = groupSubcategory
 	}
 	return c
+}
+
+// list is the list of the Type's Category pair the chart groups by.
+func (c chartSel) list() store.List {
+	spec, _ := store.SpecFor(c.Type)
+	if c.Group == groupSubcategory {
+		return spec.Lists.Subcategory
+	}
+	return spec.Lists.Category
 }
 
 // chartData is emitted as JSON for Chart.js.
@@ -149,6 +170,7 @@ func buildChart(rows []store.Slice) (chartData, []legendRow) {
 
 type reportData struct {
 	Chart       chartSel
+	ChartTypes  []store.TypeSpec
 	ChartData   chartData
 	Legend      []legendRow
 	Period      period
@@ -178,12 +200,12 @@ func (a *App) report(w http.ResponseWriter, r *http.Request) {
 	}
 	net := income - expense
 
-	slices, err := a.store.Breakdown(sel.Type, sel.Group == groupSubcategory, from, to)
+	slices, err := a.store.Breakdown(sel.Type, sel.list(), from, to)
 	if err != nil {
 		a.serverError(w, err)
 		return
 	}
-	d := reportData{Chart: sel, Period: p, Income: formatEuro(income), Expense: formatEuro(expense)}
+	d := reportData{Chart: sel, ChartTypes: chartTypes(), Period: p, Income: formatEuro(income), Expense: formatEuro(expense)}
 	switch {
 	case net > 0:
 		d.Net, d.NetClass = template.HTML("+"+formatEuro(net)), "net-positive"
