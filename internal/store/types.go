@@ -27,7 +27,7 @@ var (
 // DefaultListSet is the list set of Income and Expense.
 var DefaultListSet = ListSet{Category: CategoryList, Subcategory: SubcategoryList}
 
-// LevyListSet is the list set of Levy, separate from DefaultListSet.
+// LevyListSet is the list set of Levy and Rebate, separate from DefaultListSet.
 var LevyListSet = ListSet{Category: LevyCategoryList, Subcategory: LevySubcategoryList}
 
 // TypeSpec describes which fields a Transaction Type takes. It is the one
@@ -45,6 +45,7 @@ var Types = []TypeSpec{
 	{Type: TypeExpense, Label: "Expense", Description: true, Lists: &DefaultListSet},
 	{Type: TypeIncome, Label: "Income", Description: true, Lists: &DefaultListSet},
 	{Type: TypeLevy, Label: "Levy", Description: true, Lists: &LevyListSet},
+	{Type: TypeRebate, Label: "Rebate", Description: true, Lists: &LevyListSet},
 	{Type: TypeInvestment, Label: "Investment", Holding: true},
 	{Type: TypeDivestment, Label: "Divestment", Holding: true},
 }

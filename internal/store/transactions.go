@@ -10,6 +10,7 @@ const (
 	TypeIncome     = "income"
 	TypeExpense    = "expense"
 	TypeLevy       = "levy"
+	TypeRebate     = "rebate"
 	TypeInvestment = "investment"
 	TypeDivestment = "divestment"
 )
@@ -47,7 +48,7 @@ type NewTransaction struct {
 }
 
 // TransactionRow is a Transaction with its Category, Subcategory (Levy Category and
-// Levy Subcategory for a Levy) and Holding names
+// Levy Subcategory for a Levy or Rebate) and Holding names
 // resolved, for display.
 type TransactionRow struct {
 	ID          int64
