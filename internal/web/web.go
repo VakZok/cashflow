@@ -173,7 +173,7 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 
 	spec, known := store.SpecFor(form.Type)
 	if !known {
-		form.Errors = append(form.Errors, "Type must be Income, Expense, Investment or Divestment.")
+		form.Errors = append(form.Errors, "Type must be "+typeChoices()+".")
 	}
 	if d, err := time.Parse(dateLayout, form.Date); err != nil {
 		form.Errors = append(form.Errors, "Date must be in the format YYYY-MM-DD.")
@@ -231,7 +231,7 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 			// A Holding collision is only caught here; for Types with a
 			// Description this means a race with another submission.
 			msg := errDuplicate
-			if !spec.Description {
+			if spec.Holding {
 				msg = errDuplicateHolding
 			}
 			form.Errors = append(form.Errors, msg)

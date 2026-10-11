@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"strconv"
+	"strings"
 
 	"github.com/VakZok/money_manager_app/internal/store"
 )
@@ -14,6 +15,16 @@ func typeLabel(t string) string {
 		return spec.Label
 	}
 	return t
+}
+
+// typeChoices reads "Income, Expense or Divestment" from the known Types.
+func typeChoices() string {
+	var labels []string
+	for _, s := range store.Types {
+		labels = append(labels, s.Label)
+	}
+	last := len(labels) - 1
+	return strings.Join(labels[:last], ", ") + " or " + labels[last]
 }
 
 // specsJSON describes which fields each Type takes, for the form script.
