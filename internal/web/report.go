@@ -96,15 +96,15 @@ const (
 	otherThresholdPct = 3
 )
 
-// chartSel is the pie chart's Type (one with a Category pair) and Group-by.
+// chartSel is the pie chart's Type (one with a Category pair, not a Levy) and Group-by.
 type chartSel struct{ Type, Group string }
 
 // chartTypes lists the Types the pie chart can break down: those with a
-// Category and Subcategory pair.
+// Category and Subcategory pair; Levy is not part of the Report (ADR 0007).
 func chartTypes() []store.TypeSpec {
 	var out []store.TypeSpec
 	for _, s := range store.Types {
-		if s.Lists != nil {
+		if s.TakesDefaultLists() {
 			out = append(out, s)
 		}
 	}
@@ -115,7 +115,7 @@ func chartTypes() []store.TypeSpec {
 // defaults (expense, category).
 func parseChartSel(q url.Values) chartSel {
 	c := chartSel{Type: store.TypeExpense, Group: groupCategory}
-	if s, ok := store.SpecFor(q.Get("type")); ok && s.Lists != nil {
+	if s, ok := store.SpecFor(q.Get("type")); ok && s.TakesDefaultLists() {
 		c.Type = s.Type
 	}
 	if q.Get("group") == groupSubcategory {

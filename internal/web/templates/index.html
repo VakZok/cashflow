@@ -43,22 +43,40 @@
   <input id="description" type="text" name="description" maxlength="100" value="{{.Form.Description}}" autocomplete="off"{{if not .Form.Spec.Description}} disabled{{end}}>
   </div>
 
-  <div id="group-lists"{{if not .Form.Spec.Lists}} hidden{{end}}>
+  <div id="group-lists"{{if not .Form.Spec.TakesDefaultLists}} hidden{{end}}>
   <label for="category">Category</label>
-  <select id="category" name="category"{{if not .Form.Spec.Lists}} disabled{{end}} onchange="document.getElementById('new_category').hidden = this.value !== 'new'">
+  <select id="category" name="category"{{if not .Form.Spec.TakesDefaultLists}} disabled{{end}} onchange="document.getElementById('new_category').hidden = this.value !== 'new'">
     <option value="">Choose…</option>
     {{range .Categories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.Category}} selected{{end}}>{{.Name}}</option>{{end}}
     <option value="new"{{if eq .Form.Category "new"}} selected{{end}}>new…</option>
   </select>
-  <input id="new_category" type="text" name="new_category" maxlength="50" placeholder="New category name" value="{{.Form.NewCategory}}"{{if ne .Form.Category "new"}} hidden{{end}}{{if not .Form.Spec.Lists}} disabled{{end}}>
+  <input id="new_category" type="text" name="new_category" maxlength="50" placeholder="New category name" value="{{.Form.NewCategory}}"{{if ne .Form.Category "new"}} hidden{{end}}{{if not .Form.Spec.TakesDefaultLists}} disabled{{end}}>
 
   <label for="subcategory">Subcategory</label>
-  <select id="subcategory" name="subcategory"{{if not .Form.Spec.Lists}} disabled{{end}} onchange="document.getElementById('new_subcategory').hidden = this.value !== 'new'">
+  <select id="subcategory" name="subcategory"{{if not .Form.Spec.TakesDefaultLists}} disabled{{end}} onchange="document.getElementById('new_subcategory').hidden = this.value !== 'new'">
     <option value="">Choose…</option>
     {{range .Subcategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.Subcategory}} selected{{end}}>{{.Name}}</option>{{end}}
     <option value="new"{{if eq .Form.Subcategory "new"}} selected{{end}}>new…</option>
   </select>
-  <input id="new_subcategory" type="text" name="new_subcategory" maxlength="50" placeholder="New subcategory name" value="{{.Form.NewSubcategory}}"{{if ne .Form.Subcategory "new"}} hidden{{end}}{{if not .Form.Spec.Lists}} disabled{{end}}>
+  <input id="new_subcategory" type="text" name="new_subcategory" maxlength="50" placeholder="New subcategory name" value="{{.Form.NewSubcategory}}"{{if ne .Form.Subcategory "new"}} hidden{{end}}{{if not .Form.Spec.TakesDefaultLists}} disabled{{end}}>
+  </div>
+
+  <div id="group-levy-lists"{{if not .Form.Spec.TakesLevyLists}} hidden{{end}}>
+  <label for="levy_category">Levy Category</label>
+  <select id="levy_category" name="levy_category"{{if not .Form.Spec.TakesLevyLists}} disabled{{end}} onchange="document.getElementById('new_levy_category').hidden = this.value !== 'new'">
+    <option value="">Choose…</option>
+    {{range .LevyCategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.LevyCategory}} selected{{end}}>{{.Name}}</option>{{end}}
+    <option value="new"{{if eq .Form.LevyCategory "new"}} selected{{end}}>new…</option>
+  </select>
+  <input id="new_levy_category" type="text" name="new_levy_category" maxlength="50" placeholder="New levy category name" value="{{.Form.NewLevyCategory}}"{{if ne .Form.LevyCategory "new"}} hidden{{end}}{{if not .Form.Spec.TakesLevyLists}} disabled{{end}}>
+
+  <label for="levy_subcategory">Levy Subcategory</label>
+  <select id="levy_subcategory" name="levy_subcategory"{{if not .Form.Spec.TakesLevyLists}} disabled{{end}} onchange="document.getElementById('new_levy_subcategory').hidden = this.value !== 'new'">
+    <option value="">Choose…</option>
+    {{range .LevySubcategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.LevySubcategory}} selected{{end}}>{{.Name}}</option>{{end}}
+    <option value="new"{{if eq .Form.LevySubcategory "new"}} selected{{end}}>new…</option>
+  </select>
+  <input id="new_levy_subcategory" type="text" name="new_levy_subcategory" maxlength="50" placeholder="New levy subcategory name" value="{{.Form.NewLevySubcategory}}"{{if ne .Form.LevySubcategory "new"}} hidden{{end}}{{if not .Form.Spec.TakesLevyLists}} disabled{{end}}>
   </div>
 
   <div id="group-holding"{{if not .Form.Spec.Holding}} hidden{{end}}>
@@ -78,7 +96,7 @@
 var typeFields = {{specsJSON}};
 function syncGroups() {
   var fields = typeFields[document.getElementById('type').value] || {};
-  [['group-description', fields.description], ['group-lists', fields.lists], ['group-holding', fields.holding]].forEach(function (g) {
+  [['group-description', fields.description], ['group-lists', fields.lists], ['group-levy-lists', fields.levyLists], ['group-holding', fields.holding]].forEach(function (g) {
     var el = document.getElementById(g[0]);
     el.hidden = !g[1];
     el.querySelectorAll('input, select').forEach(function (i) { i.disabled = !g[1]; });

@@ -10,18 +10,32 @@ CREATE TABLE subcategories (
     name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(name)) BETWEEN 1 AND 50)
 );
 
+-- Levy Category and Levy Subcategory are two more flat lists, fully separate
+-- from Category and Subcategory (ADR 0001, ADR 0007). Nothing is seeded.
+CREATE TABLE levy_categories (
+    id   INTEGER PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(name)) BETWEEN 1 AND 50)
+);
+
+CREATE TABLE levy_subcategories (
+    id   INTEGER PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(name)) BETWEEN 1 AND 50)
+);
+
 -- A Holding is a named investment that Investments and Divestments are recorded against.
 CREATE TABLE holdings (
     id   INTEGER PRIMARY KEY,
     name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(name)) BETWEEN 1 AND 50)
 );
 
--- Transactions reference Category/Subcategory/Holding by id, so renames propagate.
--- All four Types are allowed from the start.
+-- Transactions reference Category/Subcategory/Levy Category/Levy Subcategory/Holding
+-- by id, so renames propagate. A list entry with Transactions cannot be deleted.
 --
 -- Per-Type fields (the CHECK on the last line of the table):
---   income, expense:         description, category and subcategory; no holding
---   investment, divestment:  holding only; no description, category or subcategory
+--   income, expense:         description, category and subcategory
+--   levy:                    description, levy category and levy subcategory
+--   investment, divestment:  holding only
+-- Every other field must be NULL.
 
 --
 -- date:   strict YYYY-MM-DD, a real calendar day, 2000..2200. date() returns
@@ -37,24 +51,33 @@ CREATE TABLE transactions (
         AND date BETWEEN '2000-01-01' AND '2200-12-31'),
     amount         INTEGER NOT NULL CHECK (typeof(amount) = 'integer' AND amount BETWEEN 1 AND 100000000),
     description    TEXT    CHECK (description IS NULL OR length(trim(description)) BETWEEN 1 AND 100),
-    type           TEXT    NOT NULL CHECK (type IN ('income', 'expense', 'investment', 'divestment')),
+    type           TEXT    NOT NULL CHECK (type IN ('income', 'expense', 'levy', 'investment', 'divestment')),
     category_id    INTEGER REFERENCES categories (id),
     subcategory_id INTEGER REFERENCES subcategories (id),
+    levy_category_id    INTEGER REFERENCES levy_categories (id),
+    levy_subcategory_id INTEGER REFERENCES levy_subcategories (id),
     holding_id     INTEGER REFERENCES holdings (id),
     CHECK (
         (type IN ('income', 'expense')
-            AND description IS NOT NULL AND category_id IS NOT NULL AND subcategory_id IS NOT NULL AND holding_id IS NULL)
+            AND description IS NOT NULL AND category_id IS NOT NULL AND subcategory_id IS NOT NULL
+            AND levy_category_id IS NULL AND levy_subcategory_id IS NULL AND holding_id IS NULL)
+        OR (type = 'levy'
+            AND description IS NOT NULL AND category_id IS NULL AND subcategory_id IS NULL
+            AND levy_category_id IS NOT NULL AND levy_subcategory_id IS NOT NULL AND holding_id IS NULL)
         OR (type IN ('investment', 'divestment')
-            AND description IS NULL AND category_id IS NULL AND subcategory_id IS NULL AND holding_id IS NOT NULL))
+            AND description IS NULL AND category_id IS NULL AND subcategory_id IS NULL
+            AND levy_category_id IS NULL AND levy_subcategory_id IS NULL AND holding_id IS NOT NULL))
 );
 
--- Income and Expense are unique per (date, description, type), ignoring ASCII case (ADR 0006).
+-- Income, Expense and Levy are unique per (date, description, type), ignoring ASCII case (ADR 0006).
 -- Investments and Divestments have a NULL description, which SQLite treats as distinct.
 -- Leading with date, it also serves date-range queries.
 CREATE UNIQUE INDEX transactions_date_description_type ON transactions (date, description COLLATE NOCASE, type);
 CREATE INDEX transactions_category ON transactions (category_id);
 CREATE INDEX transactions_subcategory ON transactions (subcategory_id);
+CREATE INDEX transactions_levy_category ON transactions (levy_category_id);
+CREATE INDEX transactions_levy_subcategory ON transactions (levy_subcategory_id);
 -- Investments and Divestments are unique per (date, holding_id), whatever the Type (ADR 0006).
--- Income and Expense have a NULL holding_id, which SQLite treats as distinct.
+-- The other Types have a NULL holding_id, which SQLite treats as distinct.
 CREATE UNIQUE INDEX transactions_date_holding ON transactions (date, holding_id);
 CREATE INDEX transactions_holding ON transactions (holding_id);
