@@ -109,16 +109,12 @@ type Slice struct {
 	Amount int64
 }
 
-// Breakdown returns the summed amounts of Transactions of one Type (income or
-// expense) per Category, or per Subcategory when bySubcategory, dated
-// from <= date < to, largest first.
-func (s *Store) Breakdown(typ string, bySubcategory bool, from, to string) ([]Slice, error) {
-	table, col := "categories", "category_id"
-	if bySubcategory {
-		table, col = "subcategories", "subcategory_id"
-	}
+// Breakdown returns the summed amounts of Transactions of one Type per entry
+// of the list (a Category or Subcategory list), dated from <= date < to,
+// largest first.
+func (s *Store) Breakdown(typ string, list List, from, to string) ([]Slice, error) {
 	rows, err := s.db.Query(
-		`SELECT n.name, SUM(t.amount) AS total FROM transactions t JOIN `+table+` n ON n.id = t.`+col+`
+		`SELECT n.name, SUM(t.amount) AS total FROM transactions t JOIN `+list.table+` n ON n.id = t.`+list.column+`
 		 WHERE t.type = ? AND t.date >= ? AND t.date < ?
 		 GROUP BY n.id ORDER BY total DESC, n.name`, typ, from, to)
 	if err != nil {
@@ -136,41 +132,9 @@ func (s *Store) Breakdown(typ string, bySubcategory bool, from, to string) ([]Sl
 	return out, rows.Err()
 }
 
-// ListCategories returns all Categories ordered by name.
-func (s *Store) ListCategories() ([]Named, error) { return s.listNamed("categories") }
-
-// ListSubcategories returns all Subcategories ordered by name.
-func (s *Store) ListSubcategories() ([]Named, error) { return s.listNamed("subcategories") }
-
-// EnsureCategory returns the id of the Category with the given name
-// (case-insensitive), creating it if needed.
-func (s *Store) EnsureCategory(name string) (int64, error) { return s.ensureNamed("categories", name) }
-
-// EnsureSubcategory returns the id of the Subcategory with the given name
-// (case-insensitive), creating it if needed.
-func (s *Store) EnsureSubcategory(name string) (int64, error) {
-	return s.ensureNamed("subcategories", name)
-}
-
-// ListHoldings returns all Holdings ordered by name.
-func (s *Store) ListHoldings() ([]Named, error) { return s.listNamed("holdings") }
-
-// EnsureHolding returns the id of the Holding with the given name
-// (case-insensitive), creating it if needed.
-func (s *Store) EnsureHolding(name string) (int64, error) { return s.ensureNamed("holdings", name) }
-
-// HoldingExists reports whether a Holding with the id exists.
-func (s *Store) HoldingExists(id int64) (bool, error) { return s.exists("holdings", id) }
-
-// CategoryExists reports whether a Category with the id exists.
-func (s *Store) CategoryExists(id int64) (bool, error) { return s.exists("categories", id) }
-
-// SubcategoryExists reports whether a Subcategory with the id exists.
-func (s *Store) SubcategoryExists(id int64) (bool, error) { return s.exists("subcategories", id) }
-
-// table is always one of our own constant table names, never user input.
-func (s *Store) listNamed(table string) ([]Named, error) {
-	rows, err := s.db.Query("SELECT id, name FROM " + table + " ORDER BY name COLLATE NOCASE")
+// ListNamed returns all entries of the list ordered by name.
+func (s *Store) ListNamed(l List) ([]Named, error) {
+	rows, err := s.db.Query("SELECT id, name FROM " + l.table + " ORDER BY name COLLATE NOCASE")
 	if err != nil {
 		return nil, err
 	}
@@ -186,28 +150,45 @@ func (s *Store) listNamed(table string) ([]Named, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) ensureNamed(table, name string) (int64, error) {
+// EnsureNamed returns the id of the entry of the list with the given name
+// (case-insensitive), creating it if needed.
+func (s *Store) EnsureNamed(l List, name string) (int64, error) {
 	name = strings.TrimSpace(name)
 	var id int64
-	err := s.db.QueryRow("SELECT id FROM "+table+" WHERE name = ?", name).Scan(&id)
+	err := s.db.QueryRow("SELECT id FROM "+l.table+" WHERE name = ?", name).Scan(&id)
 	if err == nil {
 		return id, nil
 	}
 	if err != sql.ErrNoRows {
 		return 0, err
 	}
-	res, err := s.db.Exec("INSERT INTO "+table+" (name) VALUES (?)", name)
+	res, err := s.db.Exec("INSERT INTO "+l.table+" (name) VALUES (?)", name)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-func (s *Store) exists(table string, id int64) (bool, error) {
+// NamedExists reports whether the list has an entry with the id.
+func (s *Store) NamedExists(l List, id int64) (bool, error) {
 	var n int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM "+table+" WHERE id = ?", id).Scan(&n)
+	err := s.db.QueryRow("SELECT COUNT(*) FROM "+l.table+" WHERE id = ?", id).Scan(&n)
 	return n > 0, err
 }
+
+// EnsureCategory returns the id of the Category with the given name,
+// creating it if needed.
+func (s *Store) EnsureCategory(name string) (int64, error) { return s.EnsureNamed(CategoryList, name) }
+
+// EnsureSubcategory returns the id of the Subcategory with the given name,
+// creating it if needed.
+func (s *Store) EnsureSubcategory(name string) (int64, error) {
+	return s.EnsureNamed(SubcategoryList, name)
+}
+
+// EnsureHolding returns the id of the Holding with the given name,
+// creating it if needed.
+func (s *Store) EnsureHolding(name string) (int64, error) { return s.EnsureNamed(HoldingList, name) }
 
 func nullID(id int64) any {
 	if id == 0 {
