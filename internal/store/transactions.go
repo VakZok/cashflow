@@ -9,6 +9,7 @@ import (
 const (
 	TypeIncome     = "income"
 	TypeExpense    = "expense"
+	TypeLevy       = "levy"
 	TypeInvestment = "investment"
 	TypeDivestment = "divestment"
 )
@@ -17,14 +18,15 @@ const (
 // checked by the web layer first so users get a message instead of an error.
 const (
 	MaxAmount         = 100_000_000
-	MaxNameLen        = 50 // Category, Subcategory and Holding, in characters
+	MaxNameLen        = 50 // Category, Subcategory, Levy Category, Levy Subcategory and Holding, in characters
 	MaxDescriptionLen = 100
 
 	MinDate = "2000-01-01"
 	MaxDate = "2200-12-31"
 )
 
-// Named is an entry of a flat named list (Category, Subcategory, Holding).
+// Named is an entry of a flat named list (Category, Subcategory, Levy Category,
+// Levy Subcategory, Holding).
 type Named struct {
 	ID   int64
 	Name string
@@ -39,9 +41,13 @@ type NewTransaction struct {
 	CategoryID    int64
 	SubcategoryID int64
 	HoldingID     int64
+
+	LevyCategoryID    int64
+	LevySubcategoryID int64
 }
 
-// TransactionRow is a Transaction with its Category, Subcategory and Holding names
+// TransactionRow is a Transaction with its Category, Subcategory (Levy Category and
+// Levy Subcategory for a Levy) and Holding names
 // resolved, for display.
 type TransactionRow struct {
 	ID          int64
@@ -57,10 +63,12 @@ type TransactionRow struct {
 // AddTransaction stores a Transaction and returns its id.
 func (s *Store) AddTransaction(t NewTransaction) (int64, error) {
 	res, err := s.db.Exec(
-		`INSERT INTO transactions (date, amount, description, type, category_id, subcategory_id, holding_id)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO transactions (date, amount, description, type, category_id, subcategory_id, holding_id,
+		                           levy_category_id, levy_subcategory_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.Date, t.Amount, nullString(t.Description), t.Type,
-		nullID(t.CategoryID), nullID(t.SubcategoryID), nullID(t.HoldingID))
+		nullID(t.CategoryID), nullID(t.SubcategoryID), nullID(t.HoldingID),
+		nullID(t.LevyCategoryID), nullID(t.LevySubcategoryID))
 	if err != nil {
 		return 0, translate(err)
 	}
@@ -71,10 +79,12 @@ func (s *Store) AddTransaction(t NewTransaction) (int64, error) {
 func (s *Store) ListTransactions() ([]TransactionRow, error) {
 	rows, err := s.db.Query(
 		`SELECT t.id, t.date, t.amount, COALESCE(t.description, ''), t.type,
-		        COALESCE(c.name, ''), COALESCE(sc.name, ''), COALESCE(h.name, '')
+		        COALESCE(c.name, lc.name, ''), COALESCE(sc.name, lsc.name, ''), COALESCE(h.name, '')
 		 FROM transactions t
 		 LEFT JOIN categories c ON c.id = t.category_id
 		 LEFT JOIN subcategories sc ON sc.id = t.subcategory_id
+		 LEFT JOIN levy_categories lc ON lc.id = t.levy_category_id
+		 LEFT JOIN levy_subcategories lsc ON lsc.id = t.levy_subcategory_id
 		 LEFT JOIN holdings h ON h.id = t.holding_id
 		 ORDER BY t.date DESC, t.id DESC`)
 	if err != nil {
@@ -184,6 +194,18 @@ func (s *Store) EnsureCategory(name string) (int64, error) { return s.EnsureName
 // creating it if needed.
 func (s *Store) EnsureSubcategory(name string) (int64, error) {
 	return s.EnsureNamed(SubcategoryList, name)
+}
+
+// EnsureLevyCategory returns the id of the Levy Category with the given name,
+// creating it if needed.
+func (s *Store) EnsureLevyCategory(name string) (int64, error) {
+	return s.EnsureNamed(LevyCategoryList, name)
+}
+
+// EnsureLevySubcategory returns the id of the Levy Subcategory with the given
+// name, creating it if needed.
+func (s *Store) EnsureLevySubcategory(name string) (int64, error) {
+	return s.EnsureNamed(LevySubcategoryList, name)
 }
 
 // EnsureHolding returns the id of the Holding with the given name,

@@ -80,7 +80,13 @@ type entryForm struct {
 	NewSubcategory string
 	Holding        string
 	NewHolding     string
-	Errors         []string
+	// Levy Category and Levy Subcategory are separate fields from Category and
+	// Subcategory: the Types of the two list sets never share an input.
+	LevyCategory       string
+	NewLevyCategory    string
+	LevySubcategory    string
+	NewLevySubcategory string
+	Errors             []string
 }
 
 // choice is the value of a select with an inline "new..." option, bound to
@@ -92,11 +98,23 @@ type choice struct {
 }
 
 func (f entryForm) category(set store.ListSet) choice {
+	if set == store.LevyListSet {
+		return choice{set.Category, f.LevyCategory, f.NewLevyCategory}
+	}
 	return choice{set.Category, f.Category, f.NewCategory}
 }
 
 func (f entryForm) subcategory(set store.ListSet) choice {
+	if set == store.LevyListSet {
+		return choice{set.Subcategory, f.LevySubcategory, f.NewLevySubcategory}
+	}
 	return choice{set.Subcategory, f.Subcategory, f.NewSubcategory}
+}
+
+// submitted reports whether the form carries a value for either list of the set.
+func (f entryForm) submitted(set store.ListSet) bool {
+	c, s := f.category(set), f.subcategory(set)
+	return c.value != "" || c.newName != "" || s.value != "" || s.newName != ""
 }
 
 func (f entryForm) holding() choice {
@@ -104,12 +122,14 @@ func (f entryForm) holding() choice {
 }
 
 type indexData struct {
-	Form          entryForm
-	Types         []store.TypeSpec
-	Transactions  []store.TransactionRow
-	Categories    []store.Named
-	Subcategories []store.Named
-	Holdings      []store.Named
+	Form              entryForm
+	Types             []store.TypeSpec
+	Transactions      []store.TransactionRow
+	Categories        []store.Named
+	Subcategories     []store.Named
+	LevyCategories    []store.Named
+	LevySubcategories []store.Named
+	Holdings          []store.Named
 }
 
 func (a *App) index(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +154,14 @@ func (a *App) renderIndex(w http.ResponseWriter, status int, form entryForm) {
 		return
 	}
 	if d.Subcategories, err = a.store.ListNamed(store.DefaultListSet.Subcategory); err != nil {
+		a.serverError(w, err)
+		return
+	}
+	if d.LevyCategories, err = a.store.ListNamed(store.LevyListSet.Category); err != nil {
+		a.serverError(w, err)
+		return
+	}
+	if d.LevySubcategories, err = a.store.ListNamed(store.LevyListSet.Subcategory); err != nil {
 		a.serverError(w, err)
 		return
 	}
@@ -169,6 +197,11 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		NewSubcategory: strings.TrimSpace(r.PostFormValue("new_subcategory")),
 		Holding:        r.PostFormValue("holding"),
 		NewHolding:     strings.TrimSpace(r.PostFormValue("new_holding")),
+
+		LevyCategory:       r.PostFormValue("levy_category"),
+		NewLevyCategory:    strings.TrimSpace(r.PostFormValue("new_levy_category")),
+		LevySubcategory:    r.PostFormValue("levy_subcategory"),
+		NewLevySubcategory: strings.TrimSpace(r.PostFormValue("new_levy_subcategory")),
 	}
 
 	spec, known := store.SpecFor(form.Type)
@@ -211,13 +244,20 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		nt.Description = form.Description
 	}
 	if spec.Lists != nil {
-		if nt.CategoryID, err = a.resolveChoice(form.category(*spec.Lists)); err != nil {
+		categoryID, err := a.resolveChoice(form.category(*spec.Lists))
+		if err != nil {
 			a.serverError(w, err)
 			return
 		}
-		if nt.SubcategoryID, err = a.resolveChoice(form.subcategory(*spec.Lists)); err != nil {
+		subcategoryID, err := a.resolveChoice(form.subcategory(*spec.Lists))
+		if err != nil {
 			a.serverError(w, err)
 			return
+		}
+		if spec.TakesLists(store.LevyListSet) {
+			nt.LevyCategoryID, nt.LevySubcategoryID = categoryID, subcategoryID
+		} else {
+			nt.CategoryID, nt.SubcategoryID = categoryID, subcategoryID
 		}
 	}
 	if spec.Holding {
@@ -254,8 +294,10 @@ func (a *App) validateFields(form *entryForm, spec store.TypeSpec) error {
 	if !spec.Description && form.Description != "" {
 		form.Errors = append(form.Errors, spec.Label+" takes no Description.")
 	}
-	if spec.Lists == nil && (form.Category != "" || form.NewCategory != "" || form.Subcategory != "" || form.NewSubcategory != "") {
-		form.Errors = append(form.Errors, spec.Label+" takes no Category or Subcategory.")
+	for _, other := range []store.ListSet{store.DefaultListSet, store.LevyListSet} {
+		if !spec.TakesLists(other) && form.submitted(other) {
+			form.Errors = append(form.Errors, spec.Label+" takes no "+other.Category.Label+" or "+other.Subcategory.Label+".")
+		}
 	}
 	if !spec.Holding && (form.Holding != "" || form.NewHolding != "") {
 		form.Errors = append(form.Errors, spec.Label+" takes no Holding.")

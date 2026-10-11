@@ -32,11 +32,12 @@ func specsJSON() (template.JS, error) {
 	type fields struct {
 		Description bool `json:"description"`
 		Lists       bool `json:"lists"`
+		LevyLists   bool `json:"levyLists"`
 		Holding     bool `json:"holding"`
 	}
 	m := map[string]fields{}
 	for _, s := range store.Types {
-		m[s.Type] = fields{s.Description, s.Lists != nil, s.Holding}
+		m[s.Type] = fields{s.Description, s.TakesDefaultLists(), s.TakesLevyLists(), s.Holding}
 	}
 	b, err := json.Marshal(m)
 	return template.JS(b), err
