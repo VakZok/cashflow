@@ -48,10 +48,10 @@ CREATE TABLE transactions (
             AND description IS NULL AND category_id IS NULL AND subcategory_id IS NULL AND holding_id IS NOT NULL))
 );
 
--- Income and Expense are unique per (date, description), ignoring ASCII case (ADR 0006).
+-- Income and Expense are unique per (date, description, type), ignoring ASCII case (ADR 0006).
 -- Investments and Divestments have a NULL description, which SQLite treats as distinct.
 -- Leading with date, it also serves date-range queries.
-CREATE UNIQUE INDEX transactions_date_description ON transactions (date, description COLLATE NOCASE);
+CREATE UNIQUE INDEX transactions_date_description_type ON transactions (date, description COLLATE NOCASE, type);
 CREATE INDEX transactions_category ON transactions (category_id);
 CREATE INDEX transactions_subcategory ON transactions (subcategory_id);
 -- Investments and Divestments are unique per (date, holding_id), whatever the Type (ADR 0006).

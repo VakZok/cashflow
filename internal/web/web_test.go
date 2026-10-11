@@ -575,9 +575,9 @@ func TestDuplicateDateAndDescriptionIsRejectedWithMessage(t *testing.T) {
 		t.Fatalf("first POST = %d, want 303", r.Status)
 	}
 
-	// Same date, description differing only in ASCII case, other Type and
-	// Category: still a duplicate, and the typed values are kept.
-	dup := incomeForm("2026-10-01", "9", "coffee", "new", "Other", "new", "Misc")
+	// Same date, description differing only in ASCII case, other Category: still
+	// a duplicate, and the typed values are kept.
+	dup := expenseForm("2026-10-01", "9", "coffee", "new", "Other", "new", "Misc")
 	r := ta.post("/transactions", dup)
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("duplicate POST = %d, want 422", r.Status)
@@ -590,6 +590,11 @@ func TestDuplicateDateAndDescriptionIsRejectedWithMessage(t *testing.T) {
 	}
 	if strings.Contains(ta.get("/").Body, "Misc") {
 		t.Error("rejected submission created a Subcategory")
+	}
+
+	// An Income with the same date and description is accepted.
+	if r := ta.post("/transactions", incomeForm("2026-10-01", "9", "Coffee", "new", "Other", "new", "Misc")); r.Status != http.StatusSeeOther {
+		t.Errorf("income POST = %d, want 303", r.Status)
 	}
 
 	// A different date is accepted.
