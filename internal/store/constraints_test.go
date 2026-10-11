@@ -270,21 +270,25 @@ func TestDuplicateDateAndDescriptionIsRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Same date and description collide, ignoring ASCII case and regardless of
-	// Type, Category or Subcategory.
-	for _, typ := range []string{store.TypeExpense, store.TypeIncome} {
-		for _, desc := range []string{"Coffee", "coffee", "COFFEE"} {
-			n := tx(t, s, "2026-10-05", 7, desc, typ)
-			if typ == store.TypeIncome {
-				var err error
-				if n.CategoryID, err = s.EnsureCategory("Other"); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if _, err := s.AddTransaction(n); !errors.Is(err, store.ErrDuplicate) {
-				t.Errorf("%s %q: err = %v, want ErrDuplicate", typ, desc, err)
-			}
+	// Same date and description collide for the same Type, ignoring ASCII case.
+	for _, desc := range []string{"Coffee", "coffee", "COFFEE"} {
+		if _, err := s.AddTransaction(tx(t, s, "2026-10-05", 7, desc, store.TypeExpense)); !errors.Is(err, store.ErrDuplicate) {
+			t.Errorf("expense %q: err = %v, want ErrDuplicate", desc, err)
 		}
+	}
+
+	// An Income with the same date and description is a different Duplicate key.
+	income := tx(t, s, "2026-10-05", 7, "coffee", store.TypeIncome)
+	var err error
+	if income.CategoryID, err = s.EnsureCategory("Other"); err != nil {
+		t.Fatal(err)
+	}
+	incomeID, err := s.AddTransaction(income)
+	if err != nil {
+		t.Fatalf("income with an expense's date and description rejected: %v", err)
+	}
+	if _, err := s.AddTransaction(income); !errors.Is(err, store.ErrDuplicate) {
+		t.Errorf("second income: err = %v, want ErrDuplicate", err)
 	}
 
 	// A different date or description is fine.
@@ -301,6 +305,11 @@ func TestDuplicateDateAndDescriptionIsRejected(t *testing.T) {
 	}
 	if _, err := raw.Exec(`UPDATE transactions SET date = '2026-10-05' WHERE id = ?`, id); err == nil {
 		t.Error("edit into a duplicate accepted")
+	}
+
+	// An Income edited to match an Expense's description is not a Duplicate.
+	if _, err := raw.Exec(`UPDATE transactions SET description = 'Tea' WHERE id = ?`, incomeID); err != nil {
+		t.Errorf("edit into another Type's key rejected: %v", err)
 	}
 }
 

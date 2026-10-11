@@ -190,7 +190,7 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(form.Errors) == 0 && spec.Description {
-			taken, err := a.store.DescriptionTaken(form.Date, form.Description)
+			taken, err := a.store.DescriptionTaken(form.Date, form.Description, form.Type)
 			if err != nil {
 				a.serverError(w, err)
 				return

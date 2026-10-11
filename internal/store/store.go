@@ -91,8 +91,8 @@ func migrate(db *sql.DB, fsys fs.FS) error {
 // of a violated UNIQUE constraint or index.
 const sqliteConstraintUnique = 2067
 
-// ErrDuplicate means a Transaction with the same date and description (Income
-// and Expense, ignoring ASCII case) or the same date and Holding (Investment
+// ErrDuplicate means a Transaction with the same date, description and Type
+// (Income and Expense, ignoring ASCII case) or the same date and Holding (Investment
 // and Divestment) already exists.
 var ErrDuplicate = errors.New("duplicate transaction")
 

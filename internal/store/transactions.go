@@ -205,12 +205,12 @@ func nullString(v string) any {
 	return v
 }
 
-// DescriptionTaken reports whether an Income or Expense with the date and
+// DescriptionTaken reports whether a Transaction of the Type with the date and
 // description (ignoring ASCII case) exists.
-func (s *Store) DescriptionTaken(date, description string) (bool, error) {
+func (s *Store) DescriptionTaken(date, description, typ string) (bool, error) {
 	var n int
 	err := s.db.QueryRow(
-		"SELECT COUNT(*) FROM transactions WHERE date = ? AND description = ? COLLATE NOCASE",
-		date, description).Scan(&n)
+		"SELECT COUNT(*) FROM transactions WHERE date = ? AND description = ? COLLATE NOCASE AND type = ?",
+		date, description, typ).Scan(&n)
 	return n > 0, err
 }
