@@ -81,3 +81,42 @@ CREATE INDEX transactions_levy_subcategory ON transactions (levy_subcategory_id)
 -- The other Types have a NULL holding_id, which SQLite treats as distinct.
 CREATE UNIQUE INDEX transactions_date_holding ON transactions (date, holding_id);
 CREATE INDEX transactions_holding ON transactions (holding_id);
+
+-- Repeating is a user-maintained list of saved Transactions without a date.
+-- A row is not a Transaction and has no link to the Transactions booked from it.
+--
+-- It carries the same per-Type fields as transactions, with the same rules, so
+-- Levy, Rebate, Investment and Divestment rows need no schema change later.
+-- Like a Transaction, a row references its list entries by id, so a Category,
+-- Subcategory, Levy Category, Levy Subcategory or Holding in use cannot be deleted.
+--
+-- position is the order the rows were saved in; rows are displayed grouped by
+-- Type and, within a Type, by position.
+CREATE TABLE repeating (
+    id             INTEGER PRIMARY KEY,
+    position       INTEGER NOT NULL UNIQUE CHECK (position >= 0),
+    amount         INTEGER NOT NULL CHECK (typeof(amount) = 'integer' AND amount BETWEEN 1 AND 100000000),
+    description    TEXT    CHECK (description IS NULL OR length(trim(description)) BETWEEN 1 AND 100),
+    type           TEXT    NOT NULL CHECK (type IN ('income', 'expense', 'levy', 'rebate', 'investment', 'divestment')),
+    category_id    INTEGER REFERENCES categories (id),
+    subcategory_id INTEGER REFERENCES subcategories (id),
+    levy_category_id    INTEGER REFERENCES levy_categories (id),
+    levy_subcategory_id INTEGER REFERENCES levy_subcategories (id),
+    holding_id     INTEGER REFERENCES holdings (id),
+    CHECK (
+        (type IN ('income', 'expense')
+            AND description IS NOT NULL AND category_id IS NOT NULL AND subcategory_id IS NOT NULL
+            AND levy_category_id IS NULL AND levy_subcategory_id IS NULL AND holding_id IS NULL)
+        OR (type IN ('levy', 'rebate')
+            AND description IS NOT NULL AND category_id IS NULL AND subcategory_id IS NULL
+            AND levy_category_id IS NOT NULL AND levy_subcategory_id IS NOT NULL AND holding_id IS NULL)
+        OR (type IN ('investment', 'divestment')
+            AND description IS NULL AND category_id IS NULL AND subcategory_id IS NULL
+            AND levy_category_id IS NULL AND levy_subcategory_id IS NULL AND holding_id IS NOT NULL))
+);
+
+CREATE INDEX repeating_category ON repeating (category_id);
+CREATE INDEX repeating_subcategory ON repeating (subcategory_id);
+CREATE INDEX repeating_levy_category ON repeating (levy_category_id);
+CREATE INDEX repeating_levy_subcategory ON repeating (levy_subcategory_id);
+CREATE INDEX repeating_holding ON repeating (holding_id);
