@@ -8,6 +8,10 @@ A personal, single-user tracker of money the user has actually moved. It only kn
 A single manually entered record of money moving, with a date, a whole-euro amount, and a Type. Income and Expense Transactions also have a description, a Category and a Subcategory; Levy and Rebate Transactions have a description, a Levy Category and a Levy Subcategory; Investment and Divestment Transactions have a Holding instead, and no description, Category or Subcategory.
 _Avoid_: Entry, booking, payment
 
+**Repeating**:
+A saved Transaction without a date, kept in a user-maintained list so a Transaction that comes back often does not have to be retyped. It has a Type, an amount, and the same other fields as a Transaction of that Type, each set per entry. The list changes only when the user edits it, and only complete entries can be saved. Adding the list books one Transaction per entry on a single date chosen at that moment; the Transactions are independent copies, so later editing or removing an entry never changes Transactions already booked. A Repeating entry is not a Transaction and appears in no Report.
+_Avoid_: Recurring, template, standing order
+
 **Type**:
 The nature of a Transaction: Income, Expense, Levy, Rebate, Investment, or Divestment.
 _Avoid_: Kind
@@ -57,7 +61,7 @@ A grouping of an Income or Expense Transaction (e.g. "Food"). The same Categorie
 _Avoid_: Label, group
 
 **Subcategory**:
-A second, independent grouping of an Income or Expense Transaction (e.g. "Restaurant"). It is not nested under a Category: any Subcategory can be combined with any Category. Each Income or Expense Transaction has exactly one Category and exactly one Subcategory, and each is reported on separately. A Category or Subcategory that still has Transactions cannot be deleted until they are reassigned.
+A second, independent grouping of an Income or Expense Transaction (e.g. "Restaurant"). It is not nested under a Category: any Subcategory can be combined with any Category. Each Income or Expense Transaction has exactly one Category and exactly one Subcategory, and each is reported on separately. A Category or Subcategory that still has Transactions or Repeating entries cannot be deleted until they are reassigned.
 _Avoid_: Child category, tag
 
 **Levy Category**:
