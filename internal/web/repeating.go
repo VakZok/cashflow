@@ -33,6 +33,26 @@ type repeatingRow struct {
 	NewLevyCategory    string
 	LevySubcategory    string
 	NewLevySubcategory string
+	// Holding is the only field Investment and Divestment rows take besides the amount.
+	Holding    string
+	NewHolding string
+
+	holdingName string // set on save: the Holding's name, existing or new
+}
+
+// TakesHolding reports whether the row's Type takes a Holding instead of
+// description, Category and Subcategory.
+func (r repeatingRow) TakesHolding() bool {
+	s, ok := repeatingSpec(r.Type)
+	return ok && s.Holding
+}
+
+// choices are the list picks a row of this Type must make, in form order.
+func (r repeatingRow) choices(spec store.TypeSpec) []choice {
+	if spec.Holding {
+		return []choice{r.holding()}
+	}
+	return []choice{r.category(*spec.Lists), r.subcategory(*spec.Lists)}
 }
 
 func (r repeatingRow) category(set store.ListSet) choice {
@@ -60,7 +80,7 @@ func (r repeatingRow) TakesLevyLists() bool {
 func (r repeatingRow) blank() bool {
 	return r.Amount == "" && r.Description == "" && r.Category == "" && r.NewCategory == "" &&
 		r.Subcategory == "" && r.NewSubcategory == "" && r.LevyCategory == "" && r.NewLevyCategory == "" &&
-		r.LevySubcategory == "" && r.NewLevySubcategory == ""
+		r.LevySubcategory == "" && r.NewLevySubcategory == "" && r.Holding == "" && r.NewHolding == ""
 }
 
 type repeatingData struct {
@@ -70,23 +90,15 @@ type repeatingData struct {
 	Subcategories     []store.Named
 	LevyCategories    []store.Named
 	LevySubcategories []store.Named
+	Holdings          []store.Named
 	MaxRows           int
 	Date              string
 	Errors            []string // shown in the box below the buttons
 	Notice            string   // likewise; never persisted
 }
 
-// repeatingTypes are the Types a Repeating row can take so far: those drawing
-// from the Category and Subcategory lists or from the Levy lists.
-func repeatingTypes() []store.TypeSpec {
-	var out []store.TypeSpec
-	for _, s := range store.Types {
-		if s.TakesDefaultLists() || s.TakesLevyLists() {
-			out = append(out, s)
-		}
-	}
-	return out
-}
+// repeatingTypes are the Types a Repeating row can take: all of them.
+func repeatingTypes() []store.TypeSpec { return store.Types }
 
 func repeatingSpec(typ string) (store.TypeSpec, bool) {
 	for _, s := range repeatingTypes() {
@@ -112,7 +124,9 @@ func (a *App) savedRows() ([]repeatingRow, error) {
 	var rows []repeatingRow
 	for _, e := range entries {
 		row := repeatingRow{Type: e.Type, Amount: strconv.FormatInt(e.Amount, 10), Description: e.Description}
-		if row.TakesLevyLists() {
+		if row.TakesHolding() {
+			row.Holding = strconv.FormatInt(e.HoldingID, 10)
+		} else if row.TakesLevyLists() {
 			row.LevyCategory = strconv.FormatInt(e.LevyCategoryID, 10)
 			row.LevySubcategory = strconv.FormatInt(e.LevySubcategoryID, 10)
 		} else {
@@ -162,6 +176,10 @@ func (a *App) renderRepeating(w http.ResponseWriter, status int, rows []repeatin
 		a.serverError(w, err)
 		return
 	}
+	if d.Holdings, err = a.store.ListNamed(store.HoldingList); err != nil {
+		a.serverError(w, err)
+		return
+	}
 	a.render(w, status, "repeating.html", d)
 }
 
@@ -191,6 +209,9 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 			NewLevyCategory:    strings.TrimSpace(r.PostFormValue("new_levy_category_" + n)),
 			LevySubcategory:    r.PostFormValue("levy_subcategory_" + n),
 			NewLevySubcategory: strings.TrimSpace(r.PostFormValue("new_levy_subcategory_" + n)),
+
+			Holding:    r.PostFormValue("holding_" + n),
+			NewHolding: strings.TrimSpace(r.PostFormValue("new_holding_" + n)),
 		}
 		rows = append(rows, row)
 		if !row.blank() {
@@ -211,15 +232,21 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 		addError(errTooManyRows)
 	}
 	entries := make([]store.RepeatingEntry, 0, len(filled))
-	for _, row := range filled {
+	holdings, err := a.store.ListNamed(store.HoldingList)
+	if err != nil {
+		a.serverError(w, err)
+		return
+	}
+	for i := range filled {
+		row := &filled[i]
 		spec, ok := repeatingSpec(row.Type)
 		if !ok {
 			addError("Type must be " + repeatingTypeChoices() + ".")
 			continue
 		}
-		set := *spec.Lists
-		complete := row.Amount != "" && row.Description != ""
-		for _, c := range []choice{row.category(set), row.subcategory(set)} {
+		choices := row.choices(spec)
+		complete := row.Amount != "" && (spec.Holding || row.Description != "")
+		for _, c := range choices {
 			ok, err := a.validChoice(c)
 			if err != nil {
 				a.serverError(w, err)
@@ -235,10 +262,18 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			addError(errAmount)
 		}
-		if utf8.RuneCountInString(row.Description) > store.MaxDescriptionLen {
+		if spec.Holding {
+			row.Description = ""
+			row.holdingName = row.NewHolding
+			for _, h := range holdings {
+				if row.Holding == strconv.FormatInt(h.ID, 10) {
+					row.holdingName = h.Name
+				}
+			}
+		} else if utf8.RuneCountInString(row.Description) > store.MaxDescriptionLen {
 			addError(errDescriptionLen)
 		}
-		for _, c := range []choice{row.category(set), row.subcategory(set)} {
+		for _, c := range choices {
 			if c.value == newOption && utf8.RuneCountInString(c.newName) > store.MaxNameLen {
 				addError(c.list.Label + " name must be at most 50 characters.")
 			}
@@ -257,6 +292,15 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 
 	// Everything is valid: only now create inline "new..." entries.
 	for i, row := range filled {
+		if row.TakesHolding() {
+			holdingID, err := a.resolveChoice(row.holding())
+			if err != nil {
+				a.serverError(w, err)
+				return
+			}
+			entries[i].HoldingID = holdingID
+			continue
+		}
 		set := store.DefaultListSet
 		if row.TakesLevyLists() {
 			set = store.LevyListSet
@@ -293,6 +337,10 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 // equal key collide, and label is what the error calls them. Each Type with
 // its own rule adds a case here.
 func (r repeatingRow) collision() (key, label string) {
+	if r.TakesHolding() {
+		// Whatever the Type: a Holding can be booked once per date.
+		return "holding\x00" + asciiLower(r.holdingName), r.holdingName
+	}
 	return r.Type + "\x00" + asciiLower(r.Description), r.Description
 }
 
@@ -369,4 +417,14 @@ func repeatingTypeChoices() string {
 		labels = append(labels, s.Label)
 	}
 	return strings.Join(labels[:len(labels)-1], ", ") + " or " + labels[len(labels)-1]
+}
+
+func (r repeatingRow) holding() choice {
+	return choice{store.HoldingList, r.Holding, r.NewHolding}
+}
+
+// TakesDefaultLists reports whether the row's Type draws from the Category and Subcategory lists.
+func (r repeatingRow) TakesDefaultLists() bool {
+	s, ok := repeatingSpec(r.Type)
+	return ok && s.TakesDefaultLists()
 }

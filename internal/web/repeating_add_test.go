@@ -250,3 +250,56 @@ func TestAddTransactionsWithAnIncompleteLevyRowBooksNothing(t *testing.T) {
 		t.Error("Salary was booked")
 	}
 }
+
+func TestAddTransactionsBooksInvestmentAndDivestmentAgainstTheirHolding(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.addTransactions("2026-09-15",
+		holdRow("investment", "300", "new", "ETF World"), holdRow("divestment", "100", "new", "Bonds"), repRow("income", "2000", "Salary"))
+	if r.Status != http.StatusOK {
+		t.Fatalf("status %d\n%s", r.Status, r.Body)
+	}
+	wantAll(t, r.Body, "3 Transactions added for 2026-09-15.")
+	wantAll(t, ta.get("/").Body, "ETF World", "€300", "Bonds", "€100", "Investment", "Divestment")
+}
+
+func TestAddTransactionsReportsHoldingDuplicatesByHoldingNameWhateverTheType(t *testing.T) {
+	ta := newTestApp(t)
+	ta.post("/transactions", holdingForm("divestment", "2026-10-01", "40", "new", "ETF"))
+	r := ta.addTransactions("2026-10-01", repRow("income", "5", "Salary"), holdRow("investment", "50", "1", ""))
+	if r.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("status %d, want 422\n%s", r.Status, r.Body)
+	}
+	wantAll(t, r.Body, "Already exists on 2026-10-01: ETF")
+	if strings.Contains(ta.get("/").Body, "Salary") {
+		t.Error("Salary was booked despite the Duplicate")
+	}
+}
+
+func TestAddTransactionsBooksNothingWhenOnlySomeHoldingRowsCollide(t *testing.T) {
+	ta := newTestApp(t)
+	ta.post("/transactions", holdingForm("investment", "2026-10-01", "40", "new", "ETF"))
+	r := ta.addTransactions("2026-10-01", holdRow("investment", "5", "new", "Gold"), holdRow("divestment", "6", "1", ""))
+	wantAll(t, r.Body, "Already exists on 2026-10-01: ETF")
+	if body := ta.get("/").Body; strings.Contains(body, "€5") || strings.Contains(body, "€6") {
+		t.Error("the Gold or the colliding row was booked")
+	}
+}
+
+func TestAddTransactionsRejectsInvestmentAndDivestmentOfTheSameHolding(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.addTransactions("2026-10-01", holdRow("investment", "5", "new", "ETF"), holdRow("divestment", "6", "new", "ETF"))
+	if r.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("status %d, want 422", r.Status)
+	}
+	wantAll(t, r.Body, "Duplicate rows in the list: ETF")
+	if strings.Contains(ta.get("/").Body, "ETF") || strings.Contains(ta.get("/repeating").Body, ">ETF</option>") {
+		t.Error("something was saved or booked")
+	}
+}
+
+func TestAddTransactionsTwiceReportsTheHoldingNameAgain(t *testing.T) {
+	ta := newTestApp(t)
+	ta.addTransactions("2026-10-01", holdRow("investment", "5", "new", "ETF"))
+	r := ta.addTransactions("2026-10-01", holdRow("investment", "5", "1", ""))
+	wantAll(t, r.Body, "Already exists on 2026-10-01: ETF")
+}
