@@ -19,7 +19,15 @@
   .lists > :nth-child(4) { grid-column: 2; grid-row: 2; }
   .holding:has(input:not([hidden])) { display: grid; grid-template-columns: 1fr 1fr; column-gap: .5rem; }
   ul.transactions { list-style: none; padding: 0; }
-  ul.transactions li { padding: .6rem 0; border-bottom: 1px solid #ddd; display: grid; grid-template-columns: 1fr auto; gap: .1rem .5rem; }
+  ul.transactions li { padding: .6rem 0; border-bottom: 1px solid #ddd; }
+  ul.transactions a.row { display: grid; grid-template-columns: 1fr auto; gap: .1rem .5rem; color: inherit; text-decoration: none; }
+  .edit-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .5rem; margin-top: 1rem; }
+  .edit-actions > * { margin-top: 0; grid-row: 1; }
+  .edit-actions > :nth-child(1) { grid-column: 3; }
+  .edit-actions > :nth-child(2) { grid-column: 1; }
+  .edit-actions > :nth-child(3) { grid-column: 2; }
+  a.button { box-sizing: border-box; padding: .6rem; font-size: 1rem; text-align: center; color: inherit; background: #efefef; border-radius: .5rem; text-decoration: none; }
+  button.armed { background: #9b1c1c; color: #fff; }
   .amount { font-weight: 700; text-align: right; }
   .meta { color: #666; font-size: .9rem; grid-column: 1 / -1; }
   [hidden], .lists[hidden], .holding[hidden] { display: none; }
@@ -29,86 +37,136 @@
 <body>
 <h1>Money Manager</h1>
 
+{{define "fields"}}
+  <div class="tx-main">
+  <input id="{{$.P}}date" type="date" aria-label="Date" name="date" value="{{$.Form.Date}}">
+  <select id="{{$.P}}type" name="type" aria-label="Type" onchange="syncGroups('{{$.P}}')">
+    {{range $.Types}}<option value="{{.Type}}"{{if eq .Type $.Form.Type}} selected{{end}}>{{.Label}}</option>
+    {{end}}
+  </select>
+  <input id="{{$.P}}amount" type="text" inputmode="numeric" name="amount" maxlength="9" placeholder="Amount (€)" aria-label="Amount (€)" value="{{$.Form.Amount}}" autocomplete="off">
+  </div>
+
+  <div id="{{$.P}}group-description"{{if not $.Form.Spec.Description}} hidden{{end}}>
+  <input id="{{$.P}}description" type="text" name="description" maxlength="100" placeholder="Description" aria-label="Description" value="{{$.Form.Description}}" autocomplete="off"{{if not $.Form.Spec.Description}} disabled{{end}}>
+  </div>
+
+  <div id="{{$.P}}group-lists" class="lists"{{if not $.Form.Spec.TakesDefaultLists}} hidden{{end}}>
+  <select id="{{$.P}}category" name="category" aria-label="Category"{{if not $.Form.Spec.TakesDefaultLists}} disabled{{end}} onchange="document.getElementById('{{$.P}}new_category').hidden = this.value !== 'new'">
+    <option value="">Category…</option>
+    {{range $.Categories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.Category}} selected{{end}}>{{.Name}}</option>{{end}}
+    <option value="new"{{if eq $.Form.Category "new"}} selected{{end}}>new…</option>
+  </select>
+  <input id="{{$.P}}new_category" type="text" name="new_category" maxlength="50" placeholder="New category name" aria-label="New category name" value="{{$.Form.NewCategory}}"{{if ne $.Form.Category "new"}} hidden{{end}}{{if not $.Form.Spec.TakesDefaultLists}} disabled{{end}}>
+  <select id="{{$.P}}subcategory" name="subcategory" aria-label="Subcategory"{{if not $.Form.Spec.TakesDefaultLists}} disabled{{end}} onchange="document.getElementById('{{$.P}}new_subcategory').hidden = this.value !== 'new'">
+    <option value="">Subcategory…</option>
+    {{range $.Subcategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.Subcategory}} selected{{end}}>{{.Name}}</option>{{end}}
+    <option value="new"{{if eq $.Form.Subcategory "new"}} selected{{end}}>new…</option>
+  </select>
+  <input id="{{$.P}}new_subcategory" type="text" name="new_subcategory" maxlength="50" placeholder="New subcategory name" aria-label="New subcategory name" value="{{$.Form.NewSubcategory}}"{{if ne $.Form.Subcategory "new"}} hidden{{end}}{{if not $.Form.Spec.TakesDefaultLists}} disabled{{end}}>
+  </div>
+
+  <div id="{{$.P}}group-levy-lists" class="lists"{{if not $.Form.Spec.TakesLevyLists}} hidden{{end}}>
+  <select id="{{$.P}}levy_category" name="levy_category" aria-label="Levy Category"{{if not $.Form.Spec.TakesLevyLists}} disabled{{end}} onchange="document.getElementById('{{$.P}}new_levy_category').hidden = this.value !== 'new'">
+    <option value="">Levy Category…</option>
+    {{range $.LevyCategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.LevyCategory}} selected{{end}}>{{.Name}}</option>{{end}}
+    <option value="new"{{if eq $.Form.LevyCategory "new"}} selected{{end}}>new…</option>
+  </select>
+  <input id="{{$.P}}new_levy_category" type="text" name="new_levy_category" maxlength="50" placeholder="New levy category name" aria-label="New levy category name" value="{{$.Form.NewLevyCategory}}"{{if ne $.Form.LevyCategory "new"}} hidden{{end}}{{if not $.Form.Spec.TakesLevyLists}} disabled{{end}}>
+  <select id="{{$.P}}levy_subcategory" name="levy_subcategory" aria-label="Levy Subcategory"{{if not $.Form.Spec.TakesLevyLists}} disabled{{end}} onchange="document.getElementById('{{$.P}}new_levy_subcategory').hidden = this.value !== 'new'">
+    <option value="">Levy Subcategory…</option>
+    {{range $.LevySubcategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.LevySubcategory}} selected{{end}}>{{.Name}}</option>{{end}}
+    <option value="new"{{if eq $.Form.LevySubcategory "new"}} selected{{end}}>new…</option>
+  </select>
+  <input id="{{$.P}}new_levy_subcategory" type="text" name="new_levy_subcategory" maxlength="50" placeholder="New levy subcategory name" aria-label="New levy subcategory name" value="{{$.Form.NewLevySubcategory}}"{{if ne $.Form.LevySubcategory "new"}} hidden{{end}}{{if not $.Form.Spec.TakesLevyLists}} disabled{{end}}>
+  </div>
+
+  <div id="{{$.P}}group-holding" class="holding"{{if not $.Form.Spec.Holding}} hidden{{end}}>
+  <select id="{{$.P}}holding" name="holding" aria-label="Holding"{{if not $.Form.Spec.Holding}} disabled{{end}} onchange="document.getElementById('{{$.P}}new_holding').hidden = this.value !== 'new'">
+    <option value="">Holding…</option>
+    {{range $.Holdings}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.Holding}} selected{{end}}>{{.Name}}</option>{{end}}
+    <option value="new"{{if eq $.Form.Holding "new"}} selected{{end}}>new…</option>
+  </select>
+  <input id="{{$.P}}new_holding" type="text" name="new_holding" maxlength="50" placeholder="New holding name" aria-label="New holding name" value="{{$.Form.NewHolding}}"{{if ne $.Form.Holding "new"}} hidden{{end}}{{if not $.Form.Spec.Holding}} disabled{{end}}>
+  </div>
+
+{{end}}
+
 <h2>Add Transaction</h2>
-{{with .Form.Errors}}
+{{with .Add.Form.Errors}}
 <div class="errors" role="alert"><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>
 {{end}}
 <form method="post" action="/transactions">
-  <div class="tx-main">
-  <input id="date" type="date" aria-label="Date" name="date" value="{{.Form.Date}}">
-  <select id="type" name="type" aria-label="Type" onchange="syncGroups()">
-    {{range .Types}}<option value="{{.Type}}"{{if eq .Type $.Form.Type}} selected{{end}}>{{.Label}}</option>
-    {{end}}
-  </select>
-  <input id="amount" type="text" inputmode="numeric" name="amount" maxlength="9" placeholder="Amount (€)" aria-label="Amount (€)" value="{{.Form.Amount}}" autocomplete="off">
-  </div>
-
-  <div id="group-description"{{if not .Form.Spec.Description}} hidden{{end}}>
-  <input id="description" type="text" name="description" maxlength="100" placeholder="Description" aria-label="Description" value="{{.Form.Description}}" autocomplete="off"{{if not .Form.Spec.Description}} disabled{{end}}>
-  </div>
-
-  <div id="group-lists" class="lists"{{if not .Form.Spec.TakesDefaultLists}} hidden{{end}}>
-  <select id="category" name="category" aria-label="Category"{{if not .Form.Spec.TakesDefaultLists}} disabled{{end}} onchange="document.getElementById('new_category').hidden = this.value !== 'new'">
-    <option value="">Category…</option>
-    {{range .Categories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.Category}} selected{{end}}>{{.Name}}</option>{{end}}
-    <option value="new"{{if eq .Form.Category "new"}} selected{{end}}>new…</option>
-  </select>
-  <input id="new_category" type="text" name="new_category" maxlength="50" placeholder="New category name" aria-label="New category name" value="{{.Form.NewCategory}}"{{if ne .Form.Category "new"}} hidden{{end}}{{if not .Form.Spec.TakesDefaultLists}} disabled{{end}}>
-  <select id="subcategory" name="subcategory" aria-label="Subcategory"{{if not .Form.Spec.TakesDefaultLists}} disabled{{end}} onchange="document.getElementById('new_subcategory').hidden = this.value !== 'new'">
-    <option value="">Subcategory…</option>
-    {{range .Subcategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.Subcategory}} selected{{end}}>{{.Name}}</option>{{end}}
-    <option value="new"{{if eq .Form.Subcategory "new"}} selected{{end}}>new…</option>
-  </select>
-  <input id="new_subcategory" type="text" name="new_subcategory" maxlength="50" placeholder="New subcategory name" aria-label="New subcategory name" value="{{.Form.NewSubcategory}}"{{if ne .Form.Subcategory "new"}} hidden{{end}}{{if not .Form.Spec.TakesDefaultLists}} disabled{{end}}>
-  </div>
-
-  <div id="group-levy-lists" class="lists"{{if not .Form.Spec.TakesLevyLists}} hidden{{end}}>
-  <select id="levy_category" name="levy_category" aria-label="Levy Category"{{if not .Form.Spec.TakesLevyLists}} disabled{{end}} onchange="document.getElementById('new_levy_category').hidden = this.value !== 'new'">
-    <option value="">Levy Category…</option>
-    {{range .LevyCategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.LevyCategory}} selected{{end}}>{{.Name}}</option>{{end}}
-    <option value="new"{{if eq .Form.LevyCategory "new"}} selected{{end}}>new…</option>
-  </select>
-  <input id="new_levy_category" type="text" name="new_levy_category" maxlength="50" placeholder="New levy category name" aria-label="New levy category name" value="{{.Form.NewLevyCategory}}"{{if ne .Form.LevyCategory "new"}} hidden{{end}}{{if not .Form.Spec.TakesLevyLists}} disabled{{end}}>
-  <select id="levy_subcategory" name="levy_subcategory" aria-label="Levy Subcategory"{{if not .Form.Spec.TakesLevyLists}} disabled{{end}} onchange="document.getElementById('new_levy_subcategory').hidden = this.value !== 'new'">
-    <option value="">Levy Subcategory…</option>
-    {{range .LevySubcategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.LevySubcategory}} selected{{end}}>{{.Name}}</option>{{end}}
-    <option value="new"{{if eq .Form.LevySubcategory "new"}} selected{{end}}>new…</option>
-  </select>
-  <input id="new_levy_subcategory" type="text" name="new_levy_subcategory" maxlength="50" placeholder="New levy subcategory name" aria-label="New levy subcategory name" value="{{.Form.NewLevySubcategory}}"{{if ne .Form.LevySubcategory "new"}} hidden{{end}}{{if not .Form.Spec.TakesLevyLists}} disabled{{end}}>
-  </div>
-
-  <div id="group-holding" class="holding"{{if not .Form.Spec.Holding}} hidden{{end}}>
-  <select id="holding" name="holding" aria-label="Holding"{{if not .Form.Spec.Holding}} disabled{{end}} onchange="document.getElementById('new_holding').hidden = this.value !== 'new'">
-    <option value="">Holding…</option>
-    {{range .Holdings}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Form.Holding}} selected{{end}}>{{.Name}}</option>{{end}}
-    <option value="new"{{if eq .Form.Holding "new"}} selected{{end}}>new…</option>
-  </select>
-  <input id="new_holding" type="text" name="new_holding" maxlength="50" placeholder="New holding name" aria-label="New holding name" value="{{.Form.NewHolding}}"{{if ne .Form.Holding "new"}} hidden{{end}}{{if not .Form.Spec.Holding}} disabled{{end}}>
-  </div>
+  {{template "fields" .Add}}
 
   <button type="submit">Add</button>
 </form>
 
 <script>
 var typeFields = {{specsJSON}};
-function syncGroups() {
-  var fields = typeFields[document.getElementById('type').value] || {};
+// p is the id prefix of the form: "" for the Add form, "edit-" for the row being edited.
+function syncGroups(p) {
+  var fields = typeFields[document.getElementById(p + 'type').value] || {};
   [['group-description', fields.description], ['group-lists', fields.lists], ['group-levy-lists', fields.levyLists], ['group-holding', fields.holding]].forEach(function (g) {
-    var el = document.getElementById(g[0]);
+    var el = document.getElementById(p + g[0]);
     el.hidden = !g[1];
     el.querySelectorAll('input, select').forEach(function (i) { i.disabled = !g[1]; });
   });
 }
+
+// Change and Delete need a second tap: the first one arms the button ("Approve"),
+// which disarms itself after 3 seconds, on any other tap and on editing a field.
+var armed = null, armTimer = null;
+function disarm() {
+  if (!armed) return;
+  armed.textContent = armed.dataset.label;
+  armed.classList.remove('armed');
+  armed = null;
+  clearTimeout(armTimer);
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-arm]');
+  if (b && b === armed) return; // second tap: let the form submit
+  disarm();
+  if (!b) return;
+  e.preventDefault();
+  armed = b;
+  b.dataset.label = b.textContent;
+  b.textContent = 'Approve';
+  b.classList.add('armed');
+  armTimer = setTimeout(disarm, 3000);
+});
+document.addEventListener('input', disarm);
+document.addEventListener('change', disarm);
 </script>
 
 <h2>Transactions</h2>
 <ul class="transactions">
 {{range .Transactions}}
-  <li>
-    <span>{{if .Holding}}{{.Holding}}{{else}}{{.Description}}{{end}}</span>
-    <span class="amount">{{euro .Amount}}</span>
-    <span class="meta">{{.Date}} · {{typeLabel .Type}}{{if .Category}} · {{.Category}} · {{.Subcategory}}{{end}}</span>
+  {{if and $.Edit (eq .ID $.EditID)}}
+  <li id="tx-{{.ID}}" class="editing">
+    {{with $.Edit.Form.Errors}}
+    <div class="errors" role="alert"><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>
+    {{end}}
+    <form method="post" action="/transactions/{{.ID}}">
+      {{template "fields" $.Edit}}
+      <div class="edit-actions">
+        {{/* Change comes first in the markup so Enter in a field presses it, not Delete; CSS shows it last. */}}
+        <button type="submit" data-arm>Change</button>
+        <a class="button" href="/">Discard</a>
+        <button type="submit" data-arm formaction="/transactions/{{.ID}}/delete" formnovalidate>Delete</button>
+      </div>
+    </form>
   </li>
+  {{else}}
+  <li id="tx-{{.ID}}">
+    <a class="row" href="/?edit={{.ID}}">
+      <span>{{if .Holding}}{{.Holding}}{{else}}{{.Description}}{{end}}</span>
+      <span class="amount">{{euro .Amount}}</span>
+      <span class="meta">{{.Date}} · {{typeLabel .Type}}{{if .Category}} · {{.Category}} · {{.Subcategory}}{{end}}</span>
+    </a>
+  </li>
+  {{end}}
 {{else}}
   <li>No Transactions yet.</li>
 {{end}}

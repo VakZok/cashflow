@@ -76,6 +76,61 @@ func (s *Store) AddTransaction(t NewTransaction) (int64, error) {
 	return res.LastInsertId()
 }
 
+// UpdateTransaction replaces all fields of a Transaction. Fields its Type does
+// not take are stored empty, so a Type change never violates the database CHECK.
+func (s *Store) UpdateTransaction(id int64, t NewTransaction) error {
+	res, err := s.db.Exec(
+		`UPDATE transactions SET date = ?, amount = ?, description = ?, type = ?, category_id = ?, subcategory_id = ?,
+		        holding_id = ?, levy_category_id = ?, levy_subcategory_id = ?
+		 WHERE id = ?`,
+		t.Date, t.Amount, nullString(t.Description), t.Type,
+		nullID(t.CategoryID), nullID(t.SubcategoryID), nullID(t.HoldingID),
+		nullID(t.LevyCategoryID), nullID(t.LevySubcategoryID), id)
+	if err != nil {
+		return translate(err)
+	}
+	return affectedOne(res)
+}
+
+// DeleteTransaction removes a Transaction for good.
+func (s *Store) DeleteTransaction(id int64) error {
+	res, err := s.db.Exec("DELETE FROM transactions WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return affectedOne(res)
+}
+
+// GetTransaction returns the stored fields of a Transaction, for prefilling
+// the edit form.
+func (s *Store) GetTransaction(id int64) (NewTransaction, error) {
+	var t NewTransaction
+	var cat, sub, hold, lcat, lsub sql.NullInt64
+	err := s.db.QueryRow(
+		`SELECT date, amount, COALESCE(description, ''), type, category_id, subcategory_id, holding_id,
+		        levy_category_id, levy_subcategory_id
+		 FROM transactions WHERE id = ?`, id).
+		Scan(&t.Date, &t.Amount, &t.Description, &t.Type, &cat, &sub, &hold, &lcat, &lsub)
+	if err == sql.ErrNoRows {
+		return NewTransaction{}, ErrNotFound
+	}
+	t.CategoryID, t.SubcategoryID, t.HoldingID = cat.Int64, sub.Int64, hold.Int64
+	t.LevyCategoryID, t.LevySubcategoryID = lcat.Int64, lsub.Int64
+	return t, err
+}
+
+// affectedOne reports ErrNotFound if a statement by id changed no row.
+func affectedOne(res sql.Result) error {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ListTransactions returns all Transactions, newest first.
 func (s *Store) ListTransactions() ([]TransactionRow, error) {
 	rows, err := s.db.Query(
@@ -229,11 +284,12 @@ func nullString(v string) any {
 }
 
 // DescriptionTaken reports whether a Transaction of the Type with the date and
-// description (ignoring ASCII case) exists.
-func (s *Store) DescriptionTaken(date, description, typ string) (bool, error) {
+// description (ignoring ASCII case) exists, other than the one with excludeID
+// (0 excludes none).
+func (s *Store) DescriptionTaken(date, description, typ string, excludeID int64) (bool, error) {
 	var n int
 	err := s.db.QueryRow(
-		"SELECT COUNT(*) FROM transactions WHERE date = ? AND description = ? COLLATE NOCASE AND type = ?",
-		date, description, typ).Scan(&n)
+		"SELECT COUNT(*) FROM transactions WHERE date = ? AND description = ? COLLATE NOCASE AND type = ? AND id != ?",
+		date, description, typ, excludeID).Scan(&n)
 	return n > 0, err
 }

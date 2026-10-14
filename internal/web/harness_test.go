@@ -87,11 +87,13 @@ func (ta *testApp) post(path string, form url.Values) response {
 	return ta.do(req)
 }
 
-// follow GETs the Location of a redirect response.
+// follow GETs the Location of a redirect response, without its #fragment, as
+// a browser does.
 func (ta *testApp) follow(r response) response {
 	ta.t.Helper()
 	if r.Location == "" {
 		ta.t.Fatalf("expected a redirect, got status %d", r.Status)
 	}
-	return ta.get(r.Location)
+	path, _, _ := strings.Cut(r.Location, "#")
+	return ta.get(path)
 }

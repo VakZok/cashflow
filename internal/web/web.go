@@ -57,6 +57,8 @@ func New(cfg Config) (*App, error) {
 	a.mux.Handle("GET /static/", http.FileServerFS(staticFS))
 	a.mux.HandleFunc("GET /report", a.report)
 	a.mux.HandleFunc("POST /transactions", a.createTransaction)
+	a.mux.HandleFunc("POST /transactions/{id}", a.updateTransaction)
+	a.mux.HandleFunc("POST /transactions/{id}/delete", a.deleteTransaction)
 	a.mux.HandleFunc("GET /repeating", a.repeating)
 	a.mux.HandleFunc("POST /repeating", a.saveRepeating)
 	return a, nil
@@ -123,10 +125,9 @@ func (f entryForm) holding() choice {
 	return choice{store.HoldingList, f.Holding, f.NewHolding}
 }
 
-type indexData struct {
-	Form              entryForm
+// formLists are the choices the entry form's selects offer.
+type formLists struct {
 	Types             []store.TypeSpec
-	Transactions      []store.TransactionRow
 	Categories        []store.Named
 	Subcategories     []store.Named
 	LevyCategories    []store.Named
@@ -134,44 +135,102 @@ type indexData struct {
 	Holdings          []store.Named
 }
 
-func (a *App) index(w http.ResponseWriter, r *http.Request) {
-	form := entryForm{Type: store.TypeExpense, Date: a.now().Format(dateLayout)}
-	a.renderIndex(w, http.StatusOK, form)
+// fieldsData is what the shared "fields" template renders: one entry form,
+// whose element ids start with P so the Add form and an edit row can coexist.
+type fieldsData struct {
+	P    string
+	Form entryForm
+	*formLists
 }
 
-func (a *App) renderIndex(w http.ResponseWriter, status int, form entryForm) {
-	// An unknown Type is rendered with the fields of the default one.
-	form.Spec, _ = store.SpecFor(form.Type)
-	if form.Spec.Type == "" {
-		form.Spec = store.Types[0]
+type indexData struct {
+	Add          fieldsData
+	Edit         *fieldsData // the row being edited, nil if none
+	EditID       int64
+	Transactions []store.TransactionRow
+}
+
+func (a *App) index(w http.ResponseWriter, r *http.Request) {
+	add := entryForm{Type: store.TypeExpense, Date: a.now().Format(dateLayout)}
+	var edit *editing
+	if id, err := strconv.ParseInt(r.URL.Query().Get("edit"), 10, 64); err == nil {
+		t, err := a.store.GetTransaction(id)
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+		case err != nil:
+			a.serverError(w, err)
+			return
+		default:
+			edit = &editing{ID: id, Form: formOf(t)}
+		}
 	}
-	d := indexData{Form: form, Types: store.Types}
+	a.renderIndex(w, http.StatusOK, add, edit)
+}
+
+// editing is the Transaction whose row is shown as a form, with that form's state.
+type editing struct {
+	ID   int64
+	Form entryForm
+}
+
+// formOf is the entry form prefilled with a stored Transaction.
+func formOf(t store.NewTransaction) entryForm {
+	id := func(v int64) string {
+		if v == 0 {
+			return ""
+		}
+		return strconv.FormatInt(v, 10)
+	}
+	return entryForm{
+		Type: t.Type, Date: t.Date, Amount: strconv.FormatInt(t.Amount, 10), Description: t.Description,
+		Category: id(t.CategoryID), Subcategory: id(t.SubcategoryID), Holding: id(t.HoldingID),
+		LevyCategory: id(t.LevyCategoryID), LevySubcategory: id(t.LevySubcategoryID),
+	}
+}
+
+func (a *App) renderIndex(w http.ResponseWriter, status int, add entryForm, edit *editing) {
+	lists := &formLists{Types: store.Types}
+	d := indexData{Add: fieldsData{Form: withSpec(add), formLists: lists}}
+	if edit != nil {
+		d.EditID = edit.ID
+		d.Edit = &fieldsData{P: "edit-", Form: withSpec(edit.Form), formLists: lists}
+	}
 	var err error
 	if d.Transactions, err = a.store.ListTransactions(); err != nil {
 		a.serverError(w, err)
 		return
 	}
-	if d.Categories, err = a.store.ListNamed(store.DefaultListSet.Category); err != nil {
+	if lists.Categories, err = a.store.ListNamed(store.DefaultListSet.Category); err != nil {
 		a.serverError(w, err)
 		return
 	}
-	if d.Subcategories, err = a.store.ListNamed(store.DefaultListSet.Subcategory); err != nil {
+	if lists.Subcategories, err = a.store.ListNamed(store.DefaultListSet.Subcategory); err != nil {
 		a.serverError(w, err)
 		return
 	}
-	if d.LevyCategories, err = a.store.ListNamed(store.LevyListSet.Category); err != nil {
+	if lists.LevyCategories, err = a.store.ListNamed(store.LevyListSet.Category); err != nil {
 		a.serverError(w, err)
 		return
 	}
-	if d.LevySubcategories, err = a.store.ListNamed(store.LevyListSet.Subcategory); err != nil {
+	if lists.LevySubcategories, err = a.store.ListNamed(store.LevyListSet.Subcategory); err != nil {
 		a.serverError(w, err)
 		return
 	}
-	if d.Holdings, err = a.store.ListNamed(store.HoldingList); err != nil {
+	if lists.Holdings, err = a.store.ListNamed(store.HoldingList); err != nil {
 		a.serverError(w, err)
 		return
 	}
 	a.render(w, status, "index.html", d)
+}
+
+// withSpec sets the form's Spec to the fields its Type takes. An unknown Type
+// is rendered with the fields of the default one.
+func withSpec(form entryForm) entryForm {
+	form.Spec, _ = store.SpecFor(form.Type)
+	if form.Spec.Type == "" {
+		form.Spec = store.Types[0]
+	}
+	return form
 }
 
 const dateLayout = "2006-01-02"
@@ -208,11 +267,106 @@ func parseAmount(s string) (int64, bool) {
 }
 
 func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+	form, ok := readForm(w, r)
+	if !ok {
 		return
 	}
-	form := entryForm{
+	nt, spec, err := a.prepare(&form, 0)
+	if err != nil {
+		a.serverError(w, err)
+		return
+	}
+	if len(form.Errors) > 0 {
+		a.renderIndex(w, http.StatusUnprocessableEntity, form, nil)
+		return
+	}
+	if _, err = a.store.AddTransaction(nt); err != nil {
+		if errors.Is(err, store.ErrDuplicate) {
+			form.Errors = append(form.Errors, duplicateMessage(spec))
+			a.renderIndex(w, http.StatusUnprocessableEntity, form, nil)
+			return
+		}
+		a.serverError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// updateTransaction replaces the Transaction in the path with the submitted
+// form, under the same rules as creating one.
+func (a *App) updateTransaction(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	form, ok := readForm(w, r)
+	if !ok {
+		return
+	}
+	nt, spec, err := a.prepare(&form, id)
+	if err != nil {
+		a.serverError(w, err)
+		return
+	}
+	if len(form.Errors) == 0 {
+		if err = a.store.UpdateTransaction(id, nt); errors.Is(err, store.ErrDuplicate) {
+			form.Errors = append(form.Errors, duplicateMessage(spec))
+		} else if errors.Is(err, store.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		} else if err != nil {
+			a.serverError(w, err)
+			return
+		}
+	}
+	if len(form.Errors) > 0 {
+		a.renderIndex(w, http.StatusUnprocessableEntity, entryForm{Type: store.TypeExpense, Date: a.now().Format(dateLayout)}, &editing{ID: id, Form: form})
+		return
+	}
+	http.Redirect(w, r, "/#tx-"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+}
+
+// deleteTransaction removes the Transaction in the path.
+func (a *App) deleteTransaction(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if err := a.store.DeleteTransaction(id); errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	} else if err != nil {
+		a.serverError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return 0, false
+	}
+	return id, true
+}
+
+// duplicateMessage is the rejection of a Transaction colliding with another one.
+func duplicateMessage(spec store.TypeSpec) string {
+	if spec.Holding {
+		return errDuplicateHolding
+	}
+	return errDuplicate
+}
+
+// readForm reads the submitted entry form, writing the response itself if the
+// request is malformed.
+func readForm(w http.ResponseWriter, r *http.Request) (entryForm, bool) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return entryForm{}, false
+	}
+	return entryForm{
 		Type:           r.PostFormValue("type"),
 		Date:           strings.TrimSpace(r.PostFormValue("date")),
 		Amount:         strings.TrimSpace(r.PostFormValue("amount")),
@@ -228,8 +382,14 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		NewLevyCategory:    strings.TrimSpace(r.PostFormValue("new_levy_category")),
 		LevySubcategory:    r.PostFormValue("levy_subcategory"),
 		NewLevySubcategory: strings.TrimSpace(r.PostFormValue("new_levy_subcategory")),
-	}
+	}, true
+}
 
+// prepare validates the form, appending to form.Errors, and if it is valid
+// returns the Transaction it describes, creating inline "new..." entries.
+// excludeID is the Transaction being edited (0 on create): it is never a
+// Duplicate of itself.
+func (a *App) prepare(form *entryForm, excludeID int64) (store.NewTransaction, store.TypeSpec, error) {
 	spec, known := store.SpecFor(form.Type)
 	if !known {
 		form.Errors = append(form.Errors, "Type must be "+typeChoices()+".")
@@ -241,17 +401,15 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		form.Errors = append(form.Errors, errAmount)
 	}
-	var err error
+	var nt store.NewTransaction
 	if known {
-		if err := a.validateFields(&form, spec); err != nil {
-			a.serverError(w, err)
-			return
+		if err := a.validateFields(form, spec); err != nil {
+			return nt, spec, err
 		}
 		if len(form.Errors) == 0 && spec.Description {
-			taken, err := a.store.DescriptionTaken(form.Date, form.Description, form.Type)
+			taken, err := a.store.DescriptionTaken(form.Date, form.Description, form.Type, excludeID)
 			if err != nil {
-				a.serverError(w, err)
-				return
+				return nt, spec, err
 			}
 			if taken {
 				form.Errors = append(form.Errors, errDuplicate)
@@ -259,25 +417,23 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(form.Errors) > 0 {
-		a.renderIndex(w, http.StatusUnprocessableEntity, form)
-		return
+		return nt, spec, nil
 	}
 
 	// Everything is valid: only now create inline "new..." entries.
-	nt := store.NewTransaction{Date: form.Date, Amount: amount, Type: form.Type}
+	nt = store.NewTransaction{Date: form.Date, Amount: amount, Type: form.Type}
+	var err error
 	if spec.Description {
 		nt.Description = form.Description
 	}
 	if spec.Lists != nil {
 		categoryID, err := a.resolveChoice(form.category(*spec.Lists))
 		if err != nil {
-			a.serverError(w, err)
-			return
+			return nt, spec, err
 		}
 		subcategoryID, err := a.resolveChoice(form.subcategory(*spec.Lists))
 		if err != nil {
-			a.serverError(w, err)
-			return
+			return nt, spec, err
 		}
 		if spec.TakesLists(store.LevyListSet) {
 			nt.LevyCategoryID, nt.LevySubcategoryID = categoryID, subcategoryID
@@ -287,26 +443,10 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 	if spec.Holding {
 		if nt.HoldingID, err = a.resolveChoice(form.holding()); err != nil {
-			a.serverError(w, err)
-			return
+			return nt, spec, err
 		}
 	}
-	if _, err = a.store.AddTransaction(nt); err != nil {
-		if errors.Is(err, store.ErrDuplicate) {
-			// A Holding collision is only caught here; for Types with a
-			// Description this means a race with another submission.
-			msg := errDuplicate
-			if spec.Holding {
-				msg = errDuplicateHolding
-			}
-			form.Errors = append(form.Errors, msg)
-			a.renderIndex(w, http.StatusUnprocessableEntity, form)
-			return
-		}
-		a.serverError(w, err)
-		return
-	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	return nt, spec, nil
 }
 
 // validateFields appends an error for every field the Type does not take but
