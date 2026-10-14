@@ -256,3 +256,49 @@ func TestRepeatingCreatesNoTransactionsAndAppearsInNoReport(t *testing.T) {
 		t.Errorf("a Transaction was created:\n%s", body)
 	}
 }
+
+func TestSavingRejectsRowsWithTheSameTypeAndDescriptionIgnoringCase(t *testing.T) {
+	for _, typ := range []string{"income", "expense"} {
+		for _, action := range []string{"save", "add"} {
+			ta := newTestApp(t)
+			f := addForm("2026-10-01", repRow(typ, "800", "Rent"), repRow(typ, "30", "Gym"), repRow(typ, "5", "rENT"), repRow(typ, "6", "gym"))
+			f.Set("action", action)
+			r := ta.saveList(f)
+			if r.Status != http.StatusUnprocessableEntity {
+				t.Fatalf("%s/%s: status %d, want 422\n%s", typ, action, r.Status, r.Body)
+			}
+			wantAll(t, r.Body, "Duplicate rows in the list: Rent, Gym", `value="rENT"`, `value="gym"`)
+			if strings.Index(r.Body, "Duplicate rows") < strings.Index(r.Body, "Add Transactions") {
+				t.Errorf("error is not below the Add Transactions button")
+			}
+			if n := rowCount(ta.get("/repeating").Body); n != 1 {
+				t.Errorf("%d rows saved, want the untouched blank list", n)
+			}
+			if strings.Contains(ta.get("/").Body, "Rent") {
+				t.Errorf("a Transaction was booked")
+			}
+		}
+	}
+}
+
+func TestSavingAcceptsTheSameDescriptionUnderDifferentTypes(t *testing.T) {
+	ta := newTestApp(t)
+	mustSave(t, ta, repeatingForm(repRow("income", "5", "Refund"), repRow("expense", "5", "Refund")))
+}
+
+func TestInListDuplicateCreatesNoNewNames(t *testing.T) {
+	ta := newTestApp(t)
+	ta.saveList(repeatingForm(repRow("expense", "8", "Rent"), repRow("expense", "9", "Rent")))
+	if strings.Contains(ta.get("/").Body, ">Cat<") {
+		t.Errorf("a new Category was created by a rejected save")
+	}
+}
+
+func TestCompletenessErrorTakesPrecedenceOverInListDuplicates(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.saveList(repeatingForm(repRow("expense", "8", "Rent"), repRow("expense", "9", "Rent"), repRow("expense", "", "Gym")))
+	wantAll(t, r.Body, errIncomplete)
+	if strings.Contains(r.Body, "Duplicate rows") {
+		t.Errorf("duplicate error shown with an incomplete row:\n%s", r.Body)
+	}
+}

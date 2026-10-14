@@ -110,18 +110,18 @@ func TestDuplicateErrorComesAfterTheAddTransactionsButton(t *testing.T) {
 	}
 }
 
-func TestAddTransactionsRollsBackWhenRowsCollideWithEachOther(t *testing.T) {
+func TestAddTransactionsRejectsRowsCollidingWithEachOtherBeforeSavingOrBooking(t *testing.T) {
 	ta := newTestApp(t)
 	r := ta.addTransactions("2026-10-01", repRow("income", "5", "Salary"), repRow("expense", "7", "Rent"), repRow("expense", "8", "rent"))
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("status %d\n%s", r.Status, r.Body)
 	}
-	wantAll(t, r.Body, "Already exists on 2026-10-01: ")
+	wantAll(t, r.Body, "Duplicate rows in the list: Rent")
 	if body := ta.get("/").Body; !strings.Contains(body, "No Transactions yet.") {
-		t.Errorf("not atomic:\n%s", body)
+		t.Errorf("a Transaction was booked:\n%s", body)
 	}
-	if rowCount(ta.get("/repeating").Body) != 3 {
-		t.Error("list not saved")
+	if rowCount(ta.get("/repeating").Body) != 1 {
+		t.Error("list was saved")
 	}
 }
 
