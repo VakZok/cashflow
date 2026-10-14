@@ -141,3 +141,99 @@ func TestRepeatingIsNotATransaction(t *testing.T) {
 		t.Errorf("rows %v income %d expense %d", rows, income, expense)
 	}
 }
+
+func saveRepeating(t *testing.T, s *store.Store, in ...store.RepeatingEntry) {
+	t.Helper()
+	if err := s.ReplaceRepeating(in); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBookRepeatingCreatesOneIndependentTransactionPerRow(t *testing.T) {
+	s, _ := open(t)
+	saveRepeating(t, s,
+		repeatingEntry(t, s, store.TypeExpense, "Rent", 800),
+		repeatingEntry(t, s, store.TypeIncome, "Salary", 2000))
+	booked, dups, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 2 || len(dups) != 0 {
+		t.Fatalf("booked %d dups %v err %v", booked, dups, err)
+	}
+	rows, _ := s.ListTransactions()
+	if len(rows) != 2 {
+		t.Fatalf("got %+v", rows)
+	}
+	for _, r := range rows {
+		if r.Date != "2026-10-01" || r.Category != "C" || r.Subcategory != "S" {
+			t.Errorf("row %+v", r)
+		}
+	}
+	income, expense, _ := s.Totals("2026-10-01", "2026-11-01")
+	if income != 2000 || expense != 800 {
+		t.Errorf("income %d expense %d", income, expense)
+	}
+
+	// The list is unchanged, and editing it leaves the booked copies alone.
+	if got, _ := s.ListRepeating(); len(got) != 2 {
+		t.Errorf("list changed: %+v", got)
+	}
+	saveRepeating(t, s)
+	if rows, _ := s.ListTransactions(); len(rows) != 2 {
+		t.Errorf("booked Transactions changed: %+v", rows)
+	}
+}
+
+func TestBookRepeatingNamesEveryDuplicateAndCreatesNothing(t *testing.T) {
+	s, _ := open(t)
+	e := repeatingEntry(t, s, store.TypeExpense, "Rent", 800)
+	saveRepeating(t, s, e,
+		repeatingEntry(t, s, store.TypeIncome, "Salary", 2000),
+		repeatingEntry(t, s, store.TypeExpense, "Gym", 30))
+	for _, d := range []string{"rent", "Gym"} { // ignoring ASCII case
+		if _, err := s.AddTransaction(store.NewTransaction{Date: "2026-10-01", Amount: 1, Description: d,
+			Type: store.TypeExpense, CategoryID: e.CategoryID, SubcategoryID: e.SubcategoryID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	booked, dups, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 0 {
+		t.Fatalf("booked %d err %v", booked, err)
+	}
+	if len(dups) != 2 || dups[0] != "Rent" || dups[1] != "Gym" {
+		t.Fatalf("dups = %v", dups)
+	}
+	if rows, _ := s.ListTransactions(); len(rows) != 2 {
+		t.Errorf("a Transaction was created: %+v", rows)
+	}
+}
+
+func TestBookRepeatingRollsBackWhenAnInsertCollides(t *testing.T) {
+	s, _ := open(t)
+	// Two rows with one description collide with each other, not with the
+	// existing Transactions, so only the unique constraint catches them.
+	saveRepeating(t, s,
+		repeatingEntry(t, s, store.TypeIncome, "Salary", 2000),
+		repeatingEntry(t, s, store.TypeExpense, "Rent", 800),
+		repeatingEntry(t, s, store.TypeExpense, "rent", 5))
+	booked, dups, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 0 || len(dups) != 1 || dups[0] != "rent" {
+		t.Fatalf("booked %d dups %v err %v", booked, dups, err)
+	}
+	if rows, _ := s.ListTransactions(); len(rows) != 0 {
+		t.Errorf("not atomic: %+v", rows)
+	}
+}
+
+func TestBookRepeatingTwiceForOneDateIsAllDuplicates(t *testing.T) {
+	s, _ := open(t)
+	saveRepeating(t, s, repeatingEntry(t, s, store.TypeExpense, "Rent", 800))
+	if _, _, err := s.BookRepeating("2026-10-01"); err != nil {
+		t.Fatal(err)
+	}
+	booked, dups, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 0 || len(dups) != 1 {
+		t.Fatalf("booked %d dups %v err %v", booked, dups, err)
+	}
+	if booked, _, err := s.BookRepeating("2026-11-01"); err != nil || booked != 1 {
+		t.Fatalf("next month: booked %d err %v", booked, err)
+	}
+}
