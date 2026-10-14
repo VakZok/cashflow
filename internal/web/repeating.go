@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	errIncomplete   = "All fields must be filled in for every row."
-	errTooManyRows  = "The list can hold at most 50 rows."
-	errNothingToAdd = "The list is empty, there is nothing to add."
+	errIncomplete       = "All fields must be filled in for every row."
+	errTooManyRows      = "The list can hold at most 50 rows."
+	errInListDuplicates = "Duplicate rows in the list: "
+	errNothingToAdd     = "The list is empty, there is nothing to add."
 )
 
 // repeatingRow is one row of the Repeating form: submitted values (so a
@@ -207,6 +208,11 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 		}
 		entries = append(entries, store.RepeatingEntry{Type: row.Type, Amount: amount, Description: row.Description})
 	}
+	if len(errs) == 0 {
+		if dups := inListDuplicates(filled); len(dups) > 0 {
+			addError(errInListDuplicates + strings.Join(dups, ", "))
+		}
+	}
 	if len(errs) > 0 {
 		a.renderRepeating(w, http.StatusUnprocessableEntity, rows, date, errs, "")
 		return
@@ -233,6 +239,44 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.addTransactions(w, date, len(entries))
+}
+
+// collision names how a row collides with others of the same list when
+// booked on one date (the Duplicate rule, ADR 0006, minus the date): rows with
+// equal key collide, and label is what the error calls them. Each Type with
+// its own rule adds a case here.
+func (r repeatingRow) collision() (key, label string) {
+	return r.Type + "\x00" + asciiLower(r.Description), r.Description
+}
+
+// inListDuplicates returns the labels of the groups of rows that collide with
+// each other, in first-seen order.
+func inListDuplicates(rows []repeatingRow) []string {
+	count := map[string]int{}
+	for _, r := range rows {
+		key, _ := r.collision()
+		count[key]++
+	}
+	var labels []string
+	for _, r := range rows {
+		key, label := r.collision()
+		if count[key] > 1 {
+			labels = append(labels, label)
+			count[key] = 0
+		}
+	}
+	return labels
+}
+
+// asciiLower folds ASCII case only, like SQLite's NOCASE the Duplicate rule uses.
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return string(b)
 }
 
 // addTransactions books the just-saved list on date. The list is already
