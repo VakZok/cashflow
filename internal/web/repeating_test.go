@@ -17,7 +17,11 @@ func repeatingForm(rows ...[7]string) url.Values {
 	for i, r := range rows {
 		n := strconv.Itoa(i)
 		f.Add("row", n)
-		for j, name := range []string{"type", "amount", "description", "category", "new_category", "subcategory", "new_subcategory"} {
+		names := []string{"type", "amount", "description", "category", "new_category", "subcategory", "new_subcategory"}
+		if r[0] == "levy" || r[0] == "rebate" {
+			names = []string{"type", "amount", "description", "levy_category", "new_levy_category", "levy_subcategory", "new_levy_subcategory"}
+		}
+		for j, name := range names {
 			f.Set(name+"_"+n, r[j])
 		}
 	}
@@ -197,24 +201,6 @@ func TestBlankRowsDoNotCountAgainstTheCap(t *testing.T) {
 	mustSave(t, ta, repeatingForm(rows...))
 }
 
-func TestRepeatingOffersOnlyIncomeAndExpense(t *testing.T) {
-	ta := newTestApp(t)
-	body := ta.get("/repeating").Body
-	wantAll(t, body, `>Income</option>`, `>Expense</option>`)
-	for _, label := range []string{"Levy", "Rebate", "Investment", "Divestment"} {
-		if strings.Contains(body, ">"+label+"</option>") {
-			t.Errorf("%s is offered", label)
-		}
-	}
-	for _, typ := range []string{"levy", "rebate", "investment", "divestment", "bogus"} {
-		r := ta.saveList(repeatingForm(repRow(typ, "5", "x")))
-		if r.Status != http.StatusUnprocessableEntity {
-			t.Errorf("%s: status %d, want 422", typ, r.Status)
-		}
-		wantAll(t, r.Body, "Type must be Expense or Income.")
-	}
-}
-
 func TestRepeatingAppliesTheHomeFormLimits(t *testing.T) {
 	ta := newTestApp(t)
 	for _, amount := range []string{"0", "-5", "12,5", "1.5", "abc", "100000001"} {
@@ -301,4 +287,115 @@ func TestCompletenessErrorTakesPrecedenceOverInListDuplicates(t *testing.T) {
 	if strings.Contains(r.Body, "Duplicate rows") {
 		t.Errorf("duplicate error shown with an incomplete row:\n%s", r.Body)
 	}
+}
+
+func TestRepeatingOffersLevyAndRebateButNotInvestmentOrDivestment(t *testing.T) {
+	ta := newTestApp(t)
+	body := ta.get("/repeating").Body
+	wantAll(t, body, `>Income</option>`, `>Expense</option>`, `>Levy</option>`, `>Rebate</option>`)
+	for _, label := range []string{"Investment", "Divestment"} {
+		if strings.Contains(body, ">"+label+"</option>") {
+			t.Errorf("%s is offered", label)
+		}
+	}
+	for _, typ := range []string{"investment", "divestment", "bogus"} {
+		r := ta.saveList(repeatingForm(repRow(typ, "5", "x")))
+		if r.Status != http.StatusUnprocessableEntity {
+			t.Errorf("%s: status %d, want 422", typ, r.Status)
+		}
+		wantAll(t, r.Body, "Type must be Expense, Income, Levy or Rebate.")
+	}
+}
+
+func TestRepeatingRowShowsLevyListsForLevyAndRebateOnly(t *testing.T) {
+	ta := newTestApp(t)
+	mustSave(t, ta, repeatingForm(repRow("levy", "250", "Income tax"), repRow("expense", "8", "Rent")))
+	body := ta.get("/repeating").Body
+	wantAll(t, body, `name="levy_category_0"`, `name="levy_subcategory_0"`, `name="category_1"`, `data-levy-lists`)
+	// The levy lists of the Expense row and the default lists of the Levy row are not submitted.
+	rows := strings.Split(body, `class="rep-row"`)
+	if strings.Contains(rows[1], `class="lists-default" hidden`) || !strings.Contains(rows[1], `class="lists-levy" hidden`) {
+		t.Errorf("Expense row shows the wrong lists:\n%s", rows[1])
+	}
+	if !strings.Contains(rows[2], `class="lists-default" hidden`) || strings.Contains(rows[2], `class="lists-levy" hidden`) {
+		t.Errorf("Levy row shows the wrong lists:\n%s", rows[2])
+	}
+}
+
+func TestSavedLevyAndRebateRowsComeAfterTheOtherTypesLevyBeforeRebate(t *testing.T) {
+	ta := newTestApp(t)
+	body := mustSave(t, ta, repeatingForm(
+		repRow("rebate", "1", "RebateA"), repRow("levy", "2", "LevyA"), repRow("expense", "3", "ExpenseA"),
+		repRow("rebate", "4", "RebateB"), repRow("income", "5", "IncomeA"), repRow("levy", "6", "LevyB"))).Body
+	last := -1
+	for _, d := range []string{"IncomeA", "ExpenseA", "LevyA", "LevyB", "RebateA", "RebateB"} {
+		i := strings.Index(body, `value="`+d+`"`)
+		if i < 0 || i < last {
+			t.Fatalf("%s at %d after %d", d, i, last)
+		}
+		last = i
+	}
+	wantAll(t, body, ">Cat</option>", ">Sub</option>")
+}
+
+func TestIncompleteLevyAndRebateRowsBlockSaveAndBooking(t *testing.T) {
+	for _, typ := range []string{"levy", "rebate"} {
+		for _, action := range []string{"save", "add"} {
+			for _, row := range [][7]string{
+				{typ, "", "Tax", "new", "Tax", "new", "Sub"},
+				{typ, "5", "", "new", "Tax", "new", "Sub"},
+				{typ, "5", "Tax", "", "", "new", "Sub"},
+				{typ, "5", "Tax", "new", "Tax", "", ""},
+				{typ, "5", "Tax", "new", "", "new", "Sub"},
+			} {
+				ta := newTestApp(t)
+				f := addForm("2026-10-01", row)
+				f.Set("action", action)
+				r := ta.saveList(f)
+				if r.Status != http.StatusUnprocessableEntity {
+					t.Fatalf("%s/%s %v: status %d, want 422", typ, action, row, r.Status)
+				}
+				wantAll(t, r.Body, errIncomplete)
+				if strings.Contains(ta.get("/").Body, "Tax") || strings.Contains(ta.get("/repeating").Body, ">Tax</option>") {
+					t.Errorf("%s/%s %v: something was saved or created", typ, action, row)
+				}
+			}
+		}
+	}
+}
+
+func TestLevyRowIgnoresTheDefaultListsAndUsesItsOwn(t *testing.T) {
+	ta := newTestApp(t)
+	f := repeatingForm(repRow("levy", "5", "Tax"))
+	f.Set("category_0", "new")
+	f.Set("new_category_0", "Stray")
+	// A default-list value on a Levy row is not a Category of the Levy.
+	mustSave(t, ta, f)
+	if strings.Contains(ta.get("/repeating").Body, "Stray") {
+		t.Errorf("a Category was created from a Levy row")
+	}
+}
+
+func TestLevyAndRebateRowsApplyTheListNameLimit(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.saveList(repeatingForm([7]string{"levy", "5", "x", "new", strings.Repeat("n", 51), "new", "ok"}))
+	wantAll(t, r.Body, "Levy Category name must be at most 50 characters.")
+	r = ta.saveList(repeatingForm([7]string{"rebate", "5", "x", "new", "ok", "new", strings.Repeat("n", 51)}))
+	wantAll(t, r.Body, "Levy Subcategory name must be at most 50 characters.")
+}
+
+func TestSavingRejectsTwoLevyOrTwoRebateRowsWithTheSameDescriptionButAllowsLevyAndRebate(t *testing.T) {
+	for _, typ := range []string{"levy", "rebate"} {
+		ta := newTestApp(t)
+		r := ta.saveList(repeatingForm(repRow(typ, "5", "Tax"), repRow(typ, "6", "tAX")))
+		if r.Status != http.StatusUnprocessableEntity {
+			t.Fatalf("%s: status %d, want 422", typ, r.Status)
+		}
+		wantAll(t, r.Body, "Duplicate rows in the list: Tax")
+		if strings.Contains(ta.get("/repeating").Body, ">Cat</option>") {
+			t.Errorf("%s: a Levy Category was created by a rejected save", typ)
+		}
+	}
+	ta := newTestApp(t)
+	mustSave(t, ta, repeatingForm(repRow("levy", "5", "Tax"), repRow("rebate", "5", "Tax"), repRow("income", "5", "Tax")))
 }

@@ -237,3 +237,108 @@ func TestBookRepeatingTwiceForOneDateIsAllDuplicates(t *testing.T) {
 		t.Fatalf("next month: booked %d err %v", booked, err)
 	}
 }
+
+func levyRepeatingEntry(t *testing.T, s *store.Store, typ, desc string, amount int64) store.RepeatingEntry {
+	t.Helper()
+	c, err := s.EnsureLevyCategory("LC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc, err := s.EnsureLevySubcategory("LS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store.RepeatingEntry{Type: typ, Amount: amount, Description: desc, LevyCategoryID: c, LevySubcategoryID: sc}
+}
+
+func TestRepeatingListsLevyAndRebateAfterTheOtherTypesInSavedOrder(t *testing.T) {
+	s, _ := open(t)
+	in := []store.RepeatingEntry{
+		levyRepeatingEntry(t, s, store.TypeRebate, "R1", 1),
+		levyRepeatingEntry(t, s, store.TypeLevy, "L1", 2),
+		repeatingEntry(t, s, store.TypeExpense, "E1", 3),
+		levyRepeatingEntry(t, s, store.TypeRebate, "R2", 4),
+		repeatingEntry(t, s, store.TypeIncome, "I1", 5),
+		levyRepeatingEntry(t, s, store.TypeLevy, "L2", 6),
+	}
+	if err := s.ReplaceRepeating(in); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ListRepeating()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, e := range got {
+		order = append(order, e.Description)
+	}
+	want := []string{"I1", "E1", "L1", "L2", "R1", "R2"}
+	if len(order) != len(want) {
+		t.Fatalf("order = %v, want %v", order, want)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("order = %v, want %v", order, want)
+		}
+	}
+	if got[2].LevyCategoryID == 0 || got[2].LevySubcategoryID == 0 || got[2].CategoryID != 0 {
+		t.Errorf("Levy lists not stored on the Levy row: %+v", got[2])
+	}
+}
+
+func TestRepeatingBlocksDeletingItsLevyCategoryAndLevySubcategory(t *testing.T) {
+	s, raw := open(t)
+	if err := s.ReplaceRepeating([]store.RepeatingEntry{levyRepeatingEntry(t, s, store.TypeLevy, "Tax", 5)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`DELETE FROM levy_categories`); err == nil {
+		t.Error("deleting a Levy Category used by a Repeating row succeeded")
+	}
+	if _, err := raw.Exec(`DELETE FROM levy_subcategories`); err == nil {
+		t.Error("deleting a Levy Subcategory used by a Repeating row succeeded")
+	}
+	if err := s.ReplaceRepeating(nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`DELETE FROM levy_categories`); err != nil {
+		t.Errorf("unused Levy Category not deletable: %v", err)
+	}
+	if _, err := raw.Exec(`DELETE FROM levy_subcategories`); err != nil {
+		t.Errorf("unused Levy Subcategory not deletable: %v", err)
+	}
+}
+
+func TestBookRepeatingBooksLevyAndRebateWithTheirLevyLists(t *testing.T) {
+	s, _ := open(t)
+	saveRepeating(t, s, levyRepeatingEntry(t, s, store.TypeLevy, "Tax", 250), levyRepeatingEntry(t, s, store.TypeRebate, "Tax", 40))
+	booked, dups, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 2 || len(dups) != 0 {
+		t.Fatalf("booked %d, dups %v, err %v", booked, dups, err)
+	}
+	rows, err := s.ListTransactions()
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("rows %v, err %v", rows, err)
+	}
+	for _, r := range rows {
+		if r.Category != "LC" || r.Subcategory != "LS" {
+			t.Errorf("%s booked with %q/%q, want LC/LS", r.Type, r.Category, r.Subcategory)
+		}
+	}
+}
+
+func TestBookRepeatingRebateIsNotADuplicateOfIncomeButIsOfARebate(t *testing.T) {
+	s, _ := open(t)
+	if _, err := s.AddTransaction(store.NewTransaction{Date: "2026-10-01", Amount: 40, Description: "Refund", Type: store.TypeIncome,
+		CategoryID: repeatingEntry(t, s, store.TypeIncome, "x", 1).CategoryID, SubcategoryID: repeatingEntry(t, s, store.TypeIncome, "x", 1).SubcategoryID}); err != nil {
+		t.Fatal(err)
+	}
+	saveRepeating(t, s, levyRepeatingEntry(t, s, store.TypeRebate, "refund", 40))
+	if booked, dups, err := s.BookRepeating("2026-10-01"); err != nil || booked != 1 || len(dups) != 0 {
+		t.Fatalf("booked %d, dups %v, err %v", booked, dups, err)
+	}
+	// Booking again collides with the Rebate just booked.
+	booked, dups, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 0 || len(dups) != 1 || dups[0] != "refund" {
+		t.Fatalf("booked %d, dups %v, err %v", booked, dups, err)
+	}
+}

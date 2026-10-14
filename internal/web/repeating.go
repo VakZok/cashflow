@@ -28,40 +28,60 @@ type repeatingRow struct {
 	NewCategory    string
 	Subcategory    string
 	NewSubcategory string
+	// Levy Category and Levy Subcategory are separate inputs, as on the home form.
+	LevyCategory       string
+	NewLevyCategory    string
+	LevySubcategory    string
+	NewLevySubcategory string
 }
 
-func (r repeatingRow) category() choice {
-	return choice{store.DefaultListSet.Category, r.Category, r.NewCategory}
+func (r repeatingRow) category(set store.ListSet) choice {
+	if set == store.LevyListSet {
+		return choice{set.Category, r.LevyCategory, r.NewLevyCategory}
+	}
+	return choice{set.Category, r.Category, r.NewCategory}
 }
 
-func (r repeatingRow) subcategory() choice {
-	return choice{store.DefaultListSet.Subcategory, r.Subcategory, r.NewSubcategory}
+func (r repeatingRow) subcategory(set store.ListSet) choice {
+	if set == store.LevyListSet {
+		return choice{set.Subcategory, r.LevySubcategory, r.NewLevySubcategory}
+	}
+	return choice{set.Subcategory, r.Subcategory, r.NewSubcategory}
+}
+
+// TakesLevyLists reports whether the row's Type draws from the Levy lists.
+func (r repeatingRow) TakesLevyLists() bool {
+	s, ok := repeatingSpec(r.Type)
+	return ok && s.TakesLevyLists()
 }
 
 // blank reports whether the user left the row untouched; its Type does not
 // count, a select always has one.
 func (r repeatingRow) blank() bool {
 	return r.Amount == "" && r.Description == "" && r.Category == "" && r.NewCategory == "" &&
-		r.Subcategory == "" && r.NewSubcategory == ""
+		r.Subcategory == "" && r.NewSubcategory == "" && r.LevyCategory == "" && r.NewLevyCategory == "" &&
+		r.LevySubcategory == "" && r.NewLevySubcategory == ""
 }
 
 type repeatingData struct {
-	Rows          []repeatingRow
-	Types         []store.TypeSpec
-	Categories    []store.Named
-	Subcategories []store.Named
-	MaxRows       int
-	Date          string
-	Errors        []string // shown in the box below the buttons
-	Notice        string   // likewise; never persisted
+	Rows              []repeatingRow
+	Types             []store.TypeSpec
+	Categories        []store.Named
+	Subcategories     []store.Named
+	LevyCategories    []store.Named
+	LevySubcategories []store.Named
+	MaxRows           int
+	Date              string
+	Errors            []string // shown in the box below the buttons
+	Notice            string   // likewise; never persisted
 }
 
 // repeatingTypes are the Types a Repeating row can take so far: those drawing
-// from the Category and Subcategory lists, Income and Expense.
+// from the Category and Subcategory lists or from the Levy lists.
 func repeatingTypes() []store.TypeSpec {
 	var out []store.TypeSpec
 	for _, s := range store.Types {
-		if s.TakesDefaultLists() {
+		if s.TakesDefaultLists() || s.TakesLevyLists() {
 			out = append(out, s)
 		}
 	}
@@ -91,13 +111,15 @@ func (a *App) savedRows() ([]repeatingRow, error) {
 	}
 	var rows []repeatingRow
 	for _, e := range entries {
-		rows = append(rows, repeatingRow{
-			Type:        e.Type,
-			Amount:      strconv.FormatInt(e.Amount, 10),
-			Description: e.Description,
-			Category:    strconv.FormatInt(e.CategoryID, 10),
-			Subcategory: strconv.FormatInt(e.SubcategoryID, 10),
-		})
+		row := repeatingRow{Type: e.Type, Amount: strconv.FormatInt(e.Amount, 10), Description: e.Description}
+		if row.TakesLevyLists() {
+			row.LevyCategory = strconv.FormatInt(e.LevyCategoryID, 10)
+			row.LevySubcategory = strconv.FormatInt(e.LevySubcategoryID, 10)
+		} else {
+			row.Category = strconv.FormatInt(e.CategoryID, 10)
+			row.Subcategory = strconv.FormatInt(e.SubcategoryID, 10)
+		}
+		rows = append(rows, row)
 	}
 	return rows, nil
 }
@@ -132,6 +154,14 @@ func (a *App) renderRepeating(w http.ResponseWriter, status int, rows []repeatin
 		a.serverError(w, err)
 		return
 	}
+	if d.LevyCategories, err = a.store.ListNamed(store.LevyListSet.Category); err != nil {
+		a.serverError(w, err)
+		return
+	}
+	if d.LevySubcategories, err = a.store.ListNamed(store.LevyListSet.Subcategory); err != nil {
+		a.serverError(w, err)
+		return
+	}
 	a.render(w, status, "repeating.html", d)
 }
 
@@ -156,6 +186,11 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 			NewCategory:    strings.TrimSpace(r.PostFormValue("new_category_" + n)),
 			Subcategory:    r.PostFormValue("subcategory_" + n),
 			NewSubcategory: strings.TrimSpace(r.PostFormValue("new_subcategory_" + n)),
+
+			LevyCategory:       r.PostFormValue("levy_category_" + n),
+			NewLevyCategory:    strings.TrimSpace(r.PostFormValue("new_levy_category_" + n)),
+			LevySubcategory:    r.PostFormValue("levy_subcategory_" + n),
+			NewLevySubcategory: strings.TrimSpace(r.PostFormValue("new_levy_subcategory_" + n)),
 		}
 		rows = append(rows, row)
 		if !row.blank() {
@@ -177,12 +212,14 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 	}
 	entries := make([]store.RepeatingEntry, 0, len(filled))
 	for _, row := range filled {
-		if _, ok := repeatingSpec(row.Type); !ok {
+		spec, ok := repeatingSpec(row.Type)
+		if !ok {
 			addError("Type must be " + repeatingTypeChoices() + ".")
 			continue
 		}
+		set := *spec.Lists
 		complete := row.Amount != "" && row.Description != ""
-		for _, c := range []choice{row.category(), row.subcategory()} {
+		for _, c := range []choice{row.category(set), row.subcategory(set)} {
 			ok, err := a.validChoice(c)
 			if err != nil {
 				a.serverError(w, err)
@@ -201,7 +238,7 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 		if utf8.RuneCountInString(row.Description) > store.MaxDescriptionLen {
 			addError(errDescriptionLen)
 		}
-		for _, c := range []choice{row.category(), row.subcategory()} {
+		for _, c := range []choice{row.category(set), row.subcategory(set)} {
 			if c.value == newOption && utf8.RuneCountInString(c.newName) > store.MaxNameLen {
 				addError(c.list.Label + " name must be at most 50 characters.")
 			}
@@ -220,14 +257,24 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 
 	// Everything is valid: only now create inline "new..." entries.
 	for i, row := range filled {
-		var err error
-		if entries[i].CategoryID, err = a.resolveChoice(row.category()); err != nil {
+		set := store.DefaultListSet
+		if row.TakesLevyLists() {
+			set = store.LevyListSet
+		}
+		categoryID, err := a.resolveChoice(row.category(set))
+		if err != nil {
 			a.serverError(w, err)
 			return
 		}
-		if entries[i].SubcategoryID, err = a.resolveChoice(row.subcategory()); err != nil {
+		subcategoryID, err := a.resolveChoice(row.subcategory(set))
+		if err != nil {
 			a.serverError(w, err)
 			return
+		}
+		if set == store.LevyListSet {
+			entries[i].LevyCategoryID, entries[i].LevySubcategoryID = categoryID, subcategoryID
+		} else {
+			entries[i].CategoryID, entries[i].SubcategoryID = categoryID, subcategoryID
 		}
 	}
 	if err := a.store.ReplaceRepeating(entries); err != nil {
@@ -321,5 +368,5 @@ func repeatingTypeChoices() string {
 	for _, s := range repeatingTypes() {
 		labels = append(labels, s.Label)
 	}
-	return strings.Join(labels, " or ")
+	return strings.Join(labels[:len(labels)-1], ", ") + " or " + labels[len(labels)-1]
 }

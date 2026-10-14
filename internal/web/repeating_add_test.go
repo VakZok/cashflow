@@ -190,3 +190,63 @@ func TestSaveListStillCreatesNothing(t *testing.T) {
 		t.Errorf("a Transaction was created:\n%s", body)
 	}
 }
+
+func TestAddTransactionsBooksLevyAndRebateWithTheirLevyLists(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.addTransactions("2026-09-15",
+		[7]string{"levy", "250", "Income tax", "new", "Tax", "new", "Federal"},
+		[7]string{"rebate", "40", "Tax refund", "new", "Tax", "new", "Federal"},
+		repRow("income", "2000", "Salary"))
+	if r.Status != http.StatusOK {
+		t.Fatalf("status %d\n%s", r.Status, r.Body)
+	}
+	wantAll(t, r.Body, "3 Transactions added for 2026-09-15.")
+
+	home := ta.get("/").Body
+	wantAll(t, home, "Income tax", "€250", "Tax refund", "€40", "Tax", "Federal")
+
+	// Levy and Rebate stay out of the Report, as for ordinary ones: only the Income is counted.
+	report := ta.mustReport("/report?period=month&date=2026-09")
+	wantAll(t, report, "2.000")
+	if strings.Contains(report, "250") || strings.Contains(report, "Federal") {
+		t.Errorf("Levy leaked into the report:\n%s", report)
+	}
+}
+
+func TestAddTransactionsReportsLevyDuplicatesAndBooksNothing(t *testing.T) {
+	ta := newTestApp(t)
+	ta.post("/transactions", levyForm("2026-10-01", "5", "income TAX", "new", "Tax", "new", "Federal"))
+	r := ta.addTransactions("2026-10-01",
+		repRow("income", "5", "Salary"), repRow("levy", "250", "Income tax"), repRow("rebate", "3", "Refund"))
+	if r.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("status %d, want 422\n%s", r.Status, r.Body)
+	}
+	wantAll(t, r.Body, "Already exists on 2026-10-01: Income tax")
+	if body := ta.get("/").Body; strings.Contains(body, "Salary") || strings.Contains(body, "Refund") {
+		t.Errorf("rows were booked despite the Duplicate:\n%s", body)
+	}
+}
+
+func TestRebateIsNotADuplicateOfAnIncomeWithTheSameDescriptionAndDate(t *testing.T) {
+	ta := newTestApp(t)
+	ta.post("/transactions", expenseForm("2026-10-01", "5", "Refund", "new", "Cat", "new", "Sub"))
+	ta.post("/transactions", url.Values{"type": {"income"}, "date": {"2026-10-01"}, "amount": {"40"}, "description": {"Refund"},
+		"category": {"new"}, "new_category": {"Cat2"}, "subcategory": {"new"}, "new_subcategory": {"Sub2"}})
+	r := ta.addTransactions("2026-10-01", repRow("rebate", "40", "refund"))
+	if r.Status != http.StatusOK {
+		t.Fatalf("status %d, want 200\n%s", r.Status, r.Body)
+	}
+	wantAll(t, r.Body, "1 Transaction added for 2026-10-01.")
+}
+
+func TestAddTransactionsWithAnIncompleteLevyRowBooksNothing(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.addTransactions("2026-10-01", repRow("income", "5", "Salary"), [7]string{"levy", "250", "Tax", "", "", "", ""})
+	if r.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("status %d, want 422", r.Status)
+	}
+	wantAll(t, r.Body, errIncomplete)
+	if strings.Contains(ta.get("/").Body, "Salary") {
+		t.Error("Salary was booked")
+	}
+}
