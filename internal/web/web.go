@@ -186,6 +186,18 @@ const (
 	errDescriptionLen = "Description must be at most 100 characters."
 )
 
+// validateDate returns the error message for a date input, or "" if it is valid.
+func validateDate(s string) string {
+	d, err := time.Parse(dateLayout, s)
+	if err != nil {
+		return "Date must be in the format YYYY-MM-DD."
+	}
+	if f := d.Format(dateLayout); f < store.MinDate || f > store.MaxDate {
+		return "Date must be between 2000 and 2200."
+	}
+	return ""
+}
+
 var wholeNumber = regexp.MustCompile(`^[0-9]+$`)
 
 // parseAmount reads a whole number of euros within the allowed bounds.
@@ -222,10 +234,8 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 	if !known {
 		form.Errors = append(form.Errors, "Type must be "+typeChoices()+".")
 	}
-	if d, err := time.Parse(dateLayout, form.Date); err != nil {
-		form.Errors = append(form.Errors, "Date must be in the format YYYY-MM-DD.")
-	} else if f := d.Format(dateLayout); f < store.MinDate || f > store.MaxDate {
-		form.Errors = append(form.Errors, "Date must be between 2000 and 2200.")
+	if msg := validateDate(form.Date); msg != "" {
+		form.Errors = append(form.Errors, msg)
 	}
 	amount, ok := parseAmount(form.Amount)
 	if !ok {

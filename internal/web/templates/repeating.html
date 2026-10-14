@@ -48,13 +48,17 @@
   </div>
 
   <button type="button" id="add-row" aria-label="Add row" onclick="addRow()">+</button>
-  <button type="submit">Save List</button>
+
+  <label for="date">Date</label>
+  <input id="date" type="date" name="date" value="{{.Date}}">
+  <button type="submit" name="action" value="save">Save List</button>
+  <button type="submit" name="action" value="add">Add Transactions</button>
 </form>
 
 {{with .Errors}}
 <div class="errors" role="alert"><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>
 {{end}}
-{{if .Saved}}<div class="notice" role="status">List saved</div>{{end}}
+{{if .Notice}}<div class="notice" role="status">{{.Notice}}</div>{{end}}
 
 <script>
 var maxRows = {{.MaxRows}};

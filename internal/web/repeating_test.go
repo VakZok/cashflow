@@ -55,11 +55,6 @@ func TestRepeatingPageIsLinkedAndStartsWithOneBlankRow(t *testing.T) {
 	if n := rowCount(r.Body); n != 1 {
 		t.Errorf("%d rows, want 1", n)
 	}
-	for _, unwanted := range []string{"Add Transactions", `type="date"`} {
-		if strings.Contains(r.Body, unwanted) {
-			t.Errorf("page contains %q", unwanted)
-		}
-	}
 }
 
 func TestSavedListIsGroupedIncomeThenExpenseInSavedOrder(t *testing.T) {

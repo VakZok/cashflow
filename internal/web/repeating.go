@@ -4,14 +4,16 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/VakZok/money_manager_app/internal/store"
 )
 
 const (
-	errIncomplete  = "All fields must be filled in for every row."
-	errTooManyRows = "The list can hold at most 50 rows."
+	errIncomplete   = "All fields must be filled in for every row."
+	errTooManyRows  = "The list can hold at most 50 rows."
+	errNothingToAdd = "The list is empty, there is nothing to add."
 )
 
 // repeatingRow is one row of the Repeating form: submitted values (so a
@@ -48,8 +50,9 @@ type repeatingData struct {
 	Categories    []store.Named
 	Subcategories []store.Named
 	MaxRows       int
-	Errors        []string
-	Saved         bool
+	Date          string
+	Errors        []string // shown in the box below the buttons
+	Notice        string   // likewise; never persisted
 }
 
 // repeatingTypes are the Types a Repeating row can take so far: those drawing
@@ -73,11 +76,17 @@ func repeatingSpec(typ string) (store.TypeSpec, bool) {
 	return store.TypeSpec{}, false
 }
 
-func (a *App) repeating(w http.ResponseWriter, r *http.Request) {
+// defaultBookingDate is the 1st day of the current month.
+func (a *App) defaultBookingDate() string {
+	n := a.now()
+	return time.Date(n.Year(), n.Month(), 1, 0, 0, 0, 0, time.UTC).Format(dateLayout)
+}
+
+// savedRows reads the stored list as form rows.
+func (a *App) savedRows() ([]repeatingRow, error) {
 	entries, err := a.store.ListRepeating()
 	if err != nil {
-		a.serverError(w, err)
-		return
+		return nil, err
 	}
 	var rows []repeatingRow
 	for _, e := range entries {
@@ -89,17 +98,30 @@ func (a *App) repeating(w http.ResponseWriter, r *http.Request) {
 			Subcategory: strconv.FormatInt(e.SubcategoryID, 10),
 		})
 	}
-	a.renderRepeating(w, http.StatusOK, rows, nil, r.URL.Query().Get("saved") == "1")
+	return rows, nil
 }
 
-func (a *App) renderRepeating(w http.ResponseWriter, status int, rows []repeatingRow, errs []string, saved bool) {
+func (a *App) repeating(w http.ResponseWriter, r *http.Request) {
+	rows, err := a.savedRows()
+	if err != nil {
+		a.serverError(w, err)
+		return
+	}
+	notice := ""
+	if r.URL.Query().Get("saved") == "1" {
+		notice = "List saved"
+	}
+	a.renderRepeating(w, http.StatusOK, rows, a.defaultBookingDate(), nil, notice)
+}
+
+func (a *App) renderRepeating(w http.ResponseWriter, status int, rows []repeatingRow, date string, errs []string, notice string) {
 	if len(rows) == 0 {
 		rows = []repeatingRow{{Type: store.TypeExpense}}
 	}
 	for i := range rows {
 		rows[i].Index = i
 	}
-	d := repeatingData{Rows: rows, Types: repeatingTypes(), MaxRows: store.MaxRepeating, Errors: errs, Saved: saved}
+	d := repeatingData{Rows: rows, Types: repeatingTypes(), MaxRows: store.MaxRepeating, Date: date, Errors: errs, Notice: notice}
 	var err error
 	if d.Categories, err = a.store.ListNamed(store.DefaultListSet.Category); err != nil {
 		a.serverError(w, err)
@@ -118,6 +140,10 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
+	}
+	date := a.defaultBookingDate()
+	if r.PostForm.Has("date") {
+		date = strings.TrimSpace(r.PostFormValue("date"))
 	}
 	var rows, filled []repeatingRow
 	for _, n := range r.PostForm["row"] {
@@ -182,7 +208,7 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, store.RepeatingEntry{Type: row.Type, Amount: amount, Description: row.Description})
 	}
 	if len(errs) > 0 {
-		a.renderRepeating(w, http.StatusUnprocessableEntity, rows, errs, false)
+		a.renderRepeating(w, http.StatusUnprocessableEntity, rows, date, errs, "")
 		return
 	}
 
@@ -202,7 +228,47 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 		a.serverError(w, err)
 		return
 	}
-	http.Redirect(w, r, "/repeating?saved=1", http.StatusSeeOther)
+	if r.PostFormValue("action") != "add" {
+		http.Redirect(w, r, "/repeating?saved=1", http.StatusSeeOther)
+		return
+	}
+	a.addTransactions(w, date, len(entries))
+}
+
+// addTransactions books the just-saved list on date. The list is already
+// saved, so every failure here re-renders it as stored, without booking.
+func (a *App) addTransactions(w http.ResponseWriter, date string, rowCount int) {
+	var errs []string
+	notice := ""
+	switch msg := validateDate(date); {
+	case msg != "":
+		errs = []string{msg}
+	case rowCount == 0:
+		errs = []string{errNothingToAdd}
+	default:
+		booked, duplicates, err := a.store.BookRepeating(date)
+		switch {
+		case err != nil:
+			a.serverError(w, err)
+			return
+		case len(duplicates) > 0:
+			errs = []string{"Already exists on " + date + ": " + strings.Join(duplicates, ", ")}
+		case booked == 1:
+			notice = "1 Transaction added for " + date + "."
+		default:
+			notice = strconv.Itoa(booked) + " Transactions added for " + date + "."
+		}
+	}
+	rows, err := a.savedRows()
+	if err != nil {
+		a.serverError(w, err)
+		return
+	}
+	status := http.StatusOK
+	if len(errs) > 0 {
+		status = http.StatusUnprocessableEntity
+	}
+	a.renderRepeating(w, status, rows, date, errs, notice)
 }
 
 // repeatingTypeChoices reads "Expense or Income" from the Types a row can take.

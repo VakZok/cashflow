@@ -1,6 +1,9 @@
 package store
 
-import "errors"
+import (
+	"database/sql"
+	"errors"
+)
 
 // MaxRepeating is the most rows the Repeating list holds.
 const MaxRepeating = 50
@@ -23,8 +26,16 @@ type RepeatingEntry struct {
 
 // ListRepeating returns the Repeating list grouped by Type (Income, Expense,
 // Investment, Divestment, Levy, Rebate) and, within a Type, in saved order.
-func (s *Store) ListRepeating() ([]RepeatingEntry, error) {
-	rows, err := s.db.Query(
+func (s *Store) ListRepeating() ([]RepeatingEntry, error) { return listRepeating(s.db) }
+
+// querier is what a *sql.DB and a *sql.Tx share.
+type querier interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+func listRepeating(q querier) ([]RepeatingEntry, error) {
+	rows, err := q.Query(
 		`SELECT type, amount, COALESCE(description, ''), COALESCE(category_id, 0), COALESCE(subcategory_id, 0),
 		        COALESCE(holding_id, 0), COALESCE(levy_category_id, 0), COALESCE(levy_subcategory_id, 0)
 		 FROM repeating
@@ -72,4 +83,76 @@ func (s *Store) ReplaceRepeating(entries []RepeatingEntry) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// BookRepeating creates one Transaction per row of the stored list on date,
+// all or nothing. If any row would be a Duplicate nothing is created and the
+// colliding rows are returned by description (by Holding name for an
+// Investment or Divestment), in list order.
+func (s *Store) BookRepeating(date string) (booked int, duplicates []string, err error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	entries, err := listRepeating(tx)
+	if err != nil {
+		return 0, nil, err
+	}
+	for _, e := range entries {
+		taken, err := transactionTaken(tx, date, e)
+		if err != nil {
+			return 0, nil, err
+		}
+		if taken {
+			duplicates = append(duplicates, repeatingLabel(tx, e))
+		}
+	}
+	if len(duplicates) > 0 {
+		return 0, duplicates, nil
+	}
+	for _, e := range entries {
+		_, err := tx.Exec(
+			`INSERT INTO transactions (date, amount, description, type, category_id, subcategory_id, holding_id,
+			                           levy_category_id, levy_subcategory_id)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			date, e.Amount, nullString(e.Description), e.Type,
+			nullID(e.CategoryID), nullID(e.SubcategoryID), nullID(e.HoldingID),
+			nullID(e.LevyCategoryID), nullID(e.LevySubcategoryID))
+		if err != nil {
+			if errors.Is(translate(err), ErrDuplicate) {
+				// Rows colliding with each other, not with an existing Transaction.
+				return 0, []string{repeatingLabel(tx, e)}, nil
+			}
+			return 0, nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, nil, err
+	}
+	return len(entries), nil, nil
+}
+
+// transactionTaken applies the Duplicate rule to a Repeating row booked on date.
+func transactionTaken(q querier, date string, e RepeatingEntry) (bool, error) {
+	var n int
+	var err error
+	if e.HoldingID != 0 {
+		err = q.QueryRow(
+			"SELECT COUNT(*) FROM transactions WHERE date = ? AND holding_id = ?", date, e.HoldingID).Scan(&n)
+	} else {
+		err = q.QueryRow(
+			"SELECT COUNT(*) FROM transactions WHERE date = ? AND description = ? COLLATE NOCASE AND type = ?",
+			date, e.Description, e.Type).Scan(&n)
+	}
+	return n > 0, err
+}
+
+func repeatingLabel(q querier, e RepeatingEntry) string {
+	if e.HoldingID == 0 {
+		return e.Description
+	}
+	var name string
+	_ = q.QueryRow("SELECT name FROM holdings WHERE id = ?", e.HoldingID).Scan(&name)
+	return name
 }
