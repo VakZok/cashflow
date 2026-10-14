@@ -25,23 +25,39 @@
   {{range .Rows}}{{$row := .}}
   <div class="rep-row">
     <input type="hidden" name="row" value="{{.Index}}">
-    <select name="type_{{.Index}}" aria-label="Type">
-      {{range $.Types}}<option value="{{.Type}}"{{if eq .Type $row.Type}} selected{{end}}>{{.Label}}</option>{{end}}
+    <select name="type_{{.Index}}" aria-label="Type" onchange="syncRow(this.parentNode)">
+      {{range $.Types}}<option value="{{.Type}}"{{if .TakesLevyLists}} data-levy-lists{{end}}{{if eq .Type $row.Type}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
     <input type="text" inputmode="numeric" name="amount_{{.Index}}" maxlength="9" placeholder="Amount (€)" aria-label="Amount (€)" value="{{.Amount}}" autocomplete="off">
     <input type="text" name="description_{{.Index}}" maxlength="100" placeholder="Description" aria-label="Description" value="{{.Description}}" autocomplete="off">
-    <select name="category_{{.Index}}" aria-label="Category" onchange="this.nextElementSibling.hidden = this.value !== 'new'">
+    <div class="lists-default"{{if .TakesLevyLists}} hidden{{end}}>
+    <select name="category_{{.Index}}" aria-label="Category"{{if .TakesLevyLists}} disabled{{end}} onchange="this.nextElementSibling.hidden = this.value !== 'new'">
       <option value="">Category…</option>
       {{range $.Categories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $row.Category}} selected{{end}}>{{.Name}}</option>{{end}}
       <option value="new"{{if eq .Category "new"}} selected{{end}}>new…</option>
     </select>
-    <input type="text" name="new_category_{{.Index}}" maxlength="50" placeholder="New category name" aria-label="New category name" value="{{.NewCategory}}"{{if ne .Category "new"}} hidden{{end}}>
-    <select name="subcategory_{{.Index}}" aria-label="Subcategory" onchange="this.nextElementSibling.hidden = this.value !== 'new'">
+    <input type="text" name="new_category_{{.Index}}" maxlength="50" placeholder="New category name" aria-label="New category name" value="{{.NewCategory}}"{{if ne .Category "new"}} hidden{{end}}{{if .TakesLevyLists}} disabled{{end}}>
+    <select name="subcategory_{{.Index}}" aria-label="Subcategory"{{if .TakesLevyLists}} disabled{{end}} onchange="this.nextElementSibling.hidden = this.value !== 'new'">
       <option value="">Subcategory…</option>
       {{range $.Subcategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $row.Subcategory}} selected{{end}}>{{.Name}}</option>{{end}}
       <option value="new"{{if eq .Subcategory "new"}} selected{{end}}>new…</option>
     </select>
-    <input type="text" name="new_subcategory_{{.Index}}" maxlength="50" placeholder="New subcategory name" aria-label="New subcategory name" value="{{.NewSubcategory}}"{{if ne .Subcategory "new"}} hidden{{end}}>
+    <input type="text" name="new_subcategory_{{.Index}}" maxlength="50" placeholder="New subcategory name" aria-label="New subcategory name" value="{{.NewSubcategory}}"{{if ne .Subcategory "new"}} hidden{{end}}{{if .TakesLevyLists}} disabled{{end}}>
+    </div>
+    <div class="lists-levy"{{if not .TakesLevyLists}} hidden{{end}}>
+    <select name="levy_category_{{.Index}}" aria-label="Levy Category"{{if not .TakesLevyLists}} disabled{{end}} onchange="this.nextElementSibling.hidden = this.value !== 'new'">
+      <option value="">Levy Category…</option>
+      {{range $.LevyCategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $row.LevyCategory}} selected{{end}}>{{.Name}}</option>{{end}}
+      <option value="new"{{if eq .LevyCategory "new"}} selected{{end}}>new…</option>
+    </select>
+    <input type="text" name="new_levy_category_{{.Index}}" maxlength="50" placeholder="New levy category name" aria-label="New levy category name" value="{{.NewLevyCategory}}"{{if ne .LevyCategory "new"}} hidden{{end}}{{if not .TakesLevyLists}} disabled{{end}}>
+    <select name="levy_subcategory_{{.Index}}" aria-label="Levy Subcategory"{{if not .TakesLevyLists}} disabled{{end}} onchange="this.nextElementSibling.hidden = this.value !== 'new'">
+      <option value="">Levy Subcategory…</option>
+      {{range $.LevySubcategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $row.LevySubcategory}} selected{{end}}>{{.Name}}</option>{{end}}
+      <option value="new"{{if eq .LevySubcategory "new"}} selected{{end}}>new…</option>
+    </select>
+    <input type="text" name="new_levy_subcategory_{{.Index}}" maxlength="50" placeholder="New levy subcategory name" aria-label="New levy subcategory name" value="{{.NewLevySubcategory}}"{{if ne .LevySubcategory "new"}} hidden{{end}}{{if not .TakesLevyLists}} disabled{{end}}>
+    </div>
     <button type="button" class="remove" aria-label="Remove row" onclick="removeRow(this.parentNode)">−</button>
   </div>
   {{end}}
@@ -72,6 +88,17 @@ function resetRow(row, index) {
     else { el.value = ''; if (el.name.indexOf('new_') === 0) { el.hidden = true; } }
   });
 }
+// Shows the list group the row's Type takes and disables the other, so only
+// the visible one is submitted.
+function syncRow(row) {
+  var type = row.querySelector('select[name^="type_"]');
+  var levy = type.selectedOptions[0].hasAttribute('data-levy-lists');
+  [['lists-default', !levy], ['lists-levy', levy]].forEach(function (g) {
+    var group = row.querySelector('.' + g[0]);
+    group.hidden = !g[1];
+    group.querySelectorAll('input, select').forEach(function (el) { el.disabled = !g[1]; });
+  });
+}
 function syncAdd() {
   document.getElementById('add-row').disabled = rowsEl.children.length >= maxRows;
 }
@@ -79,12 +106,13 @@ function addRow() {
   if (rowsEl.children.length >= maxRows) { return; }
   var row = rowsEl.lastElementChild.cloneNode(true);
   resetRow(row, nextIndex++);
+  syncRow(row);
   rowsEl.appendChild(row);
   syncAdd();
 }
 function removeRow(row) {
   // The list always keeps one row; removing the last one blanks it.
-  if (rowsEl.children.length === 1) { resetRow(row, nextIndex++); }
+  if (rowsEl.children.length === 1) { resetRow(row, nextIndex++); syncRow(row); }
   else { rowsEl.removeChild(row); }
   syncAdd();
 }
