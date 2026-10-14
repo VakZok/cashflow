@@ -57,7 +57,7 @@ func rowCount(body string) int { return strings.Count(body, `name="row"`) }
 
 func TestRepeatingPageIsLinkedAndStartsWithOneBlankRow(t *testing.T) {
 	ta := newTestApp(t)
-	wantAll(t, ta.get("/").Body, `href="/repeating"`, ">Repeating<")
+	wantAll(t, ta.get("/").Body, `href="/repeating"`, `aria-label="Repeating"`)
 	r := ta.get("/repeating")
 	if r.Status != http.StatusOK {
 		t.Fatalf("status %d", r.Status)
