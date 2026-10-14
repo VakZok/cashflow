@@ -96,6 +96,9 @@ const sqliteConstraintUnique = 2067
 // and Divestment) already exists.
 var ErrDuplicate = errors.New("duplicate transaction")
 
+// ErrNotFound means the Transaction does not exist (any more).
+var ErrNotFound = errors.New("transaction not found")
+
 // translate maps a unique-constraint violation to ErrDuplicate.
 func translate(err error) error {
 	var se *sqlite.Error
