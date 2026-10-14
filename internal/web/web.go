@@ -151,7 +151,7 @@ type indexData struct {
 }
 
 func (a *App) index(w http.ResponseWriter, r *http.Request) {
-	add := entryForm{Type: store.TypeExpense, Date: a.now().Format(dateLayout)}
+	add := a.defaultAddForm()
 	var edit *editing
 	if id, err := strconv.ParseInt(r.URL.Query().Get("edit"), 10, 64); err == nil {
 		t, err := a.store.GetTransaction(id)
@@ -165,6 +165,11 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	a.renderIndex(w, http.StatusOK, add, edit)
+}
+
+// defaultAddForm is the empty Add form: an Expense dated today.
+func (a *App) defaultAddForm() entryForm {
+	return entryForm{Type: store.TypeExpense, Date: a.now().Format(dateLayout)}
 }
 
 // editing is the Transaction whose row is shown as a form, with that form's state.
@@ -303,6 +308,13 @@ func (a *App) updateTransaction(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if _, err := a.store.GetTransaction(id); errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	} else if err != nil {
+		a.serverError(w, err)
+		return
+	}
 	nt, spec, err := a.prepare(&form, id)
 	if err != nil {
 		a.serverError(w, err)
@@ -320,7 +332,7 @@ func (a *App) updateTransaction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(form.Errors) > 0 {
-		a.renderIndex(w, http.StatusUnprocessableEntity, entryForm{Type: store.TypeExpense, Date: a.now().Format(dateLayout)}, &editing{ID: id, Form: form})
+		a.renderIndex(w, http.StatusUnprocessableEntity, a.defaultAddForm(), &editing{ID: id, Form: form})
 		return
 	}
 	http.Redirect(w, r, "/#tx-"+strconv.FormatInt(id, 10), http.StatusSeeOther)

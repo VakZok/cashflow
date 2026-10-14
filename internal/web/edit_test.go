@@ -201,3 +201,11 @@ func TestChangeIsTheFormsDefaultButton(t *testing.T) {
 		t.Errorf("Delete precedes Change in the row:\n%s", row)
 	}
 }
+
+func TestInvalidChangeOfAMissingTransactionIs404(t *testing.T) {
+	ta := newTestApp(t)
+	f := validForm("expense", "2026-10-02", "0", "Lunch")
+	if r := ta.post("/transactions/9", f); r.Status != http.StatusNotFound {
+		t.Errorf("status %d, want 404", r.Status)
+	}
+}
