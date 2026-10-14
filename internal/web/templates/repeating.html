@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
 <title>Repeating · Money Manager</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
@@ -23,10 +23,10 @@
   #add-row { width: auto; padding: .3rem 1rem; }
   [hidden] { display: none; }
 </style>
+{{template "nav-style"}}
 </head>
 <body>
 <h1>Repeating</h1>
-<p><a href="/">Home</a> · <a href="/report">Report</a></p>
 
 <form method="post" action="/repeating">
   <div id="rows">
@@ -139,5 +139,6 @@ function removeRow(row) {
 }
 syncAdd();
 </script>
+{{template "nav" "repeating"}}
 </body>
 </html>

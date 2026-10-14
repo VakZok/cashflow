@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
 <title>Money Manager</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
@@ -22,10 +22,10 @@
   .meta { color: #666; font-size: .9rem; grid-column: 1 / -1; }
   [hidden], .lists[hidden], .holding[hidden] { display: none; }
 </style>
+{{template "nav-style"}}
 </head>
 <body>
 <h1>Money Manager</h1>
-<p><a href="/report">Report</a> · <a href="/repeating">Repeating</a></p>
 
 <h2>Add Transaction</h2>
 {{with .Form.Errors}}
@@ -111,5 +111,6 @@ function syncGroups() {
   <li>No Transactions yet.</li>
 {{end}}
 </ul>
+{{template "nav" "add"}}
 </body>
 </html>

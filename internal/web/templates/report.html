@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
 <title>Report · Money Manager</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
@@ -23,10 +23,10 @@
   table.legend td { padding: .25rem; }
   table.legend td:nth-child(n+2) { text-align: right; }
 </style>
+{{template "nav-style"}}
 </head>
 <body>
 <h1>Report</h1>
-<p><a href="/">Add transaction</a></p>
 
 <nav class="period">
   {{if .Prev}}<a href="{{.Prev}}" aria-label="Previous">‹</a>{{end}}
@@ -74,5 +74,6 @@
     options: { plugins: { legend: { display: false } } }
   });
 </script>
+{{template "nav" "report"}}
 </body>
 </html>

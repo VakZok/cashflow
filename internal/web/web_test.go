@@ -258,7 +258,7 @@ func TestDataPersistsAcrossRestart(t *testing.T) {
 
 func TestPageIsPhoneFriendly(t *testing.T) {
 	ta := newTestApp(t)
-	if !strings.Contains(ta.get("/").Body, `<meta name="viewport" content="width=device-width, initial-scale=1">`) {
+	if !strings.Contains(ta.get("/").Body, `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">`) {
 		t.Error("missing responsive viewport meta tag")
 	}
 }
