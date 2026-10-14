@@ -3,6 +3,7 @@ package web_test
 import (
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -21,7 +22,13 @@ func repeatingForm(rows ...[7]string) url.Values {
 		if r[0] == "levy" || r[0] == "rebate" {
 			names = []string{"type", "amount", "description", "levy_category", "new_levy_category", "levy_subcategory", "new_levy_subcategory"}
 		}
+		if r[0] == "investment" || r[0] == "divestment" {
+			names = []string{"type", "amount", "description", "holding", "new_holding", "", ""}
+		}
 		for j, name := range names {
+			if name == "" {
+				continue
+			}
 			f.Set(name+"_"+n, r[j])
 		}
 	}
@@ -289,22 +296,131 @@ func TestCompletenessErrorTakesPrecedenceOverInListDuplicates(t *testing.T) {
 	}
 }
 
-func TestRepeatingOffersLevyAndRebateButNotInvestmentOrDivestment(t *testing.T) {
+func TestRepeatingOffersEveryTypeAndRejectsUnknownOnes(t *testing.T) {
 	ta := newTestApp(t)
+	wantAll(t, ta.get("/repeating").Body, `>Income</option>`, `>Expense</option>`, `>Levy</option>`, `>Rebate</option>`,
+		`>Investment</option>`, `>Divestment</option>`)
+	r := ta.saveList(repeatingForm(repRow("bogus", "5", "x")))
+	if r.Status != http.StatusUnprocessableEntity {
+		t.Errorf("status %d, want 422", r.Status)
+	}
+	wantAll(t, r.Body, "Type must be Expense, Income, Levy, Rebate, Investment or Divestment.")
+}
+
+// holdRow is an Investment or Divestment row picking or creating the Holding.
+func holdRow(typ, amount, holding, newName string) [7]string {
+	return [7]string{typ, amount, "", holding, newName, "", ""}
+}
+
+func TestRepeatingRowShowsOnlyAmountAndHoldingForInvestmentAndDivestment(t *testing.T) {
+	ta := newTestApp(t)
+	mustSave(t, ta, repeatingForm(holdRow("investment", "50", "new", "ETF"), repRow("expense", "8", "Rent")))
 	body := ta.get("/repeating").Body
-	wantAll(t, body, `>Income</option>`, `>Expense</option>`, `>Levy</option>`, `>Rebate</option>`)
-	for _, label := range []string{"Investment", "Divestment"} {
-		if strings.Contains(body, ">"+label+"</option>") {
-			t.Errorf("%s is offered", label)
+	wantAll(t, body, `name="holding_1"`, `name="new_holding_1"`, `data-holding`)
+	rows := strings.Split(body, `class="rep-row"`)
+	wantAll(t, rows[2], `<option value="1" selected>ETF</option>`, `name="description_1" maxlength="100" placeholder="Description" aria-label="Description" value="" hidden disabled`,
+		`class="lists-default" hidden`, `class="lists-levy" hidden`)
+	if strings.Contains(rows[2], `class="lists-holding" hidden`) {
+		t.Errorf("Investment row hides its Holding:\n%s", rows[2])
+	}
+	wantAll(t, rows[1], `class="lists-holding" hidden`)
+	if strings.Contains(rows[1], `class="lists-default" hidden`) || strings.Contains(rows[1], `description_0" maxlength="100" placeholder="Description" aria-label="Description" value="Rent" hidden`) {
+		t.Errorf("Expense row hides its own fields:\n%s", rows[1])
+	}
+}
+
+func TestSavedInvestmentAndDivestmentRowsComeAfterIncomeAndExpenseBeforeLevyAndRebate(t *testing.T) {
+	ta := newTestApp(t)
+	body := mustSave(t, ta, repeatingForm(
+		repRow("rebate", "1", "RebateA"), holdRow("divestment", "2", "new", "HoldD1"), repRow("levy", "3", "LevyA"),
+		holdRow("investment", "4", "new", "HoldI2"), repRow("expense", "5", "ExpenseA"),
+		holdRow("investment", "6", "new", "HoldI1"), repRow("income", "7", "IncomeA"))).Body
+	selected := regexp.MustCompile(`value="(IncomeA|ExpenseA|LevyA|RebateA)"|<option value="\d+" selected>(Hold\w+)</option>`)
+	var got []string
+	for _, row := range strings.Split(body, `class="rep-row"`)[1:] {
+		// A Holding option is only selected on a Holding row; the others show their description.
+		for _, m := range selected.FindAllStringSubmatch(row, -1) {
+			if m[1] != "" || strings.HasPrefix(m[2], "Hold") {
+				got = append(got, m[1]+m[2])
+				break
+			}
 		}
 	}
-	for _, typ := range []string{"investment", "divestment", "bogus"} {
-		r := ta.saveList(repeatingForm(repRow(typ, "5", "x")))
+	want := []string{"IncomeA", "ExpenseA", "HoldI2", "HoldI1", "HoldD1", "LevyA", "RebateA"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("order %v, want %v", got, want)
+	}
+}
+
+func TestIncompleteInvestmentAndDivestmentRowsBlockSaveAndBooking(t *testing.T) {
+	for _, typ := range []string{"investment", "divestment"} {
+		for _, action := range []string{"save", "add"} {
+			for _, row := range [][7]string{
+				holdRow(typ, "", "new", "ETF"),
+				holdRow(typ, "5", "", ""),
+				holdRow(typ, "5", "new", ""),
+				holdRow(typ, "5", "999", ""),
+			} {
+				ta := newTestApp(t)
+				f := addForm("2026-10-01", row)
+				f.Set("action", action)
+				r := ta.saveList(f)
+				if r.Status != http.StatusUnprocessableEntity {
+					t.Fatalf("%s/%s %v: status %d, want 422", typ, action, row, r.Status)
+				}
+				wantAll(t, r.Body, errIncomplete)
+				if strings.Contains(ta.get("/").Body, "ETF") || strings.Contains(ta.get("/repeating").Body, ">ETF</option>") {
+					t.Errorf("%s/%s %v: something was saved or created", typ, action, row)
+				}
+			}
+		}
+	}
+}
+
+func TestInvestmentRowIgnoresADescriptionAndTheOtherListsFields(t *testing.T) {
+	ta := newTestApp(t)
+	f := repeatingForm(holdRow("investment", "5", "new", "ETF"))
+	f.Set("description_0", "Stray")
+	f.Set("category_0", "new")
+	f.Set("new_category_0", "StrayCat")
+	body := mustSave(t, ta, f).Body
+	if strings.Contains(body, "Stray") {
+		t.Errorf("a description or Category was kept on an Investment row:\n%s", body)
+	}
+}
+
+func TestHoldingNameLimitAppliesToInvestmentRows(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.saveList(repeatingForm(holdRow("divestment", "5", "new", strings.Repeat("n", 51))))
+	wantAll(t, r.Body, "Holding name must be at most 50 characters.")
+}
+
+func TestSavingRejectsTwoRowsWithTheSameHoldingWhateverTheirType(t *testing.T) {
+	for _, types := range [][2]string{{"investment", "investment"}, {"divestment", "divestment"}, {"investment", "divestment"}} {
+		ta := newTestApp(t)
+		r := ta.saveList(repeatingForm(holdRow(types[0], "5", "new", "ETF"), holdRow(types[1], "6", "new", "etf")))
 		if r.Status != http.StatusUnprocessableEntity {
-			t.Errorf("%s: status %d, want 422", typ, r.Status)
+			t.Fatalf("%v: status %d, want 422", types, r.Status)
 		}
-		wantAll(t, r.Body, "Type must be Expense, Income, Levy or Rebate.")
+		wantAll(t, r.Body, "Duplicate rows in the list: ETF")
+		if strings.Contains(ta.get("/repeating").Body, ">ETF</option>") {
+			t.Errorf("%v: a Holding was created by a rejected save", types)
+		}
 	}
+}
+
+func TestSavingRejectsAnExistingHoldingPickedTwiceOrAlsoEnteredAsNew(t *testing.T) {
+	ta := newTestApp(t)
+	mustSave(t, ta, repeatingForm(holdRow("investment", "5", "new", "ETF")))
+	r := ta.saveList(repeatingForm(holdRow("investment", "5", "1", ""), holdRow("divestment", "6", "1", "")))
+	wantAll(t, r.Body, "Duplicate rows in the list: ETF")
+	r = ta.saveList(repeatingForm(holdRow("investment", "5", "1", ""), holdRow("divestment", "6", "new", "Etf")))
+	wantAll(t, r.Body, "Duplicate rows in the list: ETF")
+}
+
+func TestSavingAcceptsDifferentHoldingsAndTheSameNameAsADescription(t *testing.T) {
+	ta := newTestApp(t)
+	mustSave(t, ta, repeatingForm(holdRow("investment", "5", "new", "ETF"), holdRow("divestment", "6", "new", "Bonds"), repRow("expense", "5", "ETF")))
 }
 
 func TestRepeatingRowShowsLevyListsForLevyAndRebateOnly(t *testing.T) {

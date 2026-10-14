@@ -342,3 +342,93 @@ func TestBookRepeatingRebateIsNotADuplicateOfIncomeButIsOfARebate(t *testing.T) 
 		t.Fatalf("booked %d, dups %v, err %v", booked, dups, err)
 	}
 }
+
+func holdingRepeatingEntry(t *testing.T, s *store.Store, typ, holding string, amount int64) store.RepeatingEntry {
+	t.Helper()
+	id, err := s.EnsureNamed(store.HoldingList, holding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store.RepeatingEntry{Type: typ, Amount: amount, HoldingID: id}
+}
+
+func TestRepeatingListsInvestmentThenDivestmentBetweenExpenseAndLevyInSavedOrder(t *testing.T) {
+	s, _ := open(t)
+	in := []store.RepeatingEntry{
+		levyRepeatingEntry(t, s, store.TypeLevy, "L1", 1),
+		holdingRepeatingEntry(t, s, store.TypeDivestment, "D1", 2),
+		holdingRepeatingEntry(t, s, store.TypeInvestment, "I1", 3),
+		repeatingEntry(t, s, store.TypeExpense, "E1", 4),
+		holdingRepeatingEntry(t, s, store.TypeInvestment, "I2", 5),
+	}
+	saveRepeating(t, s, in...)
+	got, err := s.ListRepeating()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int64{4, 3, 5, 2, 1}
+	if len(got) != len(want) {
+		t.Fatalf("got %d rows, want %d", len(got), len(want))
+	}
+	for i, e := range got {
+		if e.Amount != want[i] {
+			t.Errorf("row %d has amount %d, want %d (%+v)", i, e.Amount, want[i], got)
+		}
+	}
+	if got[1].HoldingID == 0 || got[1].Description != "" || got[1].CategoryID != 0 {
+		t.Errorf("Holding row not stored as Holding only: %+v", got[1])
+	}
+}
+
+func TestRepeatingBlocksDeletingItsHolding(t *testing.T) {
+	s, raw := open(t)
+	saveRepeating(t, s, holdingRepeatingEntry(t, s, store.TypeInvestment, "ETF", 5))
+	if _, err := raw.Exec(`DELETE FROM holdings`); err == nil {
+		t.Error("deleting a Holding used by a Repeating row succeeded")
+	}
+	saveRepeating(t, s)
+	if _, err := raw.Exec(`DELETE FROM holdings`); err != nil {
+		t.Errorf("unused Holding not deletable: %v", err)
+	}
+}
+
+func TestBookRepeatingBooksInvestmentAndDivestmentAgainstTheirHolding(t *testing.T) {
+	s, _ := open(t)
+	saveRepeating(t, s,
+		holdingRepeatingEntry(t, s, store.TypeInvestment, "ETF", 300), holdingRepeatingEntry(t, s, store.TypeDivestment, "Bonds", 100))
+	booked, dups, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 2 || len(dups) != 0 {
+		t.Fatalf("booked %d, dups %v, err %v", booked, dups, err)
+	}
+	rows, err := s.ListTransactions()
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("rows %v, err %v", rows, err)
+	}
+	got := map[string]string{}
+	for _, r := range rows {
+		got[r.Holding] = r.Type
+	}
+	if got["ETF"] != store.TypeInvestment || got["Bonds"] != store.TypeDivestment {
+		t.Errorf("booked %v", got)
+	}
+}
+
+func TestBookRepeatingHoldingCollidesWithAnyTypeOnTheSameDateAndNamesTheHolding(t *testing.T) {
+	s, _ := open(t)
+	etf := holdingRepeatingEntry(t, s, store.TypeDivestment, "ETF", 40)
+	if _, err := s.AddTransaction(store.NewTransaction{Date: "2026-10-01", Amount: 40, Type: store.TypeDivestment, HoldingID: etf.HoldingID}); err != nil {
+		t.Fatal(err)
+	}
+	etf.Type = store.TypeInvestment
+	saveRepeating(t, s, repeatingEntry(t, s, store.TypeIncome, "Salary", 5), etf)
+	booked, dups, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 0 || len(dups) != 1 || dups[0] != "ETF" {
+		t.Fatalf("booked %d, dups %v, err %v", booked, dups, err)
+	}
+	if rows, _ := s.ListTransactions(); len(rows) != 1 {
+		t.Errorf("rows were booked despite the Duplicate: %v", rows)
+	}
+	if booked, _, err := s.BookRepeating("2026-11-01"); err != nil || booked != 2 {
+		t.Fatalf("next month: booked %d err %v", booked, err)
+	}
+}
