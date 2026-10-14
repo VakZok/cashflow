@@ -11,7 +11,15 @@
   .errors { background: #fde8e8; color: #9b1c1c; padding: .5rem 1rem; border-radius: .25rem; }
   .notice { background: #e6f4ea; color: #1e6b34; padding: .5rem 1rem; border-radius: .25rem; }
   .rep-row { border-bottom: 1px solid #ddd; padding: .5rem 0 .75rem; }
-  .rep-row .remove { width: auto; margin-top: .5rem; padding: .3rem 1rem; }
+  .rep-main { display: grid; grid-template-columns: auto 1fr 1fr; gap: .5rem; align-items: end; }
+  .rep-row .remove { width: auto; margin-top: 0; padding: .6rem 1rem; }
+  .lists-default, .lists-levy { display: grid; grid-template-columns: 1fr 1fr; column-gap: .5rem; }
+  .lists-holding:has(input:not([hidden])) { display: grid; grid-template-columns: 1fr 1fr; column-gap: .5rem; }
+  .lists-default[hidden], .lists-levy[hidden] { display: none; }
+  .lists-default > :nth-child(1), .lists-levy > :nth-child(1) { grid-column: 1; grid-row: 1; }
+  .lists-default > :nth-child(2), .lists-levy > :nth-child(2) { grid-column: 1; grid-row: 2; }
+  .lists-default > :nth-child(3), .lists-levy > :nth-child(3) { grid-column: 2; grid-row: 1; }
+  .lists-default > :nth-child(4), .lists-levy > :nth-child(4) { grid-column: 2; grid-row: 2; }
   #add-row { width: auto; padding: .3rem 1rem; }
   [hidden] { display: none; }
 </style>
@@ -25,10 +33,13 @@
   {{range .Rows}}{{$row := .}}
   <div class="rep-row">
     <input type="hidden" name="row" value="{{.Index}}">
-    <select name="type_{{.Index}}" aria-label="Type" onchange="syncRow(this.parentNode)">
+    <div class="rep-main">
+    <button type="button" class="remove" aria-label="Remove row" onclick="removeRow(this.closest('.rep-row'))">−</button>
+    <select name="type_{{.Index}}" aria-label="Type" onchange="syncRow(this.closest('.rep-row'))">
       {{range $.Types}}<option value="{{.Type}}"{{if .TakesLevyLists}} data-levy-lists{{end}}{{if .Holding}} data-holding{{end}}{{if eq .Type $row.Type}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
     <input type="text" inputmode="numeric" name="amount_{{.Index}}" maxlength="9" placeholder="Amount (€)" aria-label="Amount (€)" value="{{.Amount}}" autocomplete="off">
+    </div>
     <input type="text" name="description_{{.Index}}" maxlength="100" placeholder="Description" aria-label="Description" value="{{.Description}}"{{if .TakesHolding}} hidden disabled{{end}} autocomplete="off">
     <div class="lists-default"{{if not .TakesDefaultLists}} hidden{{end}}>
     <select name="category_{{.Index}}" aria-label="Category"{{if not .TakesDefaultLists}} disabled{{end}} onchange="this.nextElementSibling.hidden = this.value !== 'new'">
@@ -66,7 +77,6 @@
     </select>
     <input type="text" name="new_holding_{{.Index}}" maxlength="50" placeholder="New holding name" aria-label="New holding name" value="{{.NewHolding}}"{{if ne .Holding "new"}} hidden{{end}}{{if not .TakesHolding}} disabled{{end}}>
     </div>
-    <button type="button" class="remove" aria-label="Remove row" onclick="removeRow(this.parentNode)">−</button>
   </div>
   {{end}}
   </div>
