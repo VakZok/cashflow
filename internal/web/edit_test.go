@@ -18,11 +18,11 @@ func TestClickingARowOffersItsEditFormPrefilled(t *testing.T) {
 	ta.post("/transactions", validForm("investment", "2026-10-03", "90", "ETF World"))
 
 	list := ta.get("/").Body
-	wantAll(t, editRow(list, "1"), `href="/?edit=1"`, "Lunch")
+	wantAll(t, editRow(list, "1"), `href="/?edit=1#tx-1"`, "Lunch")
 
 	row := editRow(ta.get("/?edit=1").Body, "1")
 	wantAll(t, row,
-		`action="/transactions/1"`,
+		`action="/transactions/1#tx-1"`,
 		`value="2026-10-02"`, `value="12"`, `value="Lunch"`,
 		`<option value="expense" selected>`,
 		`>Food</option>`, `>Cafe</option>`,
@@ -124,7 +124,7 @@ func TestChangeRejectsWhatCreateRejectsAndKeepsTheRowInEditMode(t *testing.T) {
 			continue
 		}
 		row := editRow(r.Body, "1")
-		wantAll(t, row, `role="alert"`, `action="/transactions/1"`)
+		wantAll(t, row, `role="alert"`, `action="/transactions/1#tx-1"`)
 	}
 	// The stored Transaction is unchanged.
 	wantAll(t, editRow(ta.get("/").Body, "1"), "Lunch", "€10")

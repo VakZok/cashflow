@@ -148,7 +148,7 @@ document.addEventListener('change', disarm);
     {{with $.Edit.Form.Errors}}
     <div class="errors" role="alert"><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>
     {{end}}
-    <form method="post" action="/transactions/{{.ID}}">
+    <form method="post" action="/transactions/{{.ID}}#tx-{{.ID}}">
       {{template "fields" $.Edit}}
       <div class="edit-actions">
         {{/* Change comes first in the markup so Enter in a field presses it, not Delete; CSS shows it last. */}}
@@ -160,7 +160,7 @@ document.addEventListener('change', disarm);
   </li>
   {{else}}
   <li id="tx-{{.ID}}">
-    <a class="row" href="/?edit={{.ID}}">
+    <a class="row" href="/?edit={{.ID}}#tx-{{.ID}}">
       <span>{{if .Holding}}{{.Holding}}{{else}}{{.Description}}{{end}}</span>
       <span class="amount">{{euro .Amount}}</span>
       <span class="meta">{{.Date}} · {{typeLabel .Type}}{{if .Category}} · {{.Category}} · {{.Subcategory}}{{end}}</span>
