@@ -52,6 +52,14 @@ _Avoid_: Range, timeframe
 The page showing figures for one Period, covering Income and Expense.
 _Avoid_: Dashboard, summary
 
+**Transactions page**:
+The page listing all Transactions from the newest date to the oldest, a few at a time, with arrows to move to the newer or older ones. Transactions can be edited and deleted from it.
+_Avoid_: History, log, journal
+
+**Newest Transactions**:
+The few Transactions with the most recent dates, shown on the add page so the user sees what is already entered. Newest means the latest Transaction date, not the latest time of entry: a Transaction entered today with an old date is not among them. Transactions on the same date are ordered by when they were entered, last first.
+_Avoid_: Latest, recent, last added
+
 **Net**:
 Income minus Expense for a Period. Positive, negative, or exactly zero.
 _Avoid_: Net saved, balance, profit
