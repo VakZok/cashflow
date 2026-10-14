@@ -193,6 +193,9 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 	date := a.defaultBookingDate()
 	if r.PostForm.Has("date") {
 		date = strings.TrimSpace(r.PostFormValue("date"))
+		if len(date) == len("2006-01") {
+			date += "-01" // month picker: book on the 1st
+		}
 	}
 	var rows, filled []repeatingRow
 	for _, n := range r.PostForm["row"] {
