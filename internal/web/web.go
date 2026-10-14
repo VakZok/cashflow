@@ -57,6 +57,8 @@ func New(cfg Config) (*App, error) {
 	a.mux.Handle("GET /static/", http.FileServerFS(staticFS))
 	a.mux.HandleFunc("GET /report", a.report)
 	a.mux.HandleFunc("POST /transactions", a.createTransaction)
+	a.mux.HandleFunc("GET /repeating", a.repeating)
+	a.mux.HandleFunc("POST /repeating", a.saveRepeating)
 	return a, nil
 }
 
@@ -179,7 +181,19 @@ const (
 	errDuplicateHolding = "An entry for this date and holding already exists, edit it instead."
 )
 
+const (
+	errAmount         = "Amount must be a whole number of euros between 1 and 100.000.000."
+	errDescriptionLen = "Description must be at most 100 characters."
+)
+
 var wholeNumber = regexp.MustCompile(`^[0-9]+$`)
+
+// parseAmount reads a whole number of euros within the allowed bounds.
+func parseAmount(s string) (int64, bool) {
+	amount, err := strconv.ParseInt(s, 10, 64)
+	ok := wholeNumber.MatchString(s) && err == nil && amount >= 1 && amount <= store.MaxAmount
+	return amount, ok
+}
 
 func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
@@ -213,10 +227,11 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 	} else if f := d.Format(dateLayout); f < store.MinDate || f > store.MaxDate {
 		form.Errors = append(form.Errors, "Date must be between 2000 and 2200.")
 	}
-	amount, err := strconv.ParseInt(form.Amount, 10, 64)
-	if !wholeNumber.MatchString(form.Amount) || err != nil || amount < 1 || amount > store.MaxAmount {
-		form.Errors = append(form.Errors, "Amount must be a whole number of euros between 1 and 100.000.000.")
+	amount, ok := parseAmount(form.Amount)
+	if !ok {
+		form.Errors = append(form.Errors, errAmount)
 	}
+	var err error
 	if known {
 		if err := a.validateFields(&form, spec); err != nil {
 			a.serverError(w, err)
@@ -307,7 +322,7 @@ func (a *App) validateFields(form *entryForm, spec store.TypeSpec) error {
 		if form.Description == "" {
 			form.Errors = append(form.Errors, "Description is required.")
 		} else if utf8.RuneCountInString(form.Description) > store.MaxDescriptionLen {
-			form.Errors = append(form.Errors, "Description must be at most 100 characters.")
+			form.Errors = append(form.Errors, errDescriptionLen)
 		}
 	}
 	var required []choice

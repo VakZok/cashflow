@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repeating · Money Manager</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
+  input, select, button { width: 100%; box-sizing: border-box; padding: .6rem; font-size: 1rem; margin-top: .25rem; }
+  button { margin-top: 1rem; }
+  .errors { background: #fde8e8; color: #9b1c1c; padding: .5rem 1rem; border-radius: .25rem; }
+  .notice { background: #e6f4ea; color: #1e6b34; padding: .5rem 1rem; border-radius: .25rem; }
+  .rep-row { border-bottom: 1px solid #ddd; padding: .5rem 0 .75rem; }
+  .rep-row .remove { width: auto; margin-top: .5rem; padding: .3rem 1rem; }
+  #add-row { width: auto; padding: .3rem 1rem; }
+  [hidden] { display: none; }
+</style>
+</head>
+<body>
+<h1>Repeating</h1>
+<p><a href="/">Home</a> · <a href="/report">Report</a></p>
+
+<form method="post" action="/repeating">
+  <div id="rows">
+  {{range .Rows}}{{$row := .}}
+  <div class="rep-row">
+    <input type="hidden" name="row" value="{{.Index}}">
+    <select name="type_{{.Index}}" aria-label="Type">
+      {{range $.Types}}<option value="{{.Type}}"{{if eq .Type $row.Type}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+    <input type="text" inputmode="numeric" name="amount_{{.Index}}" maxlength="9" placeholder="Amount (€)" aria-label="Amount (€)" value="{{.Amount}}" autocomplete="off">
+    <input type="text" name="description_{{.Index}}" maxlength="100" placeholder="Description" aria-label="Description" value="{{.Description}}" autocomplete="off">
+    <select name="category_{{.Index}}" aria-label="Category" onchange="this.nextElementSibling.hidden = this.value !== 'new'">
+      <option value="">Category…</option>
+      {{range $.Categories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $row.Category}} selected{{end}}>{{.Name}}</option>{{end}}
+      <option value="new"{{if eq .Category "new"}} selected{{end}}>new…</option>
+    </select>
+    <input type="text" name="new_category_{{.Index}}" maxlength="50" placeholder="New category name" aria-label="New category name" value="{{.NewCategory}}"{{if ne .Category "new"}} hidden{{end}}>
+    <select name="subcategory_{{.Index}}" aria-label="Subcategory" onchange="this.nextElementSibling.hidden = this.value !== 'new'">
+      <option value="">Subcategory…</option>
+      {{range $.Subcategories}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $row.Subcategory}} selected{{end}}>{{.Name}}</option>{{end}}
+      <option value="new"{{if eq .Subcategory "new"}} selected{{end}}>new…</option>
+    </select>
+    <input type="text" name="new_subcategory_{{.Index}}" maxlength="50" placeholder="New subcategory name" aria-label="New subcategory name" value="{{.NewSubcategory}}"{{if ne .Subcategory "new"}} hidden{{end}}>
+    <button type="button" class="remove" aria-label="Remove row" onclick="removeRow(this.parentNode)">−</button>
+  </div>
+  {{end}}
+  </div>
+
+  <button type="button" id="add-row" aria-label="Add row" onclick="addRow()">+</button>
+  <button type="submit">Save List</button>
+</form>
+
+{{with .Errors}}
+<div class="errors" role="alert"><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>
+{{end}}
+{{if .Saved}}<div class="notice" role="status">List saved</div>{{end}}
+
+<script>
+var maxRows = {{.MaxRows}};
+var nextIndex = {{len .Rows}};
+var rowsEl = document.getElementById('rows');
+function resetRow(row, index) {
+  row.querySelectorAll('input, select').forEach(function (el) {
+    if (el.name === 'row') { el.value = index; return; }
+    el.name = el.name.replace(/_\d+$/, '_' + index);
+    if (el.tagName === 'SELECT') { el.selectedIndex = 0; }
+    else { el.value = ''; if (el.name.indexOf('new_') === 0) { el.hidden = true; } }
+  });
+}
+function syncAdd() {
+  document.getElementById('add-row').disabled = rowsEl.children.length >= maxRows;
+}
+function addRow() {
+  if (rowsEl.children.length >= maxRows) { return; }
+  var row = rowsEl.lastElementChild.cloneNode(true);
+  resetRow(row, nextIndex++);
+  rowsEl.appendChild(row);
+  syncAdd();
+}
+function removeRow(row) {
+  // The list always keeps one row; removing the last one blanks it.
+  if (rowsEl.children.length === 1) { resetRow(row, nextIndex++); }
+  else { rowsEl.removeChild(row); }
+  syncAdd();
+}
+syncAdd();
+</script>
+</body>
+</html>
