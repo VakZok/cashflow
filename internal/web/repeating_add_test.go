@@ -22,7 +22,7 @@ func (ta *testApp) addTransactions(date string, rows ...[7]string) response {
 
 func TestAddTransactionsDateDefaultsToTheFirstOfTheCurrentMonth(t *testing.T) {
 	ta := newTestApp(t)
-	wantAll(t, ta.get("/repeating").Body, `type="date"`, `value="2026-10-01"`, "Add Transactions")
+	wantAll(t, ta.get("/repeating").Body, `type="month"`, `value="2026-10"`, "Add Transactions")
 }
 
 func TestAddTransactionsBooksOneTransactionPerRowAndStaysOnThePage(t *testing.T) {
@@ -31,7 +31,7 @@ func TestAddTransactionsBooksOneTransactionPerRowAndStaysOnThePage(t *testing.T)
 	if r.Status != http.StatusOK {
 		t.Fatalf("status %d\n%s", r.Status, r.Body)
 	}
-	wantAll(t, r.Body, "2 Transactions added for 2026-09-15.", `value="Salary"`, `value="Rent"`, `value="2026-09-15"`)
+	wantAll(t, r.Body, "2 Transactions added for 2026-09-15.", `value="Salary"`, `value="Rent"`, `value="2026-09"`)
 
 	home := ta.get("/").Body
 	wantAll(t, home, "Salary", "Rent", "2026-09-15")
@@ -43,6 +43,11 @@ func TestAddTransactionsBooksOneTransactionPerRowAndStaysOnThePage(t *testing.T)
 	if rowCount(again) != 2 || strings.Contains(again, "added for") {
 		t.Errorf("reload:\n%s", again)
 	}
+}
+
+func TestAddTransactionsFromTheMonthPickerBooksOnTheFirst(t *testing.T) {
+	ta := newTestApp(t)
+	wantAll(t, ta.addTransactions("2026-09", repRow("expense", "8", "Rent")).Body, "1 Transaction added for 2026-09-01.")
 }
 
 func TestAddTransactionsSaysTransactionInTheSingular(t *testing.T) {
@@ -131,7 +136,7 @@ func TestAddTransactionsWithAnIncompleteListDoesNothing(t *testing.T) {
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("status %d", r.Status)
 	}
-	wantAll(t, r.Body, errIncomplete, `value="Fine"`, `value="2026-10-01"`)
+	wantAll(t, r.Body, errIncomplete, `value="Fine"`, `value="2026-10"`)
 	b, e := strings.Index(r.Body, "Add Transactions"), strings.Index(r.Body, errIncomplete)
 	if b < 0 || e < b {
 		t.Errorf("button at %d, error at %d", b, e)
