@@ -73,6 +73,8 @@ CREATE TABLE transactions (
 -- Investments and Divestments have a NULL description, which SQLite treats as distinct.
 -- Leading with date, it also serves date-range queries.
 CREATE UNIQUE INDEX transactions_date_description_type ON transactions (date, description COLLATE NOCASE, type);
+-- Serves the Transactions page's ORDER BY date DESC, id DESC with LIMIT/OFFSET without sorting every row.
+CREATE INDEX transactions_date_id ON transactions (date, id);
 CREATE INDEX transactions_category ON transactions (category_id);
 CREATE INDEX transactions_subcategory ON transactions (subcategory_id);
 CREATE INDEX transactions_levy_category ON transactions (levy_category_id);

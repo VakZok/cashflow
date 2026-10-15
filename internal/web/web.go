@@ -56,6 +56,7 @@ func New(cfg Config) (*App, error) {
 	a.mux.HandleFunc("GET /{$}", a.index)
 	a.mux.Handle("GET /static/", http.FileServerFS(staticFS))
 	a.mux.HandleFunc("GET /report", a.report)
+	a.mux.HandleFunc("GET /transactions", a.transactions)
 	a.mux.HandleFunc("POST /transactions", a.createTransaction)
 	a.mux.HandleFunc("POST /transactions/{id}", a.updateTransaction)
 	a.mux.HandleFunc("POST /transactions/{id}/delete", a.deleteTransaction)

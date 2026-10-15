@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
+<title>Transactions</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
+  ul.transactions { list-style: none; padding: 0; }
+  ul.transactions li { padding: .6rem 0; border-bottom: 1px solid #ddd; display: grid; grid-template-columns: 1fr auto; gap: .1rem .5rem; }
+  .amount { font-weight: 700; text-align: right; }
+  .meta { color: #666; font-size: .9rem; grid-column: 1 / -1; }
+  .pager { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
+  .pager a, .pager span.arrow { display: flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border: 1px solid #ccc; border-radius: 50%; color: #444; }
+  .pager span.arrow { color: #ccc; }
+  .pager svg { width: 1.4rem; height: 1.4rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+{{template "nav-style"}}
+</head>
+<body>
+<h1>Transactions</h1>
+{{if .Transactions}}
+<ul class="transactions">
+{{range .Transactions}}
+  <li id="tx-{{.ID}}">
+    <span>{{if .Holding}}{{.Holding}}{{else}}{{.Description}}{{end}}</span>
+    <span class="amount">{{euro .Amount}}</span>
+    <span class="meta">{{.Date}} · {{typeLabel .Type}}{{if .Category}} · {{.Category}} · {{.Subcategory}}{{end}}</span>
+  </li>
+{{end}}
+</ul>
+<div class="pager">
+  {{if .Newer}}<a href="{{.Newer}}" aria-label="Newer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+  {{else}}<span class="arrow" aria-label="Newer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></span>{{end}}
+  <span>{{.Page}} / {{.Pages}}</span>
+  {{if .Older}}<a href="{{.Older}}" aria-label="Older"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+  {{else}}<span class="arrow" aria-label="Older"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>{{end}}
+</div>
+{{else}}
+<p>No Transactions yet.</p>
+{{end}}
+{{template "nav" "transactions"}}
+</body>
+</html>

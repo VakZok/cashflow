@@ -131,8 +131,30 @@ func affectedOne(res sql.Result) error {
 	return nil
 }
 
+// PageSize is the number of Transactions on one page of the Transactions page
+// (and in the Newest Transactions).
+const PageSize = 5
+
 // ListTransactions returns all Transactions, newest first.
 func (s *Store) ListTransactions() ([]TransactionRow, error) {
+	return s.listTransactions(-1, 0)
+}
+
+// ListTransactionsPage returns up to limit Transactions, newest first,
+// skipping the first offset ones.
+func (s *Store) ListTransactionsPage(limit, offset int) ([]TransactionRow, error) {
+	return s.listTransactions(limit, offset)
+}
+
+// CountTransactions returns the number of Transactions.
+func (s *Store) CountTransactions() (int, error) {
+	var n int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM transactions").Scan(&n)
+	return n, err
+}
+
+// listTransactions orders by date, then id, both descending; a negative limit means no limit.
+func (s *Store) listTransactions(limit, offset int) ([]TransactionRow, error) {
 	rows, err := s.db.Query(
 		`SELECT t.id, t.date, t.amount, COALESCE(t.description, ''), t.type,
 		        COALESCE(c.name, lc.name, ''), COALESCE(sc.name, lsc.name, ''), COALESCE(h.name, '')
@@ -142,7 +164,8 @@ func (s *Store) ListTransactions() ([]TransactionRow, error) {
 		 LEFT JOIN levy_categories lc ON lc.id = t.levy_category_id
 		 LEFT JOIN levy_subcategories lsc ON lsc.id = t.levy_subcategory_id
 		 LEFT JOIN holdings h ON h.id = t.holding_id
-		 ORDER BY t.date DESC, t.id DESC`)
+		 ORDER BY t.date DESC, t.id DESC
+		 LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, err
 	}
