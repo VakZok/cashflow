@@ -2,7 +2,7 @@
 
 ## v1
 
-- Manual entry, listing, editing and deleting of Transactions (Income, Expense, Levy, Rebate, Investment, Divestment).
+- Manual entry, a paged Transactions page (newest first, with the Newest Transactions on the add page), editing and deleting of Transactions (Income, Expense, Levy, Rebate, Investment, Divestment).
 - Categories, Subcategories and Holdings, created inline and managed on a settings page.
 - Month and year reports: totals per Type, net saved (green if positive, red if negative), pie charts of Income and Expense by Category and by Subcategory (small slices grouped as "Other", full table alongside), invested amount per Holding.
 

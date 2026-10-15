@@ -153,6 +153,20 @@ func (s *Store) CountTransactions() (int, error) {
 	return n, err
 }
 
+// TransactionPage returns the 1-based page of the Transactions page the
+// Transaction is on: the Transactions listed before it (a newer date, or the
+// same date and a higher id) divided by PageSize.
+func (s *Store) TransactionPage(id int64) (int, error) {
+	var before int
+	err := s.db.QueryRow(
+		`SELECT (SELECT COUNT(*) FROM transactions o WHERE o.date > t.date OR (o.date = t.date AND o.id > t.id))
+		 FROM transactions t WHERE t.id = ?`, id).Scan(&before)
+	if err == sql.ErrNoRows {
+		return 0, ErrNotFound
+	}
+	return before/PageSize + 1, err
+}
+
 // listTransactions orders by date, then id, both descending; a negative limit means no limit.
 func (s *Store) listTransactions(limit, offset int) ([]TransactionRow, error) {
 	rows, err := s.db.Query(

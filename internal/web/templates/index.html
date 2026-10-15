@@ -6,7 +6,14 @@
 <title>Money Manager</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
-  input, select, button { width: 100%; box-sizing: border-box; padding: .6rem; font-size: 1rem; margin-top: .25rem; }
+{{template "entry-style"}}
+</style>
+{{template "nav-style"}}
+</head>
+<body>
+<h1>Money Manager</h1>
+
+{{define "entry-style"}}  input, select, button { width: 100%; box-sizing: border-box; padding: .6rem; font-size: 1rem; margin-top: .25rem; }
   button { margin-top: 1rem; }
   .errors { background: #fde8e8; color: #9b1c1c; padding: .5rem 1rem; border-radius: .25rem; }
   .tx-main { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .5rem; align-items: end; }
@@ -31,11 +38,7 @@
   .amount { font-weight: 700; text-align: right; }
   .meta { color: #666; font-size: .9rem; grid-column: 1 / -1; }
   [hidden], .lists[hidden], .holding[hidden] { display: none; }
-</style>
-{{template "nav-style"}}
-</head>
-<body>
-<h1>Money Manager</h1>
+{{end}}
 
 {{define "fields"}}
   <div class="tx-main">
@@ -102,7 +105,7 @@
   <button type="submit">Add</button>
 </form>
 
-<script>
+{{define "entry-script"}}<script>
 var typeFields = {{specsJSON}};
 // p is the id prefix of the form: "" for the Add form, "edit-" for the row being edited.
 function syncGroups(p) {
@@ -138,25 +141,32 @@ document.addEventListener('click', function (e) {
 });
 document.addEventListener('input', disarm);
 document.addEventListener('change', disarm);
-</script>
+</script>{{end}}
+
+{{/* edit-row is the body of the <li> of the Transaction being edited: its form, with the hidden return-to value. */}}
+{{define "edit-row"}}
+    {{with .Fields.Form.Errors}}
+    <div class="errors" role="alert"><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>
+    {{end}}
+    <form method="post" action="/transactions/{{.ID}}#tx-{{.ID}}">
+      <input type="hidden" name="return" value="{{.Return}}">
+      {{template "fields" .Fields}}
+      <div class="edit-actions">
+        {{/* Change comes first in the markup so Enter in a field presses it, not Delete; CSS shows it last. */}}
+        <button type="submit" data-arm>Change</button>
+        <a class="button" href="{{.Discard}}">Discard</a>
+        <button type="submit" data-arm formaction="/transactions/{{.ID}}/delete" formnovalidate>Delete</button>
+      </div>
+    </form>
+{{end}}
+
+{{template "entry-script"}}
 
 <h2>Newest transactions</h2>
 <ul class="transactions">
 {{range .Transactions}}
-  {{if and $.Edit (eq .ID $.EditID)}}
-  <li id="tx-{{.ID}}" class="editing">
-    {{with $.Edit.Form.Errors}}
-    <div class="errors" role="alert"><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>
-    {{end}}
-    <form method="post" action="/transactions/{{.ID}}#tx-{{.ID}}">
-      {{template "fields" $.Edit}}
-      <div class="edit-actions">
-        {{/* Change comes first in the markup so Enter in a field presses it, not Delete; CSS shows it last. */}}
-        <button type="submit" data-arm>Change</button>
-        <a class="button" href="/">Discard</a>
-        <button type="submit" data-arm formaction="/transactions/{{.ID}}/delete" formnovalidate>Delete</button>
-      </div>
-    </form>
+  {{if and $.Edit (eq .ID $.Edit.ID)}}
+  <li id="tx-{{.ID}}" class="editing">{{template "edit-row" $.Edit}}
   </li>
   {{else}}
   <li id="tx-{{.ID}}">
