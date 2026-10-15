@@ -15,3 +15,6 @@
 *.exe
 *.test
 *.out
+
+# Locally installed dev tools (golangci-lint)
+/.tools/
