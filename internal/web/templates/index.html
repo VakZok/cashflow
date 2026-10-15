@@ -140,7 +140,7 @@ document.addEventListener('input', disarm);
 document.addEventListener('change', disarm);
 </script>
 
-<h2>Transactions</h2>
+<h2>Newest transactions</h2>
 <ul class="transactions">
 {{range .Transactions}}
   {{if and $.Edit (eq .ID $.EditID)}}

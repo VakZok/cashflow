@@ -202,7 +202,7 @@ func (a *App) renderIndex(w http.ResponseWriter, status int, add entryForm, edit
 		d.Edit = &fieldsData{P: "edit-", Form: withSpec(edit.Form), formLists: lists}
 	}
 	var err error
-	if d.Transactions, err = a.store.ListTransactions(); err != nil {
+	if d.Transactions, err = a.store.ListTransactionsPage(store.PageSize, 0); err != nil {
 		a.serverError(w, err)
 		return
 	}
