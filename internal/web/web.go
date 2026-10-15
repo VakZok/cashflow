@@ -144,10 +144,27 @@ type fieldsData struct {
 	*formLists
 }
 
+// editView is a Transaction's row shown as a form, with where Discard goes and
+// the hidden "return" value that takes Change and Delete back to the same list.
+type editView struct {
+	ID      int64
+	Fields  *fieldsData
+	Return  string
+	Discard string
+}
+
+func newEditView(e *editing, lists *formLists, ret returnTo) *editView {
+	return &editView{
+		ID:      e.ID,
+		Fields:  &fieldsData{P: "edit-", Form: withSpec(e.Form), formLists: lists},
+		Return:  ret.String(),
+		Discard: ret.URL(),
+	}
+}
+
 type indexData struct {
 	Add          fieldsData
-	Edit         *fieldsData // the row being edited, nil if none
-	EditID       int64
+	Edit         *editView // the row being edited, nil if none
 	Transactions []store.TransactionRow
 }
 
@@ -195,38 +212,42 @@ func formOf(t store.NewTransaction) entryForm {
 }
 
 func (a *App) renderIndex(w http.ResponseWriter, status int, add entryForm, edit *editing) {
-	lists := &formLists{Types: store.Types}
+	lists, err := a.formLists()
+	if err != nil {
+		a.serverError(w, err)
+		return
+	}
 	d := indexData{Add: fieldsData{Form: withSpec(add), formLists: lists}}
 	if edit != nil {
-		d.EditID = edit.ID
-		d.Edit = &fieldsData{P: "edit-", Form: withSpec(edit.Form), formLists: lists}
+		d.Edit = newEditView(edit, lists, returnTo{})
 	}
-	var err error
 	if d.Transactions, err = a.store.ListTransactionsPage(store.PageSize, 0); err != nil {
 		a.serverError(w, err)
 		return
 	}
+	a.render(w, status, "index.html", d)
+}
+
+// formLists loads the choices of the entry form's selects.
+func (a *App) formLists() (*formLists, error) {
+	lists := &formLists{Types: store.Types}
+	var err error
 	if lists.Categories, err = a.store.ListNamed(store.DefaultListSet.Category); err != nil {
-		a.serverError(w, err)
-		return
+		return nil, err
 	}
 	if lists.Subcategories, err = a.store.ListNamed(store.DefaultListSet.Subcategory); err != nil {
-		a.serverError(w, err)
-		return
+		return nil, err
 	}
 	if lists.LevyCategories, err = a.store.ListNamed(store.LevyListSet.Category); err != nil {
-		a.serverError(w, err)
-		return
+		return nil, err
 	}
 	if lists.LevySubcategories, err = a.store.ListNamed(store.LevyListSet.Subcategory); err != nil {
-		a.serverError(w, err)
-		return
+		return nil, err
 	}
 	if lists.Holdings, err = a.store.ListNamed(store.HoldingList); err != nil {
-		a.serverError(w, err)
-		return
+		return nil, err
 	}
-	a.render(w, status, "index.html", d)
+	return lists, nil
 }
 
 // withSpec sets the form's Spec to the fields its Type takes. An unknown Type
@@ -332,11 +353,28 @@ func (a *App) updateTransaction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	ret := parseReturn(r.PostFormValue("return"))
 	if len(form.Errors) > 0 {
-		a.renderIndex(w, http.StatusUnprocessableEntity, a.defaultAddForm(), &editing{ID: id, Form: form})
+		edit := &editing{ID: id, Form: form}
+		if ret.Page > 0 {
+			a.renderTransactions(w, http.StatusUnprocessableEntity, ret.Page, edit)
+		} else {
+			a.renderIndex(w, http.StatusUnprocessableEntity, a.defaultAddForm(), edit)
+		}
 		return
 	}
-	http.Redirect(w, r, "/#tx-"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+	anchor := "#tx-" + strconv.FormatInt(id, 10)
+	if ret.Page == 0 {
+		http.Redirect(w, r, "/"+anchor, http.StatusSeeOther)
+		return
+	}
+	// From the Transactions page the row is followed to the page it now sits on.
+	page, err := a.store.TransactionPage(id)
+	if err != nil {
+		a.serverError(w, err)
+		return
+	}
+	http.Redirect(w, r, returnTo{Page: page}.URL()+anchor, http.StatusSeeOther)
 }
 
 // deleteTransaction removes the Transaction in the path.
@@ -352,7 +390,17 @@ func (a *App) deleteTransaction(w http.ResponseWriter, r *http.Request) {
 		a.serverError(w, err)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	ret := parseReturn(r.PostFormValue("return"))
+	if ret.Page > 0 {
+		// Deleting the only row of the last page lands on the new last page.
+		total, err := a.store.CountTransactions()
+		if err != nil {
+			a.serverError(w, err)
+			return
+		}
+		ret.Page = clampPage(ret.Page, total)
+	}
+	http.Redirect(w, r, ret.URL(), http.StatusSeeOther)
 }
 
 func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {

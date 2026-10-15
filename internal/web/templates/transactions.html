@@ -6,10 +6,7 @@
 <title>Transactions</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
-  ul.transactions { list-style: none; padding: 0; }
-  ul.transactions li { padding: .6rem 0; border-bottom: 1px solid #ddd; display: grid; grid-template-columns: 1fr auto; gap: .1rem .5rem; }
-  .amount { font-weight: 700; text-align: right; }
-  .meta { color: #666; font-size: .9rem; grid-column: 1 / -1; }
+{{template "entry-style"}}
   .pager { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
   .pager a, .pager span.arrow { display: flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border: 1px solid #ccc; border-radius: 50%; color: #444; }
   .pager span.arrow { color: #ccc; }
@@ -22,11 +19,18 @@
 {{if .Transactions}}
 <ul class="transactions">
 {{range .Transactions}}
-  <li id="tx-{{.ID}}">
-    <span>{{if .Holding}}{{.Holding}}{{else}}{{.Description}}{{end}}</span>
-    <span class="amount">{{euro .Amount}}</span>
-    <span class="meta">{{.Date}} · {{typeLabel .Type}}{{if .Category}} · {{.Category}} · {{.Subcategory}}{{end}}</span>
+  {{if and $.Edit (eq .ID $.Edit.ID)}}
+  <li id="tx-{{.ID}}" class="editing">{{template "edit-row" $.Edit}}
   </li>
+  {{else}}
+  <li id="tx-{{.ID}}">
+    <a class="row" href="/transactions?page={{$.Page}}&amp;edit={{.ID}}#tx-{{.ID}}">
+      <span>{{if .Holding}}{{.Holding}}{{else}}{{.Description}}{{end}}</span>
+      <span class="amount">{{euro .Amount}}</span>
+      <span class="meta">{{.Date}} · {{typeLabel .Type}}{{if .Category}} · {{.Category}} · {{.Subcategory}}{{end}}</span>
+    </a>
+  </li>
+  {{end}}
 {{end}}
 </ul>
 <div class="pager">
@@ -36,6 +40,7 @@
   {{if .Older}}<a href="{{.Older}}" aria-label="Older"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
   {{else}}<span class="arrow" aria-label="Older"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>{{end}}
 </div>
+{{template "entry-script"}}
 {{else}}
 <p>No Transactions yet.</p>
 {{end}}
