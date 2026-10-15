@@ -86,3 +86,69 @@ func TestTransactionsPageWithOnePageGreysBothArrows(t *testing.T) {
 	body := ta.get("/transactions").Body
 	wantAll(t, body, `<span class="arrow" aria-label="Newer">`, `<span class="arrow" aria-label="Older">`, "1 / 1")
 }
+
+func TestAddPageShowsOnlyTheFiveNewestTransactions(t *testing.T) {
+	ta := newTestApp(t)
+	addTransactions(ta, 7)
+
+	body := ta.get("/").Body
+	wantAll(t, body, "Newest transactions", "Item 07", "Item 06", "Item 05", "Item 04", "Item 03")
+	for _, old := range []string{"Item 02", "Item 01"} {
+		if strings.Contains(body, old) {
+			t.Errorf("add page shows %q, older than the 5 newest", old)
+		}
+	}
+	if strings.Index(body, "Item 07") > strings.Index(body, "Item 06") {
+		t.Error("add page is not newest first")
+	}
+}
+
+func TestAddPageOrdersSameDateByLatestEntered(t *testing.T) {
+	ta := newTestApp(t)
+	ta.post("/transactions", expenseForm("2026-09-01", "3", "First entered", "new", "Food", "new", "Cafe"))
+	ta.post("/transactions", expenseForm("2026-09-01", "3", "Last entered", "new", "Food", "new", "Cafe"))
+	body := ta.get("/").Body
+	if strings.Index(body, "Last entered") > strings.Index(body, "First entered") {
+		t.Error("same-date Transactions are not ordered last entered first")
+	}
+}
+
+func TestBackDatedTransactionIsOnTheTransactionsPageNotTheAddPage(t *testing.T) {
+	ta := newTestApp(t)
+	addTransactions(ta, 5)
+	r := ta.post("/transactions", expenseForm("2026-01-01", "3", "Back dated", "new", "Food", "new", "Cafe"))
+	if r.Status != 303 {
+		t.Fatalf("add status %d, want 303", r.Status)
+	}
+	if strings.Contains(ta.get("/").Body, "Back dated") {
+		t.Error("back-dated Transaction is on the add page")
+	}
+	if !strings.Contains(ta.get("/transactions?page=2").Body, "Back dated") {
+		t.Error("back-dated Transaction is not on the Transactions page")
+	}
+}
+
+func TestAddPageValidationErrorShowsOnlyTheNewestTransactions(t *testing.T) {
+	ta := newTestApp(t)
+	addTransactions(ta, 7)
+	r := ta.post("/transactions", expenseForm("2026-09-30", "0", "Bad", "new", "Food", "new", "Cafe"))
+	if r.Status != 422 {
+		t.Fatalf("status %d, want 422", r.Status)
+	}
+	wantAll(t, r.Body, "Item 07", "Item 03")
+	if strings.Contains(r.Body, "Item 02") {
+		t.Error("422 page shows more than the 5 newest Transactions")
+	}
+}
+
+func TestEditingARowOutsideTheNewestTransactionsDoesNotError(t *testing.T) {
+	ta := newTestApp(t)
+	addTransactions(ta, 7)
+	r := ta.get("/?edit=1")
+	if r.Status != 200 {
+		t.Fatalf("status %d, want 200", r.Status)
+	}
+	if strings.Contains(r.Body, `class="editing"`) || strings.Contains(r.Body, "Item 01") {
+		t.Error("edit form appears for a row outside the 5 shown")
+	}
+}
