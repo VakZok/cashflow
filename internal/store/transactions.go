@@ -135,40 +135,87 @@ func affectedOne(res sql.Result) error {
 // (and in the Newest Transactions).
 const PageSize = 5
 
+// Filter narrows the Transactions listed and counted; the zero Filter
+// narrows nothing.
+type Filter struct {
+	// From and To bound the date: From <= date < To (YYYY-MM-DD). An empty
+	// bound is open.
+	From, To string
+}
+
+// where is the Filter as an SQL condition on the transactions table aliased
+// as alias, with its arguments.
+func (f Filter) where(alias string) (string, []any) {
+	conds, args := []string{"1"}, []any{}
+	if f.From != "" {
+		conds, args = append(conds, alias+".date >= ?"), append(args, f.From)
+	}
+	if f.To != "" {
+		conds, args = append(conds, alias+".date < ?"), append(args, f.To)
+	}
+	return strings.Join(conds, " AND "), args
+}
+
 // ListTransactions returns all Transactions, newest first.
 func (s *Store) ListTransactions() ([]TransactionRow, error) {
-	return s.listTransactions(-1, 0)
+	return s.listTransactions(Filter{}, -1, 0)
 }
 
-// ListTransactionsPage returns up to limit Transactions, newest first,
-// skipping the first offset ones.
-func (s *Store) ListTransactionsPage(limit, offset int) ([]TransactionRow, error) {
-	return s.listTransactions(limit, offset)
+// ListTransactionsPage returns up to limit of the Transactions matching the
+// filter, newest first, skipping the first offset ones. A negative limit
+// means no limit.
+func (s *Store) ListTransactionsPage(f Filter, limit, offset int) ([]TransactionRow, error) {
+	return s.listTransactions(f, limit, offset)
 }
 
-// CountTransactions returns the number of Transactions.
-func (s *Store) CountTransactions() (int, error) {
+// CountTransactions returns the number of Transactions matching the filter.
+func (s *Store) CountTransactions(f Filter) (int, error) {
+	where, args := f.where("t")
 	var n int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM transactions").Scan(&n)
+	err := s.db.QueryRow("SELECT COUNT(*) FROM transactions t WHERE "+where, args...).Scan(&n)
 	return n, err
 }
 
-// TransactionPage returns the 1-based page of the Transactions page the
-// Transaction is on: the Transactions listed before it (a newer date, or the
-// same date and a higher id) divided by PageSize.
-func (s *Store) TransactionPage(id int64) (int, error) {
+// TransactionPage returns the 1-based page of the Transactions page, narrowed
+// by the filter, the Transaction is on: the matching Transactions listed
+// before it (a newer date, or the same date and a higher id) divided by
+// PageSize. It is ErrNotFound if the Transaction does not match the filter.
+func (s *Store) TransactionPage(id int64, f Filter) (int, error) {
+	inner, innerArgs := f.where("o")
+	outer, outerArgs := f.where("t")
 	var before int
 	err := s.db.QueryRow(
-		`SELECT (SELECT COUNT(*) FROM transactions o WHERE o.date > t.date OR (o.date = t.date AND o.id > t.id))
-		 FROM transactions t WHERE t.id = ?`, id).Scan(&before)
+		`SELECT (SELECT COUNT(*) FROM transactions o
+		         WHERE (o.date > t.date OR (o.date = t.date AND o.id > t.id)) AND `+inner+`)
+		 FROM transactions t WHERE t.id = ? AND `+outer,
+		append(append(innerArgs, id), outerArgs...)...).Scan(&before)
 	if err == sql.ErrNoRows {
 		return 0, ErrNotFound
 	}
 	return before/PageSize + 1, err
 }
 
+// TransactionYears returns the years that have at least one Transaction, newest first.
+func (s *Store) TransactionYears() ([]int, error) {
+	rows, err := s.db.Query("SELECT DISTINCT CAST(substr(date, 1, 4) AS INTEGER) AS y FROM transactions ORDER BY y DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []int
+	for rows.Next() {
+		var y int
+		if err := rows.Scan(&y); err != nil {
+			return nil, err
+		}
+		out = append(out, y)
+	}
+	return out, rows.Err()
+}
+
 // listTransactions orders by date, then id, both descending; a negative limit means no limit.
-func (s *Store) listTransactions(limit, offset int) ([]TransactionRow, error) {
+func (s *Store) listTransactions(f Filter, limit, offset int) ([]TransactionRow, error) {
+	where, args := f.where("t")
 	rows, err := s.db.Query(
 		`SELECT t.id, t.date, t.amount, COALESCE(t.description, ''), t.type,
 		        COALESCE(c.name, lc.name, ''), COALESCE(sc.name, lsc.name, ''), COALESCE(h.name, '')
@@ -178,8 +225,9 @@ func (s *Store) listTransactions(limit, offset int) ([]TransactionRow, error) {
 		 LEFT JOIN levy_categories lc ON lc.id = t.levy_category_id
 		 LEFT JOIN levy_subcategories lsc ON lsc.id = t.levy_subcategory_id
 		 LEFT JOIN holdings h ON h.id = t.holding_id
+		 WHERE `+where+`
 		 ORDER BY t.date DESC, t.id DESC
-		 LIMIT ? OFFSET ?`, limit, offset)
+		 LIMIT ? OFFSET ?`, append(args, limit, offset)...)
 	if err != nil {
 		return nil, err
 	}

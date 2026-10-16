@@ -221,7 +221,7 @@ func (a *App) renderIndex(w http.ResponseWriter, status int, add entryForm, edit
 	if edit != nil {
 		d.Edit = newEditView(edit, lists, returnTo{})
 	}
-	if d.Transactions, err = a.store.ListTransactionsPage(store.PageSize, 0); err != nil {
+	if d.Transactions, err = a.store.ListTransactionsPage(store.Filter{}, store.PageSize, 0); err != nil {
 		a.serverError(w, err)
 		return
 	}
@@ -357,7 +357,7 @@ func (a *App) updateTransaction(w http.ResponseWriter, r *http.Request) {
 	if len(form.Errors) > 0 {
 		edit := &editing{ID: id, Form: form}
 		if ret.Page > 0 {
-			a.renderTransactions(w, http.StatusUnprocessableEntity, ret.Page, edit)
+			a.renderTransactions(w, http.StatusUnprocessableEntity, ret.Page, ret.Filter, edit)
 		} else {
 			a.renderIndex(w, http.StatusUnprocessableEntity, a.defaultAddForm(), edit)
 		}
@@ -368,13 +368,23 @@ func (a *App) updateTransaction(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/"+anchor, http.StatusSeeOther)
 		return
 	}
-	// From the Transactions page the row is followed to the page it now sits on.
-	page, err := a.store.TransactionPage(id)
-	if err != nil {
+	// From the Transactions page the row is followed to the page it now sits on
+	// under the same filter. A row edited out of the filter is gone from the
+	// list: back to the same page, clamped.
+	page, err := a.store.TransactionPage(id, ret.Filter.store())
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		if ret, err = a.clamped(ret); err != nil {
+			a.serverError(w, err)
+			return
+		}
+		http.Redirect(w, r, ret.URL(), http.StatusSeeOther)
+	case err != nil:
 		a.serverError(w, err)
-		return
+	default:
+		ret.Page = page
+		http.Redirect(w, r, ret.URL()+anchor, http.StatusSeeOther)
 	}
-	http.Redirect(w, r, returnTo{Page: page}.URL()+anchor, http.StatusSeeOther)
 }
 
 // deleteTransaction removes the Transaction in the path.
@@ -390,15 +400,11 @@ func (a *App) deleteTransaction(w http.ResponseWriter, r *http.Request) {
 		a.serverError(w, err)
 		return
 	}
-	ret := parseReturn(r.PostFormValue("return"))
-	if ret.Page > 0 {
-		// Deleting the only row of the last page lands on the new last page.
-		total, err := a.store.CountTransactions()
-		if err != nil {
-			a.serverError(w, err)
-			return
-		}
-		ret.Page = clampPage(ret.Page, total)
+	// Deleting the only row of the last page lands on the new last page.
+	ret, err := a.clamped(parseReturn(r.PostFormValue("return")))
+	if err != nil {
+		a.serverError(w, err)
+		return
 	}
 	http.Redirect(w, r, ret.URL(), http.StatusSeeOther)
 }
