@@ -45,7 +45,7 @@ A named investment (e.g. "ETF World") that Investments and Divestments are recor
 _Avoid_: Asset, position, portfolio item
 
 **Period**:
-A calendar month or a calendar year that a Report covers.
+A calendar month or a calendar year that a Report covers, or that the Transactions page is narrowed to. A month always belongs to a specific year.
 _Avoid_: Range, timeframe
 
 **Report**:
@@ -53,8 +53,16 @@ The page showing figures for one Period, covering Income and Expense.
 _Avoid_: Dashboard, summary
 
 **Transactions page**:
-The page listing all Transactions from the newest date to the oldest, a few at a time, with arrows to move to the newer or older ones. Transactions can be edited and deleted from it.
+The page listing all Transactions from the newest date to the oldest, a few at a time, with arrows to move to the newer or older ones. Transactions can be edited and deleted from it. It can be narrowed by a Period, a Type, the Type's Category-like groupings or Holding, and a Search; the narrowing applies together, shows all matching Transactions across the pages, and survives editing and deleting. By default nothing narrows it. A single action clears all narrowing at once.
 _Avoid_: History, log, journal
+
+**Type filter**:
+Narrows the Transactions page to one Type. Once a Type is chosen, its groupings can be narrowed too: Category and Subcategory for Income and Expense, Levy Category and Levy Subcategory for Levy and Rebate, Holding for Investment and Divestment. Each is a single choice from all existing values, and when two are set both must match. Changing the Type drops the groupings, because the lists differ per Type.
+_Avoid_: Tab, view
+
+**Search**:
+Narrows the Transactions page to those whose description or Holding contains the typed text, ignoring ASCII case. The text is matched literally, as one phrase. It is available for all Types except Investment and Divestment, where the Holding filter replaces it; the typed text survives a Type change that keeps it available.
+_Avoid_: Query, find
 
 **Newest Transactions**:
 The few Transactions with the most recent dates, shown on the add page so the user sees what is already entered. Newest means the latest Transaction date, not the latest time of entry: a Transaction entered today with an old date is not among them. Transactions on the same date are ordered by when they were entered, last first.
