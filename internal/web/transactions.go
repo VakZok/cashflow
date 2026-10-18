@@ -51,7 +51,14 @@ type filter struct {
 	Category, Subcategory int64
 	// Holding is the id of a Holding, 0 is all. Always 0 for a Type without one.
 	Holding int64
+
+	// Search is the trimmed text to find in descriptions and Holdings, "" is none.
+	// Always "" for a Type with a Holding dropdown, which replaces the search field.
+	Search string
 }
+
+// maxSearchLen caps the Search text taken from the URL, in bytes.
+const maxSearchLen = 200
 
 // filterTypes are the Type dropdown's choices besides All, in the order the filter offers them.
 var filterTypes = func() []store.TypeSpec {
@@ -77,13 +84,20 @@ func parseFilter(q url.Values) filter {
 			f.Month = n
 		}
 	}
-	if spec, ok := store.SpecFor(q.Get("type")); ok {
+	spec, ok := store.SpecFor(q.Get("type"))
+	if ok {
 		f.Type = spec.Type
 		if spec.Lists != nil {
 			f.Category, f.Subcategory = parseID(q.Get("category")), parseID(q.Get("subcategory"))
 		}
 		if spec.Holding {
 			f.Holding = parseID(q.Get("holding"))
+		}
+	}
+	if !spec.Holding {
+		f.Search = strings.TrimSpace(q.Get("search"))
+		if len(f.Search) > maxSearchLen {
+			f.Search = strings.TrimSpace(strings.ToValidUTF8(f.Search[:maxSearchLen], ""))
 		}
 	}
 	return f
@@ -145,7 +159,7 @@ func (f filter) among(years []int) filter {
 
 // store is the filter as the store applies it.
 func (f filter) store() store.Filter {
-	sf := store.Filter{Type: f.Type, CategoryID: f.Category, SubcategoryID: f.Subcategory, HoldingID: f.Holding}
+	sf := store.Filter{Type: f.Type, CategoryID: f.Category, SubcategoryID: f.Subcategory, HoldingID: f.Holding, Search: f.Search}
 	if f.Year != 0 {
 		from := time.Date(f.Year, time.January, 1, 0, 0, 0, 0, time.UTC)
 		to := from.AddDate(1, 0, 0)
@@ -178,6 +192,9 @@ func (f filter) query() string {
 	}
 	if f.Holding != 0 {
 		parts = append(parts, "holding="+strconv.FormatInt(f.Holding, 10))
+	}
+	if f.Search != "" {
+		parts = append(parts, "search="+url.QueryEscape(f.Search))
 	}
 	return strings.Join(parts, "&")
 }

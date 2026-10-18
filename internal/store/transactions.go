@@ -152,6 +152,11 @@ type Filter struct {
 	// HoldingID keeps only Transactions of that Holding; 0 is no narrowing.
 	// It is ignored unless the Type takes a Holding.
 	HoldingID int64
+
+	// Search keeps only Transactions whose description or Holding contains
+	// the trimmed text as one literal phrase, ignoring ASCII case; empty or
+	// whitespace-only is no narrowing.
+	Search string
 }
 
 // where is the Filter as an SQL condition on the transactions table aliased
@@ -177,6 +182,12 @@ func (f Filter) where(alias string) (string, []any) {
 	}
 	if spec, _ := SpecFor(f.Type); spec.Holding && f.HoldingID != 0 {
 		conds, args = append(conds, alias+"."+HoldingList.column+" = ?"), append(args, f.HoldingID)
+	}
+	// instr and SQLite's lower() are literal and ASCII-only, so %, _ and "ä" vs "Ä" need no special care.
+	if text := strings.TrimSpace(f.Search); text != "" {
+		conds = append(conds, `(instr(lower(COALESCE(`+alias+`.description, '')), lower(?)) > 0
+		 OR instr(lower(COALESCE((SELECT h.name FROM holdings h WHERE h.id = `+alias+`.holding_id), '')), lower(?)) > 0)`)
+		args = append(args, text, text)
 	}
 	return strings.Join(conds, " AND "), args
 }

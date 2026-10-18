@@ -218,3 +218,42 @@ func TestAHoldingFilterNarrowsInvestmentsAndDivestmentsOfThatHolding(t *testing.
 		}
 	}
 }
+
+func TestASearchMatchesDescriptionOrHoldingAsALiteralASCIICaseInsensitivePhrase(t *testing.T) {
+	s, _ := open(t)
+	etf, err := s.EnsureHolding("ETF World")
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed(t, s, 1, store.NewTransaction{Type: store.TypeInvestment, HoldingID: etf})
+	for i, d := range []string{"Etf fees", "Food rest", "100% sure", "a_b", "axb", "Ärger", "Rent"} {
+		typed(t, s, i+2, expense(t, s, "", d))
+	}
+	for _, c := range []struct {
+		search string
+		want   int
+	}{
+		{"etf", 2}, // the Investment through its Holding, the Expense through its description
+		{"  ETF  ", 2},
+		{"food rest", 1},
+		{"food  rest", 0},
+		{"%", 1},
+		{"_", 1},
+		{"ä", 0}, // case is ignored for ASCII only
+		{"Ä", 1},
+		{"", 8},
+		{"   ", 8},
+	} {
+		f := store.Filter{Search: c.search}
+		rows, err := s.ListTransactionsPage(f, -1, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != c.want {
+			t.Errorf("%q: list = %v, want %d rows", c.search, descriptions(rows), c.want)
+		}
+		if n, err := s.CountTransactions(f); err != nil || n != c.want {
+			t.Errorf("%q: count = %d, err %v; want %d", c.search, n, err, c.want)
+		}
+	}
+}

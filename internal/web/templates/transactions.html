@@ -21,7 +21,9 @@
   /* Row 2 spans the bar in thirds, so Type keeps its third whether or not groupings dropdowns follow. */
   .filters > .row2 { grid-column: 1 / -1; height: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
   .row2 > * { min-width: 0; height: 2.75rem; margin-top: 0; }
-  .row2 > .holding { grid-column: span 2; }
+  .row2 > .holding, .row2 > .search { grid-column: span 2; }
+  .filters > .row3 { grid-column: 1 / -1; height: auto; }
+  .row3 input { height: 2.75rem; margin-top: 0; }
 </style>
 {{template "nav-style"}}
 </head>
@@ -65,8 +67,15 @@
       {{range .Subcategories}}<option value="{{.ID}}"{{if eq .ID $.Filter.Subcategory}} selected{{end}}>{{.Name}}</option>
       {{end}}
     </select>
-    {{end}}{{end}}
+    {{end}}{{else}}
+    <input class="search" type="search" name="search" value="{{.Filter.Search}}" placeholder="Search…" aria-label="Search" enterkeyhint="search" autocomplete="off">
+    {{end}}
   </div>
+  {{if and .Groupings (not .Groupings.Holding)}}
+  <div class="row3">
+    <input type="search" name="search" value="{{.Filter.Search}}" placeholder="Search…" aria-label="Search" enterkeyhint="search" autocomplete="off">
+  </div>
+  {{end}}
 </form>
 {{end}}
 {{if .Transactions}}

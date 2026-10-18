@@ -512,3 +512,78 @@ func TestChangingTheTypeDropsTheHoldingAndClearResetsIt(t *testing.T) {
 	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?type=investment&holding=1").Body),
 		`href="/transactions"`, "<span>Clear</span>")
 }
+
+// searchApp holds an Investment in ETF World, an Expense "Etf fees", Expense "Rent" and a Levy "Rent tax".
+func searchApp(t *testing.T) *testApp {
+	t.Helper()
+	ta := newTestApp(t)
+	ta.post("/transactions", holdingForm("investment", "2026-01-01", "3", "new", "ETF World"))
+	ta.post("/transactions", expenseForm("2026-01-02", "3", "Etf fees", "new", "Food", "new", "Cafe"))
+	ta.post("/transactions", expenseForm("2026-02-03", "3", "Rent", "new", "Home", "new", "Flat"))
+	ta.post("/transactions", levyForm("2026-02-04", "3", "Rent tax", "new", "Tax", "new", "Federal"))
+	return ta
+}
+
+func TestSearchMatchesDescriptionAndHoldingCombinedWithThePeriod(t *testing.T) {
+	ta := searchApp(t)
+	body := ta.get("/transactions?search=etf").Body
+	wantAll(t, body, "<span>ETF World</span>", "<span>Etf fees</span>")
+	wantNone(t, body, "<span>Rent</span>", "<span>Rent tax</span>")
+	wantAll(t, ta.get("/transactions?search=etf&year=2026&month=2").Body, "No matching Transactions.", `name="search"`)
+	wantNone(t, ta.get("/transactions?search=rent&type=expense").Body, "<span>Rent tax</span>")
+	wantAll(t, ta.get("/transactions?search=rent").Body, "<span>Rent</span>", "<span>Rent tax</span>")
+}
+
+func TestSearchCombinesWithGroupingsAndEscapesItsValue(t *testing.T) {
+	ta := searchApp(t)
+	wantAll(t, ta.get("/transactions?type=expense&search=e&category=1").Body, "Etf fees")
+	wantNone(t, ta.get("/transactions?type=expense&search=e&category=1").Body, "<span>Rent</span>")
+	body := ta.get(`/transactions?search=%22%3E%3Cb%3E`).Body
+	wantAll(t, body, `value="&#34;&gt;&lt;b&gt;"`, "No matching Transactions.")
+	wantNone(t, body, "<b>")
+}
+
+func TestSearchFieldPlacementFollowsTheType(t *testing.T) {
+	ta := searchApp(t)
+	all := ta.get("/transactions").Body
+	wantAll(t, all, `type="search"`)
+	wantAll(t, regexp.MustCompile(`(?s)<div class="row2">.*?</div>`).FindString(all), `name="search"`)
+	for _, typ := range []string{"expense", "income", "levy", "rebate"} {
+		body := ta.get("/transactions?type=" + typ).Body
+		wantAll(t, body, `name="search"`)
+		wantNone(t, regexp.MustCompile(`(?s)<div class="row2">.*?</div>`).FindString(body), `name="search"`)
+		wantAll(t, regexp.MustCompile(`(?s)<div class="row3">.*?</div>`).FindString(body), `name="search"`)
+	}
+	for _, typ := range []string{"investment", "divestment"} {
+		wantNone(t, ta.get("/transactions?type="+typ).Body, `name="search"`)
+	}
+}
+
+func TestSearchTextSurvivesTypeChangesWhereTheFieldExistsAndIsDroppedOtherwise(t *testing.T) {
+	ta := searchApp(t)
+	wantAll(t, ta.get("/transactions?type=expense&search=rent").Body, `value="rent"`)
+	wantAll(t, ta.get("/transactions?type=&search=rent").Body, `value="rent"`)
+	body := ta.get("/transactions?type=investment&search=etf").Body
+	wantNone(t, body, "<span>Rent", `value="etf"`, "No matching Transactions.")
+	wantAll(t, body, "ETF World")
+	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?search=rent").Body), `href="/transactions"`)
+}
+
+func TestSearchSurvivesPagerEditAndReturns(t *testing.T) {
+	ta := searchApp(t)
+	body := ta.get("/transactions?search=rent&edit=3").Body
+	wantAll(t, body, `href="/transactions?search=rent&amp;page=1"`, `value="transactions:1?search=rent"`)
+	r := ta.post("/transactions/3/delete", url.Values{"return": {"transactions:1?search=rent"}})
+	if r.Location != "/transactions?search=rent&page=1" {
+		t.Errorf("delete: location %q", r.Location)
+	}
+	wantNone(t, ta.get("/transactions?search=rent").Body, "<span>Rent</span>")
+}
+
+func TestSearchAddsTheFilterToThePagerLinks(t *testing.T) {
+	ta := newTestApp(t)
+	for i := 1; i <= 6; i++ {
+		ta.post("/transactions", expenseForm(fmt.Sprintf("2026-01-%02d", i), "3", fmt.Sprintf("Rent %d", i), "new", "Food", "new", "Cafe"))
+	}
+	wantAll(t, ta.get("/transactions?search=rent").Body, `href="/transactions?search=rent&amp;page=2"`, "1 / 2")
+}
