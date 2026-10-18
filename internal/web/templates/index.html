@@ -7,6 +7,7 @@
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
 {{template "entry-style"}}
+{{template "sign-style"}}
 </style>
 {{template "nav-style"}}
 </head>
@@ -172,7 +173,7 @@ document.addEventListener('change', disarm);
   <li id="tx-{{.ID}}">
     <a class="row" href="/?edit={{.ID}}#tx-{{.ID}}">
       <span>{{if .Holding}}{{.Holding}}{{else}}{{.Description}}{{end}}</span>
-      <span class="amount">{{euro .Amount}}</span>
+      {{signedAmount .Type .Amount}}
       <span class="meta">{{.Date}} · {{typeLabel .Type}}{{if .Category}} · {{.Category}} · {{.Subcategory}}{{end}}</span>
     </a>
   </li>

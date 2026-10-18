@@ -208,9 +208,11 @@ func (a *App) report(w http.ResponseWriter, r *http.Request) {
 	d := reportData{Chart: sel, ChartTypes: chartTypes(), Period: p, Income: formatEuro(income), Expense: formatEuro(expense)}
 	switch {
 	case net > 0:
-		d.Net, d.NetClass = template.HTML("+"+formatEuro(net)), "net-positive"
+		text, class := signedEuro(net, true)
+		d.Net, d.NetClass = template.HTML(text), class
 	case net < 0:
-		d.Net, d.NetClass = template.HTML("−"+formatEuro(-net)), "net-negative"
+		text, class := signedEuro(-net, false)
+		d.Net, d.NetClass = template.HTML(text), class
 	default:
 		d.Net, d.NetClass = template.HTML(formatEuro(0)), "net-zero"
 	}

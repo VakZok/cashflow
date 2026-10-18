@@ -228,7 +228,7 @@ func TestNewCategoryNamesReuseExistingCaseInsensitively(t *testing.T) {
 
 func TestAmountFormatting(t *testing.T) {
 	ta := newTestApp(t)
-	amounts := map[string]string{"7": "€7", "999": "€999", "1000": "€1.000", "1234": "€1.234", "1234567": "€1.234.567"}
+	amounts := map[string]string{"7": "−€7", "999": "−€999", "1000": "−€1.000", "1234": "−€1.234", "1234567": "−€1.234.567"}
 	for in, want := range amounts {
 		ta.post("/transactions", expenseForm("2026-10-05", in, "amt"+in, "new", "C", "new", "S"))
 		if body := ta.get("/").Body; !strings.Contains(body, ">"+want+"<") {
@@ -399,12 +399,13 @@ func TestInvestmentAndDivestmentShowInListWithHolding(t *testing.T) {
 	for typ, label := range map[string]string{"investment": "Investment", "divestment": "Divestment"} {
 		t.Run(typ, func(t *testing.T) {
 			ta := newTestApp(t)
+			signed := map[string]string{"investment": "+€1.500", "divestment": "−€1.500"}[typ]
 			r := ta.post("/transactions", holdingForm(typ, "2026-10-03", "1500", "new", "ETF World"))
 			if r.Status != http.StatusSeeOther || r.Location != "/" {
 				t.Fatalf("POST = %d -> %q, want 303 -> /", r.Status, r.Location)
 			}
 			body := ta.follow(r).Body
-			if !strings.Contains(body, "<span>ETF World</span>") || !strings.Contains(body, ">€1.500<") ||
+			if !strings.Contains(body, "<span>ETF World</span>") || !strings.Contains(body, ">"+signed+"<") ||
 				!strings.Contains(body, "2026-10-03 · "+label+"</span>") {
 				t.Errorf("list entry wrong in:\n%s", body)
 			}

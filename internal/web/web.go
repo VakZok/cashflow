@@ -44,7 +44,7 @@ func New(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	tmpl, err := template.New("").Funcs(template.FuncMap{"euro": formatEuro, "typeLabel": typeLabel, "specsJSON": specsJSON}).ParseFS(templateFS, "templates/*.html")
+	tmpl, err := template.New("").Funcs(template.FuncMap{"euro": formatEuro, "signedAmount": signedAmount, "typeLabel": typeLabel, "specsJSON": specsJSON}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		_ = st.Close()
 		return nil, err
