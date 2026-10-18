@@ -14,8 +14,9 @@ func TestEveryPageHasTheBottomNavWithItsOwnItemActive(t *testing.T) {
 		{"/repeating", "Repeating"},
 		{"/report", "Report"},
 		{"/report?period=year", "Report"},
+		{"/categories", "Edit Categories"},
 	}
-	labels := []string{"Repeating", "Add transaction", "Transactions", "Report"}
+	labels := []string{"Repeating", "Add transaction", "Transactions", "Report", "Edit Categories"}
 	for _, p := range pages {
 		t.Run(p.path, func(t *testing.T) {
 			body := ta.get(p.path).Body
