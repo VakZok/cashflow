@@ -149,6 +149,9 @@ type Filter struct {
 	// Rebate); 0 is no narrowing. Both must match. They are ignored unless the
 	// Type takes such lists.
 	CategoryID, SubcategoryID int64
+	// HoldingID keeps only Transactions of that Holding; 0 is no narrowing.
+	// It is ignored unless the Type takes a Holding.
+	HoldingID int64
 }
 
 // where is the Filter as an SQL condition on the transactions table aliased
@@ -171,6 +174,9 @@ func (f Filter) where(alias string) (string, []any) {
 		if f.SubcategoryID != 0 {
 			conds, args = append(conds, alias+"."+spec.Lists.Subcategory.column+" = ?"), append(args, f.SubcategoryID)
 		}
+	}
+	if spec, _ := SpecFor(f.Type); spec.Holding && f.HoldingID != 0 {
+		conds, args = append(conds, alias+"."+HoldingList.column+" = ?"), append(args, f.HoldingID)
 	}
 	return strings.Join(conds, " AND "), args
 }

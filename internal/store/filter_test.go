@@ -177,3 +177,44 @@ func TestTransactionPageHonoursTheTypeFilter(t *testing.T) {
 		t.Errorf("other Type: err %v, want ErrNotFound", err)
 	}
 }
+
+func TestAHoldingFilterNarrowsInvestmentsAndDivestmentsOfThatHolding(t *testing.T) {
+	s, _ := open(t)
+	etf, _ := s.EnsureHolding("ETF")
+	gold, _ := s.EnsureHolding("Gold")
+	for i, c := range []struct {
+		typ     string
+		holding int64
+	}{
+		{store.TypeInvestment, etf}, {store.TypeDivestment, etf}, {store.TypeInvestment, gold},
+	} {
+		n := store.NewTransaction{Date: fmt.Sprintf("2026-01-0%d", i+1), Amount: 3, Type: c.typ, HoldingID: c.holding}
+		if _, err := s.AddTransaction(n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.AddTransaction(expense(t, s, "2026-01-09", "Lunch")); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name string
+		f    store.Filter
+		want int
+	}{
+		{"Type only", store.Filter{Type: store.TypeInvestment}, 2},
+		{"Investments of a Holding", store.Filter{Type: store.TypeInvestment, HoldingID: etf}, 1},
+		{"Divestments of a Holding", store.Filter{Type: store.TypeDivestment, HoldingID: etf}, 1},
+		{"Divestments of another Holding", store.Filter{Type: store.TypeDivestment, HoldingID: gold}, 0},
+		{"Holding is ignored for a Type without one", store.Filter{Type: store.TypeExpense, HoldingID: etf}, 1},
+		{"Holding is ignored without a Type", store.Filter{HoldingID: etf}, 4},
+		{"Holding combines with the date range", store.Filter{Type: store.TypeInvestment, HoldingID: etf, From: "2026-01-02", To: "2026-02-01"}, 0},
+	} {
+		rows, err := s.ListTransactionsPage(c.f, -1, 0)
+		if err != nil || len(rows) != c.want {
+			t.Errorf("%s: list has %d, err %v; want %d", c.name, len(rows), err, c.want)
+		}
+		if n, err := s.CountTransactions(c.f); err != nil || n != c.want {
+			t.Errorf("%s: count = %d, err %v; want %d", c.name, n, err, c.want)
+		}
+	}
+}

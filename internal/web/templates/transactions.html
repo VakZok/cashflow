@@ -21,6 +21,7 @@
   /* Row 2 spans the bar in thirds, so Type keeps its third whether or not groupings dropdowns follow. */
   .filters > .row2 { grid-column: 1 / -1; height: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
   .row2 > * { min-width: 0; height: 2.75rem; margin-top: 0; }
+  .row2 > .holding { grid-column: span 2; }
 </style>
 {{template "nav-style"}}
 </head>
@@ -47,7 +48,13 @@
       {{range .Types}}<option value="{{.Type}}"{{if eq .Type $.Filter.Type}} selected{{end}}>{{.Label}}</option>
       {{end}}
     </select>
-    {{with .Groupings}}
+    {{with .Groupings}}{{if .Holding}}
+    <select class="grouping holding" name="holding" aria-label="Holding" onchange="this.form.submit()">
+      <option value="">Holding</option>
+      {{range .Holdings}}<option value="{{.ID}}"{{if eq .ID $.Filter.Holding}} selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+    {{else}}
     <select class="grouping" name="category" aria-label="{{.Category.Label}}" onchange="this.form.submit()">
       <option value="">{{.Category.Label}}</option>
       {{range .Categories}}<option value="{{.ID}}"{{if eq .ID $.Filter.Category}} selected{{end}}>{{.Name}}</option>
@@ -58,7 +65,7 @@
       {{range .Subcategories}}<option value="{{.ID}}"{{if eq .ID $.Filter.Subcategory}} selected{{end}}>{{.Name}}</option>
       {{end}}
     </select>
-    {{end}}
+    {{end}}{{end}}
   </div>
 </form>
 {{end}}

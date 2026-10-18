@@ -429,3 +429,86 @@ func TestClearResetsTypeAndGroupings(t *testing.T) {
 	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?type=expense&category=1").Body),
 		`href="/transactions"`, "<span>Clear</span>")
 }
+
+// holdingFilterApp holds an Investment and a Divestment of ETF, an Investment of Gold and an Expense.
+func holdingFilterApp(t *testing.T) *testApp {
+	t.Helper()
+	ta := newTestApp(t)
+	ta.post("/transactions", holdingForm("investment", "2026-01-01", "3", "new", "ETF"))
+	ta.post("/transactions", holdingForm("divestment", "2026-01-02", "3", "new", "Gold"))
+	ta.post("/transactions", holdingForm("investment", "2026-02-03", "3", "new", "Gold"))
+	ta.post("/transactions", expenseForm("2026-01-04", "3", "Lunch", "new", "Food", "new", "Cafe"))
+	return ta
+}
+
+// holdingID is the id of the Holding named name in the filter's Holding dropdown.
+func holdingID(ta *testApp, name string) string {
+	ta.t.Helper()
+	m := regexp.MustCompile(`<option value="(\d+)"[^>]*>` + name + `</option>`).FindStringSubmatch(selectHTML(ta.get("/transactions?type=investment").Body, "holding"))
+	if m == nil {
+		ta.t.Fatalf("no Holding option %q", name)
+	}
+	return m[1]
+}
+
+func TestTheHoldingDropdownAppearsOnlyForInvestmentAndDivestment(t *testing.T) {
+	ta := holdingFilterApp(t)
+	for _, typ := range []string{"investment", "divestment"} {
+		body := ta.get("/transactions?type=" + typ).Body
+		sel := selectHTML(body, "holding")
+		wantAll(t, sel, `aria-label="Holding"`, `<option value="">Holding</option>`, ">ETF<", ">Gold<", `onchange="this.form.submit()"`)
+		wantNone(t, body, `name="search"`)
+		wantNone(t, selectHTML(body, "category")+selectHTML(body, "subcategory"), "<select")
+	}
+	for _, q := range []string{"", "?type=expense", "?type=levy"} {
+		wantNone(t, ta.get("/transactions"+q).Body, `name="holding"`)
+	}
+}
+
+func TestSelectingAHoldingShowsOnlyItsTransactionsOfTheType(t *testing.T) {
+	ta := holdingFilterApp(t)
+	gold := holdingID(ta, "Gold")
+	body := ta.get("/transactions?type=investment&holding=" + gold).Body
+	wantAll(t, body, "2026-02-03")
+	wantNone(t, body, "2026-01-01", "2026-01-02", "Lunch")
+	wantAll(t, ta.get("/transactions?type=divestment&holding="+gold).Body, "2026-01-02")
+	wantAll(t, selectHTML(body, "holding"), `value="`+gold+`" selected`)
+	// Combines with Period using AND.
+	body = ta.get("/transactions?type=investment&holding=" + gold + "&year=2026&month=1").Body
+	wantAll(t, body, "No matching Transactions.")
+}
+
+func TestAnUnknownHoldingFallsBackToUnfiltered(t *testing.T) {
+	ta := holdingFilterApp(t)
+	for _, h := range []string{"999", "abc", "-1", "", "99999999999999999999999"} {
+		r := ta.get("/transactions?type=investment&holding=" + h)
+		if r.Status != 200 {
+			t.Errorf("%q: status %d", h, r.Status)
+		}
+		wantAll(t, r.Body, "2026-01-01", "2026-02-03")
+		wantNone(t, r.Body, "No matching Transactions.")
+		wantNone(t, selectHTML(r.Body, "holding"), "selected")
+	}
+	// A stale Holding for a Type without one narrows nothing.
+	wantAll(t, ta.get("/transactions?type=expense&holding=1").Body, "Lunch")
+}
+
+func TestTheHoldingSurvivesPagerEditAndReturns(t *testing.T) {
+	ta := holdingFilterApp(t)
+	gold := holdingID(ta, "Gold")
+	q := "type=investment&holding=" + gold
+	wantAll(t, ta.get("/transactions?"+q+"&page=1&edit=3").Body, `href="/transactions?type=investment&amp;holding=`+gold+`&amp;page=1"`)
+	r := ta.post("/transactions/3/delete", url.Values{"return": {"transactions:1?" + q}})
+	if r.Location != "/transactions?"+q+"&page=1" {
+		t.Errorf("delete: location %q", r.Location)
+	}
+}
+
+func TestChangingTheTypeDropsTheHoldingAndClearResetsIt(t *testing.T) {
+	ta := holdingFilterApp(t)
+	body := ta.get("/transactions?type=investment").Body
+	wantAll(t, selectHTML(body, "holding"), `class="grouping holding"`)
+	wantAll(t, selectHTML(body, "type"), `e.disabled = true`)
+	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?type=investment&holding=1").Body),
+		`href="/transactions"`, "<span>Clear</span>")
+}
