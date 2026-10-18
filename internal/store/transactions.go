@@ -141,6 +141,14 @@ type Filter struct {
 	// From and To bound the date: From <= date < To (YYYY-MM-DD). An empty
 	// bound is open.
 	From, To string
+
+	// Type keeps only Transactions of that Type; empty is all Types.
+	Type string
+	// CategoryID and SubcategoryID keep only Transactions with that entry of
+	// the Type's Category and Subcategory list (the Levy ones for Levy and
+	// Rebate); 0 is no narrowing. Both must match. They are ignored unless the
+	// Type takes such lists.
+	CategoryID, SubcategoryID int64
 }
 
 // where is the Filter as an SQL condition on the transactions table aliased
@@ -152,6 +160,17 @@ func (f Filter) where(alias string) (string, []any) {
 	}
 	if f.To != "" {
 		conds, args = append(conds, alias+".date < ?"), append(args, f.To)
+	}
+	if f.Type != "" {
+		conds, args = append(conds, alias+".type = ?"), append(args, f.Type)
+	}
+	if spec, _ := SpecFor(f.Type); spec.Lists != nil {
+		if f.CategoryID != 0 {
+			conds, args = append(conds, alias+"."+spec.Lists.Category.column+" = ?"), append(args, f.CategoryID)
+		}
+		if f.SubcategoryID != 0 {
+			conds, args = append(conds, alias+"."+spec.Lists.Subcategory.column+" = ?"), append(args, f.SubcategoryID)
+		}
 	}
 	return strings.Join(conds, " AND "), args
 }
