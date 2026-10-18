@@ -20,7 +20,8 @@
   .lists-default > :nth-child(2), .lists-levy > :nth-child(2) { grid-column: 1; grid-row: 2; }
   .lists-default > :nth-child(3), .lists-levy > :nth-child(3) { grid-column: 2; grid-row: 1; }
   .lists-default > :nth-child(4), .lists-levy > :nth-child(4) { grid-column: 2; grid-row: 2; }
-  #add-row { width: auto; padding: .3rem 1rem; }
+  #add-row { display: block; width: auto; margin: 1rem auto 0; padding: .3rem 1rem; }
+  input[type=month] { -webkit-appearance: none; appearance: none; min-width: 0; margin-top: 1rem; border: 1px solid #767676; border-radius: .25rem; background: #fff; }
   [hidden] { display: none; }
 </style>
 {{template "nav-style"}}
@@ -83,8 +84,7 @@
 
   <button type="button" id="add-row" aria-label="Add row" onclick="addRow()">+</button>
 
-  <label for="date">Month</label>
-  <input id="date" type="month" name="date" value="{{if ge (len .Date) 7}}{{slice .Date 0 7}}{{end}}">
+  <input id="date" type="month" name="date" aria-label="Month" value="{{if ge (len .Date) 7}}{{slice .Date 0 7}}{{end}}">
   <button type="submit" name="action" value="save">Save List</button>
   <button type="submit" name="action" value="add">Add Transactions</button>
 </form>

@@ -308,3 +308,12 @@ func TestAddTransactionsTwiceReportsTheHoldingNameAgain(t *testing.T) {
 	r := ta.addTransactions("2026-10-01", holdRow("investment", "5", "1", ""))
 	wantAll(t, r.Body, "Already exists on 2026-10-01: ETF")
 }
+
+func TestMonthPickerHasAnAccessibleNameButNoVisibleLabel(t *testing.T) {
+	ta := newTestApp(t)
+	body := ta.get("/repeating").Body
+	wantAll(t, body, `aria-label="Month"`)
+	if strings.Contains(body, "<label") {
+		t.Errorf("visible label on the Repeating page:\n%s", body)
+	}
+}
