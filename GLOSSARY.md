@@ -13,8 +13,12 @@ A saved Transaction without a date, kept in a user-maintained list so a Transact
 _Avoid_: Recurring, template, standing order
 
 **Type**:
-The nature of a Transaction: Income, Expense, Levy, Rebate, Investment, or Divestment.
+The nature of a Transaction: Income, Expense, Levy, Rebate, Investment, or Divestment. Each Type has a Sign.
 _Avoid_: Kind
+
+**Sign**:
+Whether a Type adds to what the user keeps (positive: Income, Rebate, Investment) or takes away from it (negative: Expense, Levy, Divestment). Investment is positive because invested money is still the user's; Divestment is negative because it takes money back out.
+_Avoid_: Cashflow, incoming/outgoing, direction
 
 **Income**:
 Money actually received to spend or invest, after any Levy was taken off (salary as paid out, gifts, investment profit).
@@ -57,7 +61,7 @@ The page listing all Transactions from the newest date to the oldest, a few at a
 _Avoid_: History, log, journal
 
 **Type filter**:
-Narrows the Transactions page to one Type. Once a Type is chosen, its groupings can be narrowed too: Category and Subcategory for Income and Expense, Levy Category and Levy Subcategory for Levy and Rebate, Holding for Investment and Divestment. Each is a single choice from all existing values, and when two are set both must match. Changing the Type drops the groupings, because the lists differ per Type.
+Narrows the Transactions page to one Type. Once a Type is chosen, its groupings can be narrowed too: Category and Subcategory for Income and Expense, Levy Category and Levy Subcategory for Levy and Rebate, Holding for Investment and Divestment. Each is a single choice from all existing values, and when two are set both must match. Changing the Type keeps the groupings when the new Type uses the same lists, and drops them otherwise.
 _Avoid_: Tab, view
 
 **Search**:
