@@ -57,8 +57,8 @@ type filter struct {
 	Search string
 }
 
-// maxSearchLen caps the Search text taken from the URL, in bytes.
-const maxSearchLen = 200
+// maxSearchLen caps the Search text taken from the URL, in characters.
+const maxSearchLen = store.MaxDescriptionLen
 
 // filterTypes are the Type dropdown's choices besides All, in the order the filter offers them.
 var filterTypes = func() []store.TypeSpec {
@@ -96,8 +96,8 @@ func parseFilter(q url.Values) filter {
 	}
 	if !spec.Holding {
 		f.Search = strings.TrimSpace(q.Get("search"))
-		if len(f.Search) > maxSearchLen {
-			f.Search = strings.TrimSpace(strings.ToValidUTF8(f.Search[:maxSearchLen], ""))
+		if r := []rune(strings.ToValidUTF8(f.Search, "")); len(r) > maxSearchLen {
+			f.Search = strings.TrimSpace(string(r[:maxSearchLen]))
 		}
 	}
 	return f

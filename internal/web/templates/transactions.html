@@ -28,52 +28,59 @@
 {{template "nav-style"}}
 </head>
 <body>
+<script>
+  // Search only takes effect with Enter: any other filter change keeps the last entered Search.
+  function applyFilter(form) {
+    if (form.search) form.search.value = form.search.defaultValue
+    form.submit()
+  }
+</script>
 <h1>Transactions</h1>
 {{if .Years}}
 <form class="filters{{if .Filter.Year}} has-year{{end}}" method="get" action="/transactions">
   <a class="clear" href="/transactions">Clear</a>
-  <select class="year" name="year" aria-label="Year" onchange="this.form.submit()">
+  <select class="year" name="year" aria-label="Year" onchange="applyFilter(this.form)">
     <option value="">Year</option>
     {{range .Years}}<option value="{{.}}"{{if eq . $.Filter.Year}} selected{{end}}>{{.}}</option>
     {{end}}
   </select>
   {{if .Filter.Year}}
-  <select name="month" aria-label="Month" onchange="this.form.submit()">
+  <select name="month" aria-label="Month" onchange="applyFilter(this.form)">
     <option value="">Month</option>
     {{range .Months}}<option value="{{.Number}}"{{if eq .Number $.Filter.Month}} selected{{end}}>{{.Label}}</option>
     {{end}}
   </select>
   {{end}}
   <div class="row2">
-    <select name="type" aria-label="Type" onchange="this.form.querySelectorAll('.grouping').forEach(function (e) { e.disabled = true }); this.form.submit()">
+    <select name="type" aria-label="Type" onchange="this.form.querySelectorAll('.grouping').forEach(function (e) { e.disabled = true }); applyFilter(this.form)">
       <option value="">Type</option>
       {{range .Types}}<option value="{{.Type}}"{{if eq .Type $.Filter.Type}} selected{{end}}>{{.Label}}</option>
       {{end}}
     </select>
     {{with .Groupings}}{{if .Holding}}
-    <select class="grouping holding" name="holding" aria-label="Holding" onchange="this.form.submit()">
+    <select class="grouping holding" name="holding" aria-label="Holding" onchange="applyFilter(this.form)">
       <option value="">Holding</option>
       {{range .Holdings}}<option value="{{.ID}}"{{if eq .ID $.Filter.Holding}} selected{{end}}>{{.Name}}</option>
       {{end}}
     </select>
     {{else}}
-    <select class="grouping" name="category" aria-label="{{.Category.Label}}" onchange="this.form.submit()">
+    <select class="grouping" name="category" aria-label="{{.Category.Label}}" onchange="applyFilter(this.form)">
       <option value="">{{.Category.Label}}</option>
       {{range .Categories}}<option value="{{.ID}}"{{if eq .ID $.Filter.Category}} selected{{end}}>{{.Name}}</option>
       {{end}}
     </select>
-    <select class="grouping" name="subcategory" aria-label="{{.Subcategory.Label}}" onchange="this.form.submit()">
+    <select class="grouping" name="subcategory" aria-label="{{.Subcategory.Label}}" onchange="applyFilter(this.form)">
       <option value="">{{.Subcategory.Label}}</option>
       {{range .Subcategories}}<option value="{{.ID}}"{{if eq .ID $.Filter.Subcategory}} selected{{end}}>{{.Name}}</option>
       {{end}}
     </select>
     {{end}}{{else}}
-    <input class="search" type="search" name="search" value="{{.Filter.Search}}" placeholder="Search…" aria-label="Search" enterkeyhint="search" autocomplete="off">
+    <input class="search" type="search" name="search" maxlength="100" value="{{.Filter.Search}}" placeholder="Search…" aria-label="Search" enterkeyhint="search" autocomplete="off">
     {{end}}
   </div>
   {{if and .Groupings (not .Groupings.Holding)}}
   <div class="row3">
-    <input type="search" name="search" value="{{.Filter.Search}}" placeholder="Search…" aria-label="Search" enterkeyhint="search" autocomplete="off">
+    <input type="search" name="search" maxlength="100" value="{{.Filter.Search}}" placeholder="Search…" aria-label="Search" enterkeyhint="search" autocomplete="off">
   </div>
   {{end}}
 </form>
