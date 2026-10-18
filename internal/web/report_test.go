@@ -235,3 +235,20 @@ func TestReportChartSelectionPersistsAcrossPeriodNavigation(t *testing.T) {
 		`<option value="income" selected>`, `<option value="subcategory" selected>`,
 	)
 }
+
+func TestReportControlsSubmitOnChangeWithoutButtons(t *testing.T) {
+	ta := newTestApp(t)
+	body := ta.mustReport("/report?period=month&date=2026-03&type=expense&group=subcategory")
+	if strings.Contains(body, "<button") {
+		t.Errorf("Report has a submit button:\n%s", body)
+	}
+	if n := strings.Count(body, `onchange="this.form.submit()"`); n != 3 {
+		t.Errorf("auto-submitting controls = %d, want 3 (picker, Type, Group by)", n)
+	}
+	// Each form carries the other controls' values so changing one keeps them.
+	wantAll(t, body,
+		`<input type="hidden" name="type" value="expense">`,
+		`<input type="hidden" name="group" value="subcategory">`,
+		`<input type="hidden" name="date" value="2026-03">`,
+	)
+}
