@@ -44,8 +44,7 @@ func specsJSON() (template.JS, error) {
 }
 
 // signedEuro renders a magnitude with an explicit Sign (+€50 or −€50, true
-// minus U+2212) and the CSS class that colours it. The Report Net and the
-// Transaction lists share it.
+// minus U+2212) and the CSS class that colours it, for the Report Net.
 func signedEuro(amount int64, positive bool) (text, class string) {
 	if positive {
 		return "+" + formatEuro(amount), "net-positive"
@@ -53,20 +52,26 @@ func signedEuro(amount int64, positive bool) (text, class string) {
 	return "−" + formatEuro(amount), "net-negative"
 }
 
-// signedAmount renders a Transaction amount with the Sign of its Type as a
-// coloured span.
+// signedAmount renders a Transaction amount as a bare number (1.234) in a
+// span coloured by the Sign of its Type, for the Transaction lists.
 func signedAmount(typ string, amount int64) template.HTML {
-	spec, _ := store.SpecFor(typ)
-	text, class := signedEuro(amount, spec.Positive)
-	return template.HTML(`<span class="amount ` + class + `">` + template.HTMLEscapeString(text) + `</span>`)
+	class := "net-negative"
+	if spec, _ := store.SpecFor(typ); spec.Positive {
+		class = "net-positive"
+	}
+	return template.HTML(`<span class="amount ` + class + `">` + groupThousands(amount) + `</span>`)
 }
 
 // formatEuro renders whole euros as €1.234 (dot as thousands separator).
 func formatEuro(amount int64) string {
-	neg := amount < 0
-	if neg {
-		amount = -amount
+	if amount < 0 {
+		return "-€" + groupThousands(-amount)
 	}
+	return "€" + groupThousands(amount)
+}
+
+// groupThousands renders a non-negative whole number as 1.234.
+func groupThousands(amount int64) string {
 	digits := strconv.FormatInt(amount, 10)
 	var out []byte
 	for i := range digits {
@@ -75,9 +80,5 @@ func formatEuro(amount int64) string {
 		}
 		out = append(out, digits[i])
 	}
-	s := "€" + string(out)
-	if neg {
-		s = "-" + s
-	}
-	return s
+	return string(out)
 }

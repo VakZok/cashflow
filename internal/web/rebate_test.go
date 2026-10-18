@@ -18,7 +18,7 @@ func TestAddRebateWithInlineLevyCategoriesShowsInList(t *testing.T) {
 	if r.Status != http.StatusSeeOther {
 		t.Fatalf("status %d, want 303\n%s", r.Status, r.Body)
 	}
-	wantAll(t, ta.follow(r).Body, "Tax refund", "€250", "Rebate", "Tax", "Federal")
+	wantAll(t, ta.follow(r).Body, "Tax refund", ">250<", "Rebate", "Tax", "Federal")
 }
 
 func TestRebateUsesExistingLevyCategories(t *testing.T) {

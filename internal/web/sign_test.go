@@ -2,16 +2,16 @@ package web_test
 
 import "testing"
 
-func TestListAmountsShowTheSignOfTheirType(t *testing.T) {
+func TestListAmountsAreColouredByTheSignOfTheirType(t *testing.T) {
 	cases := []struct {
 		typ, class, want string
 	}{
-		{"income", "net-positive", "+€1.234"},
-		{"rebate", "net-positive", "+€1.234"},
-		{"investment", "net-positive", "+€1.234"},
-		{"expense", "net-negative", "−€1.234"},
-		{"levy", "net-negative", "−€1.234"},
-		{"divestment", "net-negative", "−€1.234"},
+		{"income", "net-positive", "1.234"},
+		{"rebate", "net-positive", "1.234"},
+		{"investment", "net-positive", "1.234"},
+		{"expense", "net-negative", "1.234"},
+		{"levy", "net-negative", "1.234"},
+		{"divestment", "net-negative", "1.234"},
 	}
 	for _, c := range cases {
 		t.Run(c.typ, func(t *testing.T) {
