@@ -94,7 +94,16 @@ const (
 
 	// otherThresholdPct: slices below this share of the total become "Other".
 	otherThresholdPct = 3
+
+	// otherColour is reserved for "Other", so no named slice looks like it.
+	otherColour = "#bab0ac"
 )
+
+// sliceColours colour the named slices in order, repeating past the tenth.
+var sliceColours = []string{
+	"#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f",
+	"#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#8cd17d",
+}
 
 // chartSel is the pie chart's Type (one with a Category pair, not a Levy) and Group-by.
 type chartSel struct{ Type, Group string }
@@ -137,42 +146,84 @@ func (c chartSel) list() store.List {
 type chartData struct {
 	Labels  []string `json:"labels"`
 	Amounts []int64  `json:"amounts"`
+	Colours []string `json:"colours"`
 }
 
-type legendRow struct{ Label, Amount, Share string }
+// breakdownRow is one line of the table below the chart, which lists every
+// item, including those the chart groups as "Other".
+type breakdownRow struct{ Label, Amount, Share, Colour string }
 
-// buildChart groups slices below the threshold into "Other" and returns the
-// chart data and legend. rows must be ordered by amount, descending.
-func buildChart(rows []store.Slice) (chartData, []legendRow) {
-	cd := chartData{Labels: []string{}, Amounts: []int64{}}
-	var total, other int64
+// buildChart groups two or more slices below the threshold into "Other" and
+// returns the chart data and the full breakdown. rows must be ordered by
+// amount, descending.
+func buildChart(rows []store.Slice) (chartData, []breakdownRow) {
+	var total int64
 	for _, r := range rows {
 		total += r.Amount
 	}
-	for _, r := range rows {
-		if r.Amount*100 < otherThresholdPct*total {
-			other += r.Amount
-			continue
-		}
+	fold := foldStart(rows, total)
+
+	cd := chartData{Labels: []string{}, Amounts: []int64{}, Colours: []string{}}
+	for i, r := range rows[:fold] {
 		cd.Labels = append(cd.Labels, r.Name)
 		cd.Amounts = append(cd.Amounts, r.Amount)
+		cd.Colours = append(cd.Colours, sliceColour(i, fold, len(rows)))
 	}
-	if other > 0 {
+	if fold < len(rows) {
+		var other int64
+		for _, r := range rows[fold:] {
+			other += r.Amount
+		}
 		cd.Labels = append(cd.Labels, "Other")
 		cd.Amounts = append(cd.Amounts, other)
+		cd.Colours = append(cd.Colours, otherColour)
 	}
-	legend := make([]legendRow, len(cd.Labels))
-	for i, l := range cd.Labels {
-		legend[i] = legendRow{l, formatEuro(cd.Amounts[i]), fmt.Sprintf("%.1f%%", float64(cd.Amounts[i])*100/float64(total))}
+
+	breakdown := make([]breakdownRow, len(rows))
+	for i, r := range rows {
+		breakdown[i] = breakdownRow{
+			Label:  r.Name,
+			Amount: formatEuro(r.Amount),
+			Share:  fmt.Sprintf("%.1f%%", float64(r.Amount)*100/float64(total)),
+			Colour: sliceColour(i, fold, len(rows)),
+		}
 	}
-	return cd, legend
+	return cd, breakdown
+}
+
+// foldStart is the index from which rows go into "Other". rows are
+// descending, so the small ones are a suffix; a lone small row keeps its name,
+// and then foldStart is len(rows).
+func foldStart(rows []store.Slice, total int64) int {
+	fold := len(rows)
+	for fold > 0 && rows[fold-1].Amount*100 < otherThresholdPct*total {
+		fold--
+	}
+	if len(rows)-fold < 2 {
+		return len(rows)
+	}
+	return fold
+}
+
+// sliceColour is the colour of row i of n, where rows from fold on are in
+// "Other". The pie wraps around, so without "Other" between them the last
+// named slice touches the first and must not share its colour.
+func sliceColour(i, fold, n int) string {
+	if i >= fold {
+		return otherColour
+	}
+	c := i % len(sliceColours)
+	if c == 0 && i > 0 && i == n-1 {
+		c = 1
+	}
+	return sliceColours[c]
 }
 
 type reportData struct {
 	Chart       chartSel
 	ChartTypes  []store.TypeSpec
 	ChartData   chartData
-	Legend      []legendRow
+	Breakdown   []breakdownRow
 	Period      period
 	Prev, Next  string // empty when out of range
 	ToggleLabel string
@@ -216,7 +267,7 @@ func (a *App) report(w http.ResponseWriter, r *http.Request) {
 	default:
 		d.Net, d.NetClass = template.HTML(formatEuro(0)), "net-zero"
 	}
-	d.ChartData, d.Legend = buildChart(slices)
+	d.ChartData, d.Breakdown = buildChart(slices)
 	if prev := p.shifted(-1); prev.valid() {
 		d.Prev = prev.query(sel)
 	}

@@ -18,9 +18,10 @@
   form.chart-controls { display: flex; gap: .5rem; margin: 1.5rem 0 .5rem; }
   form.chart-controls select { flex: 1; min-width: 0; padding: .6rem; font-size: 1rem; }
   .chart-box { max-width: 20rem; margin: 0 auto; }
-  table.legend { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-  table.legend td { padding: .25rem; }
-  table.legend td:nth-child(n+2) { text-align: right; }
+  table.breakdown { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+  table.breakdown td { padding: .25rem; }
+  table.breakdown td:nth-child(n+2) { text-align: right; }
+  .swatch { display: inline-block; width: .8em; height: .8em; border-radius: .2em; margin-right: .5em; vertical-align: baseline; }
 </style>
 {{template "nav-style"}}
 </head>
@@ -58,8 +59,8 @@
 
 <div class="chart-box"><canvas id="pie" role="img" aria-label="Breakdown chart"></canvas></div>
 <script type="application/json" id="chart-data">{{.ChartData}}</script>
-<table class="legend">
-  {{range .Legend}}<tr><td>{{.Label}}</td><td>{{.Amount}}</td><td>{{.Share}}</td></tr>
+<table class="breakdown">
+  {{range .Breakdown}}<tr><td><span class="swatch" style="background:{{.Colour}}"></span>{{.Label}}</td><td>{{.Amount}}</td><td>{{.Share}}</td></tr>
   {{end}}
 </table>
 <script src="/static/chart.umd.js"></script>
@@ -67,7 +68,7 @@
   var data = JSON.parse(document.getElementById("chart-data").textContent);
   new Chart(document.getElementById("pie"), {
     type: "pie",
-    data: { labels: data.labels, datasets: [{ data: data.amounts }] },
+    data: { labels: data.labels, datasets: [{ data: data.amounts, backgroundColor: data.colours }] },
     options: { plugins: { legend: { display: false } } }
   });
 </script>
