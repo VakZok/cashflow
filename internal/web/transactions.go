@@ -29,10 +29,13 @@ type transactionsData struct {
 	Groupings *groupings
 }
 
-// groupings are the choices of a Type's Category and Subcategory dropdowns.
+// groupings are the choices of a Type's Category and Subcategory dropdowns,
+// or of its Holding dropdown.
 type groupings struct {
 	Category, Subcategory     store.List
 	Categories, Subcategories []store.Named
+	Holding                   bool // the Type takes a Holding dropdown instead
+	Holdings                  []store.Named
 }
 
 // filter is the narrowing of the Transactions page, as carried in its URL.
@@ -46,6 +49,8 @@ type filter struct {
 	// list (the Levy ones for Levy and Rebate), 0 is all. Always 0 for a Type
 	// without such lists.
 	Category, Subcategory int64
+	// Holding is the id of a Holding, 0 is all. Always 0 for a Type without one.
+	Holding int64
 }
 
 // filterTypes are the Type dropdown's choices besides All, in the order the filter offers them.
@@ -58,7 +63,7 @@ var filterTypes = func() []store.TypeSpec {
 	return out
 }()
 
-// parseFilter reads ?year=&month=&type=&category=&subcategory=; anything
+// parseFilter reads ?year=&month=&type=&category=&subcategory=&holding=; anything
 // missing or invalid is All.
 func parseFilter(q url.Values) filter {
 	var f filter
@@ -77,6 +82,9 @@ func parseFilter(q url.Values) filter {
 		if spec.Lists != nil {
 			f.Category, f.Subcategory = parseID(q.Get("category")), parseID(q.Get("subcategory"))
 		}
+		if spec.Holding {
+			f.Holding = parseID(q.Get("holding"))
+		}
 	}
 	return f
 }
@@ -91,10 +99,21 @@ func parseID(s string) int64 {
 }
 
 // groupings loads the choices of the Type's Category and Subcategory dropdowns
-// and drops a selection that is not among them, as it is not a choice of the
-// dropdown. It is nil if the Type has no such dropdowns.
+// (or Holding dropdown) and drops a selection that is not among them, as it is
+// not a choice of the dropdown. It is nil if the Type has no such dropdowns.
 func (a *App) groupings(f filter) (*groupings, filter, error) {
 	spec, _ := store.SpecFor(f.Type)
+	if spec.Holding {
+		g := &groupings{Holding: true}
+		var err error
+		if g.Holdings, err = a.store.ListNamed(store.HoldingList); err != nil {
+			return nil, f, err
+		}
+		if !slices.ContainsFunc(g.Holdings, func(n store.Named) bool { return n.ID == f.Holding }) {
+			f.Holding = 0
+		}
+		return g, f, nil
+	}
 	if spec.Lists == nil {
 		return nil, f, nil
 	}
@@ -126,7 +145,7 @@ func (f filter) among(years []int) filter {
 
 // store is the filter as the store applies it.
 func (f filter) store() store.Filter {
-	sf := store.Filter{Type: f.Type, CategoryID: f.Category, SubcategoryID: f.Subcategory}
+	sf := store.Filter{Type: f.Type, CategoryID: f.Category, SubcategoryID: f.Subcategory, HoldingID: f.Holding}
 	if f.Year != 0 {
 		from := time.Date(f.Year, time.January, 1, 0, 0, 0, 0, time.UTC)
 		to := from.AddDate(1, 0, 0)
@@ -156,6 +175,9 @@ func (f filter) query() string {
 	}
 	if f.Subcategory != 0 {
 		parts = append(parts, "subcategory="+strconv.FormatInt(f.Subcategory, 10))
+	}
+	if f.Holding != 0 {
+		parts = append(parts, "holding="+strconv.FormatInt(f.Holding, 10))
 	}
 	return strings.Join(parts, "&")
 }
