@@ -46,3 +46,18 @@ func TestPagesNoLongerCarryTextNavLinks(t *testing.T) {
 		}
 	}
 }
+
+func TestNavHidesOnlyForTextFieldsAndFocusIsShortLived(t *testing.T) {
+	ta := newTestApp(t)
+	for _, path := range []string{"/", "/transactions", "/repeating", "/report"} {
+		body := ta.get(path).Body
+		if strings.Contains(body, "select:focus") {
+			t.Errorf("%s hides the nav while a dropdown has focus", path)
+		}
+		for _, want := range []string{`input:is([type="text"], [type="search"], [type="number"]):focus`, `addEventListener('change'`, `addEventListener('pointerdown'`, "safe-area-inset-bottom"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s is missing %q", path, want)
+			}
+		}
+	}
+}
