@@ -18,6 +18,9 @@
   .filters select { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
   a.clear { display: flex; align-items: center; justify-content: center; gap: .3rem; box-sizing: border-box; padding: 0 .9rem; border: 1px solid #ccc; border-radius: 1.375rem; color: #444; text-decoration: none; white-space: nowrap; }
   .filters.tight a.clear { padding: 0; }
+  /* Row 2 spans the bar in thirds, so Type keeps its third whether or not groupings dropdowns follow. */
+  .filters > .row2 { grid-column: 1 / -1; height: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+  .row2 > * { min-width: 0; height: 2.75rem; margin-top: 0; }
 </style>
 {{template "nav-style"}}
 </head>
@@ -38,6 +41,25 @@
     {{end}}
   </select>
   {{end}}
+  <div class="row2">
+    <select name="type" aria-label="Type" onchange="this.form.querySelectorAll('.grouping').forEach(function (e) { e.disabled = true }); this.form.submit()">
+      <option value="">All</option>
+      {{range .Types}}<option value="{{.Type}}"{{if eq .Type $.Filter.Type}} selected{{end}}>{{.Label}}</option>
+      {{end}}
+    </select>
+    {{with .Groupings}}
+    <select class="grouping" name="category" aria-label="{{.Category.Label}}" onchange="this.form.submit()">
+      <option value="">{{.Category.Label}}</option>
+      {{range .Categories}}<option value="{{.ID}}"{{if eq .ID $.Filter.Category}} selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+    <select class="grouping" name="subcategory" aria-label="{{.Subcategory.Label}}" onchange="this.form.submit()">
+      <option value="">{{.Subcategory.Label}}</option>
+      {{range .Subcategories}}<option value="{{.ID}}"{{if eq .ID $.Filter.Subcategory}} selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+    {{end}}
+  </div>
 </form>
 {{end}}
 {{if .Transactions}}

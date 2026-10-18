@@ -24,6 +24,15 @@ type transactionsData struct {
 	Filter filter
 	Years  []int // the Year dropdown's choices besides All; none means there are no Transactions
 	Months []monthChoice
+	Types  []store.TypeSpec // the Type dropdown's choices besides All
+	// Groupings are the Category and Subcategory dropdowns of the chosen Type, nil if it has none.
+	Groupings *groupings
+}
+
+// groupings are the choices of a Type's Category and Subcategory dropdowns.
+type groupings struct {
+	Category, Subcategory     store.List
+	Categories, Subcategories []store.Named
 }
 
 // filter is the narrowing of the Transactions page, as carried in its URL.
@@ -31,62 +40,128 @@ type transactionsData struct {
 type filter struct {
 	Year  int // 0 is All
 	Month int // 1-12, 0 is the whole Year; always 0 without a Year
+
+	Type string // a stored Type, "" is All
+	// Category and Subcategory are ids of the Type's Category and Subcategory
+	// list (the Levy ones for Levy and Rebate), 0 is all. Always 0 for a Type
+	// without such lists.
+	Category, Subcategory int64
 }
 
-// parseFilter reads ?year=&month=; anything missing or invalid is All.
+// filterTypes are the Type dropdown's choices besides All, in the order the filter offers them.
+var filterTypes = func() []store.TypeSpec {
+	var out []store.TypeSpec
+	for _, typ := range []string{store.TypeIncome, store.TypeExpense, store.TypeLevy, store.TypeRebate, store.TypeInvestment, store.TypeDivestment} {
+		spec, _ := store.SpecFor(typ)
+		out = append(out, spec)
+	}
+	return out
+}()
+
+// parseFilter reads ?year=&month=&type=&category=&subcategory=; anything
+// missing or invalid is All.
 func parseFilter(q url.Values) filter {
 	var f filter
 	if y := q.Get("year"); len(y) == len(yearLayout) && wholeNumber.MatchString(y) {
 		f.Year, _ = strconv.Atoi(y)
 	}
 	if f.Year < minYear || f.Year > maxYear {
-		return filter{}
-	}
-	if m := q.Get("month"); wholeNumber.MatchString(m) && len(m) <= 2 {
+		f.Year = 0
+	} else if m := q.Get("month"); wholeNumber.MatchString(m) && len(m) <= 2 {
 		if n, _ := strconv.Atoi(m); n >= 1 && n <= 12 {
 			f.Month = n
+		}
+	}
+	if spec, ok := store.SpecFor(q.Get("type")); ok {
+		f.Type = spec.Type
+		if spec.Lists != nil {
+			f.Category, f.Subcategory = parseID(q.Get("category")), parseID(q.Get("subcategory"))
 		}
 	}
 	return f
 }
 
+// parseID reads a positive id; anything else is 0.
+func parseID(s string) int64 {
+	if len(s) > 18 || !wholeNumber.MatchString(s) {
+		return 0
+	}
+	id, _ := strconv.ParseInt(s, 10, 64)
+	return id
+}
+
+// groupings loads the choices of the Type's Category and Subcategory dropdowns
+// and drops a selection that is not among them, as it is not a choice of the
+// dropdown. It is nil if the Type has no such dropdowns.
+func (a *App) groupings(f filter) (*groupings, filter, error) {
+	spec, _ := store.SpecFor(f.Type)
+	if spec.Lists == nil {
+		return nil, f, nil
+	}
+	g := &groupings{Category: spec.Lists.Category, Subcategory: spec.Lists.Subcategory}
+	var err error
+	if g.Categories, err = a.store.ListNamed(g.Category); err != nil {
+		return nil, f, err
+	}
+	if g.Subcategories, err = a.store.ListNamed(g.Subcategory); err != nil {
+		return nil, f, err
+	}
+	if !slices.ContainsFunc(g.Categories, func(n store.Named) bool { return n.ID == f.Category }) {
+		f.Category = 0
+	}
+	if !slices.ContainsFunc(g.Subcategories, func(n store.Named) bool { return n.ID == f.Subcategory }) {
+		f.Subcategory = 0
+	}
+	return g, f, nil
+}
+
 // among drops a Year that no Transaction is dated in (with its Month): it is
 // not a choice of the Year dropdown.
 func (f filter) among(years []int) filter {
-	if slices.Contains(years, f.Year) {
-		return f
+	if f.Year != 0 && !slices.Contains(years, f.Year) {
+		f.Year, f.Month = 0, 0
 	}
-	return filter{}
+	return f
 }
 
 // store is the filter as the store applies it.
 func (f filter) store() store.Filter {
-	if f.Year == 0 {
-		return store.Filter{}
+	sf := store.Filter{Type: f.Type, CategoryID: f.Category, SubcategoryID: f.Subcategory}
+	if f.Year != 0 {
+		from := time.Date(f.Year, time.January, 1, 0, 0, 0, 0, time.UTC)
+		to := from.AddDate(1, 0, 0)
+		if f.Month != 0 {
+			from = from.AddDate(0, f.Month-1, 0)
+			to = from.AddDate(0, 1, 0)
+		}
+		sf.From, sf.To = from.Format(dateLayout), to.Format(dateLayout)
 	}
-	from := time.Date(f.Year, time.January, 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(1, 0, 0)
-	if f.Month != 0 {
-		from = from.AddDate(0, f.Month-1, 0)
-		to = from.AddDate(0, 1, 0)
-	}
-	return store.Filter{From: from.Format(dateLayout), To: to.Format(dateLayout)}
+	return sf
 }
 
 // query is the filter's URL parameters, "" when it narrows nothing.
 func (f filter) query() string {
-	if f.Year == 0 {
-		return ""
+	var parts []string
+	if f.Year != 0 {
+		parts = append(parts, "year="+strconv.Itoa(f.Year))
 	}
-	q := "year=" + strconv.Itoa(f.Year)
 	if f.Month != 0 {
-		q += "&month=" + strconv.Itoa(f.Month)
+		parts = append(parts, "month="+strconv.Itoa(f.Month))
 	}
-	return q
+	if f.Type != "" {
+		parts = append(parts, "type="+f.Type)
+	}
+	if f.Category != 0 {
+		parts = append(parts, "category="+strconv.FormatInt(f.Category, 10))
+	}
+	if f.Subcategory != 0 {
+		parts = append(parts, "subcategory="+strconv.FormatInt(f.Subcategory, 10))
+	}
+	return strings.Join(parts, "&")
 }
 
 // Active reports whether the filter narrows anything.
-func (f filter) Active() bool { return f.Year != 0 }
+func (f filter) Active() bool { return f.query() != "" }
 
 // transactionsURL is the page of the Transactions page narrowed by the filter.
 func transactionsURL(f filter, page int) string {
@@ -207,6 +282,11 @@ func (a *App) renderTransactions(w http.ResponseWriter, status, page int, f filt
 		return
 	}
 	f = f.among(years)
+	g, f, err := a.groupings(f)
+	if err != nil {
+		a.serverError(w, err)
+		return
+	}
 	total, err := a.store.CountTransactions(f.store())
 	if err != nil {
 		a.serverError(w, err)
@@ -215,7 +295,7 @@ func (a *App) renderTransactions(w http.ResponseWriter, status, page int, f filt
 	pages := pageCount(total)
 	page = clampPage(page, total)
 
-	d := transactionsData{Page: page, Pages: pages, PageURL: transactionsURL(f, page), Filter: f, Years: years, Months: monthChoices}
+	d := transactionsData{Page: page, Pages: pages, PageURL: transactionsURL(f, page), Filter: f, Years: years, Months: monthChoices, Types: filterTypes, Groupings: g}
 	if total > 0 {
 		if d.Transactions, err = a.store.ListTransactionsPage(f.store(), store.PageSize, (page-1)*store.PageSize); err != nil {
 			a.serverError(w, err)

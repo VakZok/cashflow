@@ -227,3 +227,205 @@ func TestInvalidYearOrMonthFallsBackToAll(t *testing.T) {
 		wantNone(t, selectHTML(body, "month"), "selected")
 	}
 }
+
+// typeFilterApp holds one Transaction of every Type, described "Expense"... "Divestment".
+func typeFilterApp(t *testing.T) *testApp {
+	t.Helper()
+	ta := newTestApp(t)
+	ta.post("/transactions", expenseForm("2026-01-01", "3", "Expense", "new", "Food", "new", "Cafe"))
+	ta.post("/transactions", url.Values{"type": {"income"}, "date": {"2026-01-02"}, "amount": {"3"}, "description": {"Income"},
+		"category": {"new"}, "new_category": {"Pay"}, "subcategory": {"new"}, "new_subcategory": {"Job"}})
+	ta.post("/transactions", levyForm("2026-01-03", "3", "Levy", "new", "Tax", "new", "Federal"))
+	ta.post("/transactions", rebateForm("2026-01-04", "3", "Rebate", "new", "Refund", "new", "Federal"))
+	ta.post("/transactions", holdingForm("investment", "2026-01-05", "3", "new", "Investment"))
+	ta.post("/transactions", holdingForm("divestment", "2026-01-06", "3", "new", "Divestment"))
+	return ta
+}
+
+var allTypeDescriptions = []string{"Expense", "Income", "Levy", "Rebate", "Investment", "Divestment"}
+
+func TestChoosingATypeShowsOnlyTransactionsOfThatType(t *testing.T) {
+	ta := typeFilterApp(t)
+	for i, typ := range []string{"expense", "income", "levy", "rebate", "investment", "divestment"} {
+		body := ta.get("/transactions?type=" + typ).Body
+		wantAll(t, body, "<span>"+allTypeDescriptions[i]+"</span>")
+		for j, other := range allTypeDescriptions {
+			if j != i {
+				wantNone(t, body, "<span>"+other+"</span>")
+			}
+		}
+	}
+	ta.post("/transactions", expenseForm("2025-01-01", "3", "Old", "new", "Food", "new", "Cafe"))
+	body := ta.get("/transactions?type=expense&year=2026").Body
+	wantAll(t, body, "<span>Expense</span>")
+	wantNone(t, body, ">Old<")
+}
+
+func TestTheTypeDropdownOffersAllThenEveryTypeAndKeepsTheChoice(t *testing.T) {
+	ta := typeFilterApp(t)
+	types := selectHTML(ta.get("/transactions").Body, "type")
+	wantAll(t, types, `aria-label="Type"`, `<option value="">All</option>`, `<option value="income">Income</option>`, `<option value="divestment">Divestment</option>`)
+	wantNone(t, types, "selected")
+	if strings.Count(types, "<option") != 7 {
+		t.Errorf("want All and six Types:\n%s", types)
+	}
+	wantAll(t, selectHTML(ta.get("/transactions?type=levy").Body, "type"), `<option value="levy" selected>Levy</option>`)
+}
+
+func TestGroupingsDropdownsFollowTheType(t *testing.T) {
+	ta := typeFilterApp(t)
+	for _, c := range []struct {
+		typ, cat, sub string
+	}{
+		{"income", "Category", "Subcategory"}, {"expense", "Category", "Subcategory"},
+		{"levy", "Levy Category", "Levy Subcategory"}, {"rebate", "Levy Category", "Levy Subcategory"},
+	} {
+		body := ta.get("/transactions?type=" + c.typ).Body
+		wantAll(t, selectHTML(body, "category"), `aria-label="`+c.cat+`"`, `<option value="">`+c.cat+`</option>`)
+		wantAll(t, selectHTML(body, "subcategory"), `aria-label="`+c.sub+`"`, `<option value="">`+c.sub+`</option>`)
+	}
+	for _, q := range []string{"", "?type=investment", "?type=divestment"} {
+		body := ta.get("/transactions" + q).Body
+		for _, name := range []string{"category", "subcategory"} {
+			if s := regexp.MustCompile(`(?s)<form[^>]*class="filters.*?</form>`).FindString(body); selectHTML(s, name) != "" {
+				t.Errorf("%q: %s dropdown shown", q, name)
+			}
+		}
+	}
+}
+
+func TestGroupingsDropdownsListEveryValueOfTheirList(t *testing.T) {
+	ta := typeFilterApp(t)
+	body := ta.get("/transactions?type=expense").Body
+	wantAll(t, selectHTML(body, "category"), ">Food<", ">Pay<")
+	wantNone(t, selectHTML(body, "category"), ">Tax<", ">Refund<")
+	wantAll(t, selectHTML(body, "subcategory"), ">Cafe<", ">Job<")
+	wantNone(t, selectHTML(body, "subcategory"), ">Federal<")
+	body = ta.get("/transactions?type=levy").Body
+	wantAll(t, selectHTML(body, "category"), ">Tax<", ">Refund<")
+	wantNone(t, selectHTML(body, "category"), ">Food<")
+	wantAll(t, selectHTML(body, "subcategory"), ">Federal<")
+	wantNone(t, selectHTML(body, "subcategory"), ">Cafe<")
+}
+
+func TestSelectingGroupingsNarrowsAndCombinesWithAnd(t *testing.T) {
+	ta := typeFilterApp(t)
+	ta.post("/transactions", expenseForm("2026-01-07", "3", "Pay cafe", "new", "Pay", "1", ""))
+	ta.post("/transactions", expenseForm("2026-01-08", "3", "Food job", "1", "", "new", "Job"))
+	food, pay := selectedID(ta, "category", "Food"), selectedID(ta, "category", "Pay")
+	cafe, job := selectedID(ta, "subcategory", "Cafe"), selectedID(ta, "subcategory", "Job")
+
+	body := ta.get("/transactions?type=expense&category=" + food).Body
+	wantAll(t, body, "<span>Expense</span>", "<span>Food job</span>", `<option value="`+food+`" selected>Food</option>`)
+	wantNone(t, body, "<span>Pay cafe</span>", "<span>Income</span>")
+	body = ta.get("/transactions?type=expense&subcategory=" + cafe).Body
+	wantAll(t, body, "<span>Expense</span>", "<span>Pay cafe</span>")
+	wantNone(t, body, "<span>Food job</span>")
+	body = ta.get("/transactions?type=expense&category=" + food + "&subcategory=" + cafe).Body
+	wantAll(t, body, "<span>Expense</span>")
+	wantNone(t, body, "<span>Pay cafe</span>", "<span>Food job</span>")
+	body = ta.get("/transactions?type=expense&category=" + pay + "&subcategory=" + job).Body
+	wantAll(t, body, "No matching Transactions.", `name="type"`, `name="category"`)
+	wantNone(t, body, "No Transactions yet.")
+}
+
+// selectedID is the value of the option named name in the filter's select.
+func selectedID(ta *testApp, sel, name string) string {
+	ta.t.Helper()
+	body := ta.get("/transactions?type=expense").Body
+	m := regexp.MustCompile(`<option value="(\d+)"[^>]*>` + name + `</option>`).FindStringSubmatch(selectHTML(body, sel))
+	if m == nil {
+		ta.t.Fatalf("no %s option %q", sel, name)
+	}
+	return m[1]
+}
+
+func TestChangingTheTypeDropsTheGroupingsSelection(t *testing.T) {
+	ta := typeFilterApp(t)
+	body := ta.get("/transactions").Body
+	wantAll(t, selectHTML(body, "type"), `this.form.querySelectorAll('.grouping')`, `e.disabled = true`, `this.form.submit()`)
+	body = ta.get("/transactions?type=expense").Body
+	wantAll(t, selectHTML(body, "category"), `class="grouping"`)
+	wantAll(t, selectHTML(body, "subcategory"), `class="grouping"`)
+	// A stale grouping that reached the server for a Type without such lists narrows nothing.
+	wantAll(t, ta.get("/transactions?type=investment&category=1&subcategory=1").Body, ">Investment<")
+}
+
+func TestUnknownTypeOrGroupingIdsFallBackToUnfiltered(t *testing.T) {
+	ta := typeFilterApp(t)
+	for _, q := range []string{"type=bogus", "type=", "type=Expense", "type=bogus&category=1", "category=1&subcategory=1"} {
+		r := ta.get("/transactions?" + q)
+		if r.Status != 200 {
+			t.Errorf("%s: status %d", q, r.Status)
+		}
+		wantAll(t, r.Body, "<span>Income</span>", "<span>Divestment</span>")
+		wantNone(t, selectHTML(r.Body, "type"), "selected")
+	}
+	for _, q := range []string{"category=999", "category=abc", "category=-1", "category=1x", "subcategory=999", "category=99999999999999999999999"} {
+		r := ta.get("/transactions?type=expense&" + q)
+		if r.Status != 200 {
+			t.Errorf("%s: status %d", q, r.Status)
+		}
+		wantAll(t, r.Body, "<span>Expense</span>")
+		wantNone(t, r.Body, "No matching Transactions.", "<span>Income</span>")
+		wantNone(t, selectHTML(r.Body, "category"), "selected")
+		wantNone(t, selectHTML(r.Body, "subcategory"), "selected")
+	}
+}
+
+func TestThePagerAndEditKeepTypeAndGroupings(t *testing.T) {
+	ta := newTestApp(t)
+	for i := 1; i <= 7; i++ {
+		ta.post("/transactions", expenseForm(fmt.Sprintf("2026-08-%02d", i), "3", fmt.Sprintf("Exp %02d", i), "new", "Food", "new", "Cafe"))
+	}
+	ta.post("/transactions", url.Values{"type": {"income"}, "date": {"2026-08-09"}, "amount": {"3"}, "description": {"Inc"},
+		"category": {"1"}, "subcategory": {"1"}})
+	q := "type=expense&category=1&subcategory=1"
+	p1 := ta.get("/transactions?" + q).Body
+	wantAll(t, p1, "1 / 2", `href="/transactions?`+strings.ReplaceAll(q, "&", "&amp;")+`&amp;page=2" aria-label="Older"`,
+		`href="/transactions?`+strings.ReplaceAll(q, "&", "&amp;")+`&amp;page=1&amp;edit=7#tx-7"`)
+	wantNone(t, p1, ">Inc<")
+	wantAll(t, editRow(ta.get("/transactions?"+q+"&page=2&edit=2").Body, "2"), `name="return" value="transactions:2?`+strings.ReplaceAll(q, "&", "&amp;")+`"`)
+}
+
+func TestChangeDeleteAndDiscardReturnToThePageWithTypeAndGroupings(t *testing.T) {
+	ta := newTestApp(t)
+	for i := 1; i <= 6; i++ {
+		ta.post("/transactions", expenseForm(fmt.Sprintf("2026-08-%02d", i), "3", fmt.Sprintf("Exp %02d", i), "new", "Food", "new", "Cafe"))
+	}
+	ret := "transactions:2?type=expense&category=1&subcategory=1"
+	// Exp 01 (id 1) moved to income leaves the filter: back to the clamped same page.
+	form := changeForm(ta, "2026-08-01", "Exp 01", ret)
+	form.Set("type", "income")
+	r := ta.post("/transactions/1", form)
+	if r.Status != 303 || r.Location != "/transactions?type=expense&category=1&subcategory=1&page=1" {
+		t.Fatalf("status %d, location %q", r.Status, r.Location)
+	}
+	r = ta.post("/transactions/2/delete", url.Values{"return": {ret}})
+	if r.Location != "/transactions?type=expense&category=1&subcategory=1&page=1" {
+		t.Errorf("delete: location %q", r.Location)
+	}
+	wantAll(t, ta.get("/transactions?type=expense&category=1&subcategory=1&page=1&edit=6").Body,
+		`href="/transactions?type=expense&amp;category=1&amp;subcategory=1&amp;page=1"`)
+}
+
+func TestATamperedTypeOrGroupingInTheReturnValueNarrowsNothing(t *testing.T) {
+	ta := newTestApp(t)
+	addMonths(ta, 6)
+	for i, c := range []struct{ ret, want string }{
+		{"transactions:1?type=evil", "/transactions?page=1"},
+		{"transactions:1?type=expense%26page%3D9", "/transactions?page=1"},
+		{"transactions:1?type=expense&category=//evil.example", "/transactions?type=expense&page=1"},
+		{"transactions:1?category=1", "/transactions?page=1"},
+	} {
+		if r := ta.post(fmt.Sprintf("/transactions/%d/delete", 12-i), url.Values{"return": {c.ret}}); r.Location != c.want {
+			t.Errorf("%q: status %d, location %q, want %q", c.ret, r.Status, r.Location, c.want)
+		}
+	}
+}
+
+func TestClearResetsTypeAndGroupings(t *testing.T) {
+	ta := typeFilterApp(t)
+	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?type=expense&category=1").Body),
+		`href="/transactions"`, "<span>Clear</span>")
+}
