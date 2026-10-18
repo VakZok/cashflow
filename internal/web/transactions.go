@@ -87,10 +87,17 @@ func parseFilter(q url.Values) filter {
 	spec, ok := store.SpecFor(q.Get("type"))
 	if ok {
 		f.Type = spec.Type
-		if spec.Lists != nil {
+		// The Type dropdown sends the Type it was changed from as "from"; the
+		// groupings only carry over to a Type that uses the same lists.
+		keep := true
+		if q.Has("from") {
+			prev, _ := store.SpecFor(q.Get("from"))
+			keep = sharesGroupings(prev, spec)
+		}
+		if keep && spec.Lists != nil {
 			f.Category, f.Subcategory = parseID(q.Get("category")), parseID(q.Get("subcategory"))
 		}
-		if spec.Holding {
+		if keep && spec.Holding {
 			f.Holding = parseID(q.Get("holding"))
 		}
 	}
@@ -101,6 +108,18 @@ func parseFilter(q url.Values) filter {
 		}
 	}
 	return f
+}
+
+// sharesGroupings reports whether two Types filter by the same groupings:
+// both take the same Category and Subcategory lists, or both take Holdings.
+func sharesGroupings(a, b store.TypeSpec) bool {
+	switch {
+	case a.Holding:
+		return b.Holding
+	case a.Lists != nil:
+		return b.TakesLists(*a.Lists)
+	}
+	return false
 }
 
 // parseID reads a positive id; anything else is 0.

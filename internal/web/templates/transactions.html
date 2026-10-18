@@ -52,7 +52,8 @@
   </select>
   {{end}}
   <div class="row2">
-    <select name="type" aria-label="Type" onchange="this.form.querySelectorAll('.grouping').forEach(function (e) { e.disabled = true }); applyFilter(this.form)">
+    <input type="hidden" name="from" value="{{.Filter.Type}}">
+    <select name="type" aria-label="Type" onchange="applyFilter(this.form)">
       <option value="">Type</option>
       {{range .Types}}<option value="{{.Type}}"{{if eq .Type $.Filter.Type}} selected{{end}}>{{.Label}}</option>
       {{end}}

@@ -350,10 +350,53 @@ func selectedID(ta *testApp, sel, name string) string {
 	return m[1]
 }
 
-func TestChangingTheTypeDropsTheGroupingsSelection(t *testing.T) {
+func TestChangingTheTypeKeepsGroupingsOnlyForTypesWithTheSameLists(t *testing.T) {
+	ta := typeFilterApp(t)
+	// The Type dropdown reports the Type it was changed from.
+	wantAll(t, ta.get("/transactions?type=expense").Body, `<input type="hidden" name="from" value="expense">`)
+
+	// Pay (2) is a Category and Job (2) a Subcategory; Tax (1) a Levy Category; Divestment (2) a Holding.
+	for _, c := range []struct {
+		from, to, params string
+		cat, sub, hold   string // the selected options expected after the change
+	}{
+		{"expense", "income", "category=2&subcategory=2", `<option value="2" selected>Pay</option>`, `<option value="2" selected>Job</option>`, ""},
+		{"income", "expense", "category=2&subcategory=2", `<option value="2" selected>Pay</option>`, `<option value="2" selected>Job</option>`, ""},
+		{"levy", "rebate", "category=1&subcategory=1", `<option value="1" selected>Tax</option>`, `<option value="1" selected>Federal</option>`, ""},
+		{"rebate", "levy", "category=1&subcategory=1", `<option value="1" selected>Tax</option>`, `<option value="1" selected>Federal</option>`, ""},
+		{"investment", "divestment", "holding=2", "", "", `<option value="2" selected>Divestment</option>`},
+		{"divestment", "investment", "holding=2", "", "", `<option value="2" selected>Divestment</option>`},
+	} {
+		body := ta.get("/transactions?type=" + c.to + "&from=" + c.from + "&" + c.params).Body
+		if c.hold != "" {
+			wantAll(t, selectHTML(body, "holding"), c.hold)
+		} else {
+			wantAll(t, selectHTML(body, "category"), c.cat)
+			wantAll(t, selectHTML(body, "subcategory"), c.sub)
+		}
+	}
+
+	// A kept grouping that matches nothing under the new Type keeps the filter set.
+	body := ta.get("/transactions?type=income&from=expense&category=1&subcategory=2").Body
+	wantAll(t, body, "No matching Transactions.", `<option value="1" selected>Food</option>`, `name="type"`)
+
+	// Any other change drops them.
+	for _, c := range [][2]string{{"expense", "levy"}, {"expense", ""}, {"investment", "income"}, {"", "expense"}, {"levy", "investment"}} {
+		body := ta.get("/transactions?type=" + c[1] + "&from=" + c[0] + "&category=1&subcategory=1&holding=1").Body
+		for _, name := range []string{"category", "subcategory", "holding"} {
+			wantNone(t, selectHTML(body, name), " selected>")
+		}
+	}
+
+	// Without "from" (pager, edit and Clear links) nothing is dropped.
+	wantAll(t, ta.get("/transactions?type=expense&category=2").Body, `<option value="2" selected>Pay</option>`)
+}
+
+func TestTheTypeDropdownLeavesTheGroupingsEnabledOnChange(t *testing.T) {
 	ta := typeFilterApp(t)
 	body := ta.get("/transactions").Body
-	wantAll(t, selectHTML(body, "type"), `this.form.querySelectorAll('.grouping')`, `e.disabled = true`, `applyFilter(this.form)`)
+	wantAll(t, selectHTML(body, "type"), `applyFilter(this.form)`)
+	wantNone(t, selectHTML(body, "type"), `e.disabled = true`)
 	body = ta.get("/transactions?type=expense").Body
 	wantAll(t, selectHTML(body, "category"), `class="grouping"`)
 	wantAll(t, selectHTML(body, "subcategory"), `class="grouping"`)
@@ -514,11 +557,10 @@ func TestTheHoldingSurvivesPagerEditAndReturns(t *testing.T) {
 	}
 }
 
-func TestChangingTheTypeDropsTheHoldingAndClearResetsIt(t *testing.T) {
+func TestClearResetsTheHolding(t *testing.T) {
 	ta := holdingFilterApp(t)
 	body := ta.get("/transactions?type=investment").Body
 	wantAll(t, selectHTML(body, "holding"), `class="grouping holding"`)
-	wantAll(t, selectHTML(body, "type"), `e.disabled = true`)
 	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?type=investment&holding=1").Body),
 		`href="/transactions"`, ">Clear</a>")
 }
