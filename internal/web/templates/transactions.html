@@ -10,12 +10,36 @@
   .pager { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
   .pager a, .pager span.arrow { display: flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border: 1px solid #ccc; border-radius: 50%; color: #444; }
   .pager span.arrow { color: #ccc; }
-  .pager svg { width: 1.4rem; height: 1.4rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .pager svg, a.clear svg { width: 1.4rem; height: 1.4rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  /* Row 1 of the filter bar never wraps: the Clear pill keeps its width, the dropdowns share the rest and truncate. */
+  .filters { display: grid; grid-template-columns: auto 1fr; gap: .5rem; align-items: center; }
+  .filters.tight { grid-template-columns: 2.75rem 1fr 1fr; }
+  .filters > * { min-width: 0; height: 2.75rem; margin-top: 0; }
+  .filters select { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+  a.clear { display: flex; align-items: center; justify-content: center; gap: .3rem; box-sizing: border-box; padding: 0 .9rem; border: 1px solid #ccc; border-radius: 1.375rem; color: #444; text-decoration: none; white-space: nowrap; }
+  .filters.tight a.clear { padding: 0; }
 </style>
 {{template "nav-style"}}
 </head>
 <body>
 <h1>Transactions</h1>
+{{if .Years}}
+<form class="filters{{if .Filter.Year}} tight{{end}}" method="get" action="/transactions">
+  <a class="clear" href="/transactions" aria-label="Clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>{{if not .Filter.Year}}<span>Clear</span>{{end}}</a>
+  <select name="year" aria-label="Year" onchange="this.form.submit()">
+    <option value="">All</option>
+    {{range .Years}}<option value="{{.}}"{{if eq . $.Filter.Year}} selected{{end}}>{{.}}</option>
+    {{end}}
+  </select>
+  {{if .Filter.Year}}
+  <select name="month" aria-label="Month" onchange="this.form.submit()">
+    <option value="">All</option>
+    {{range .Months}}<option value="{{.Number}}"{{if eq .Number $.Filter.Month}} selected{{end}}>{{.Label}}</option>
+    {{end}}
+  </select>
+  {{end}}
+</form>
+{{end}}
 {{if .Transactions}}
 <ul class="transactions">
 {{range .Transactions}}
@@ -24,7 +48,7 @@
   </li>
   {{else}}
   <li id="tx-{{.ID}}">
-    <a class="row" href="/transactions?page={{$.Page}}&amp;edit={{.ID}}#tx-{{.ID}}">
+    <a class="row" href="{{$.PageURL}}&amp;edit={{.ID}}#tx-{{.ID}}">
       <span>{{if .Holding}}{{.Holding}}{{else}}{{.Description}}{{end}}</span>
       <span class="amount">{{euro .Amount}}</span>
       <span class="meta">{{.Date}} · {{typeLabel .Type}}{{if .Category}} · {{.Category}} · {{.Subcategory}}{{end}}</span>
@@ -41,6 +65,8 @@
   {{else}}<span class="arrow" aria-label="Older"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>{{end}}
 </div>
 {{template "entry-script"}}
+{{else if .Filter.Active}}
+<p>No matching Transactions.</p>
 {{else}}
 <p>No Transactions yet.</p>
 {{end}}

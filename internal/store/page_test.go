@@ -23,12 +23,12 @@ func TestTransactionPageIsWhereTheTransactionSitsInTheOrdering(t *testing.T) {
 	// Order: T0..T3 (positions 0-3), then the tie newest id first: T6 (4), T5 (5), T4 (6), then T7 (7).
 	want := []int{1, 1, 1, 1, 2, 2, 1, 2}
 	for i, id := range ids {
-		got, err := s.TransactionPage(id)
+		got, err := s.TransactionPage(id, store.Filter{})
 		if err != nil || got != want[i] {
 			t.Errorf("T%d: page %d, err %v; want %d", i, got, err, want[i])
 		}
 	}
-	if _, err := s.TransactionPage(999); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.TransactionPage(999, store.Filter{}); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("missing id: err %v, want ErrNotFound", err)
 	}
 }
@@ -40,15 +40,15 @@ func TestListTransactionsPageOrdersByDateThenIDDescending(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	n, err := s.CountTransactions()
+	n, err := s.CountTransactions(store.Filter{})
 	if err != nil || n != 7 {
 		t.Fatalf("count = %d, err = %v", n, err)
 	}
-	page1, err := s.ListTransactionsPage(5, 0)
+	page1, err := s.ListTransactionsPage(store.Filter{}, 5, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	page2, err := s.ListTransactionsPage(5, 5)
+	page2, err := s.ListTransactionsPage(store.Filter{}, 5, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
