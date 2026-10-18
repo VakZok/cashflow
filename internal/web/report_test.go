@@ -140,20 +140,34 @@ func (ta *testApp) seedIn(typ, date, amount, category, subcategory string) {
 
 var chartJSON = regexp.MustCompile(`(?s)<script type="application/json" id="chart-data">(.*?)</script>`)
 
-func (ta *testApp) chart(path string) (labels []string, amounts []int64) {
+type chartPayload struct {
+	Labels  []string `json:"labels"`
+	Amounts []int64  `json:"amounts"`
+	Colours []string `json:"colours"`
+}
+
+func (ta *testApp) chartData(path string) chartPayload {
 	ta.t.Helper()
 	m := chartJSON.FindStringSubmatch(ta.mustReport(path))
 	if m == nil {
 		ta.t.Fatalf("no chart data on %s", path)
 	}
-	var d struct {
-		Labels  []string `json:"labels"`
-		Amounts []int64  `json:"amounts"`
-	}
+	var d chartPayload
 	if err := json.Unmarshal([]byte(m[1]), &d); err != nil {
 		ta.t.Fatalf("chart data %q: %v", m[1], err)
 	}
+	return d
+}
+
+func (ta *testApp) chart(path string) (labels []string, amounts []int64) {
+	ta.t.Helper()
+	d := ta.chartData(path)
 	return d.Labels, d.Amounts
+}
+
+func (ta *testApp) chartColours(path string) []string {
+	ta.t.Helper()
+	return ta.chartData(path).Colours
 }
 
 func wantChart(t *testing.T, labels []string, amounts []int64, wantLabels []string, wantAmounts []int64) {
@@ -190,13 +204,28 @@ func TestReportChartTypeAndGroupCombinations(t *testing.T) {
 	}
 }
 
-func TestReportChartGroupsSmallSlicesAsOther(t *testing.T) {
-	ta := newTestApp(t)
+// seedFold records, in October 2026, one big Expense, one at exactly 3% (which
+// stays named) and three below 3% (grouped as Other).
+func (ta *testApp) seedFold() {
+	ta.t.Helper()
 	ta.seedIn("expense", "2026-10-02", "940", "Big", "S")
-	ta.seedIn("expense", "2026-10-03", "30", "Exactly3", "S") // 3% stays
+	ta.seedIn("expense", "2026-10-03", "30", "Exactly3", "S")
 	ta.seedIn("expense", "2026-10-04", "20", "Small1", "S")
 	ta.seedIn("expense", "2026-10-05", "9", "Small2", "S")
 	ta.seedIn("expense", "2026-10-06", "1", "Small3", "S")
+}
+
+// seedTen records ten equal Expenses in October 2026, filling the palette.
+func (ta *testApp) seedTen() {
+	ta.t.Helper()
+	for i := range 10 {
+		ta.seedIn("expense", fmt.Sprintf("2026-10-%02d", i+1), "1000", fmt.Sprintf("Cat%d", i), "S")
+	}
+}
+
+func TestReportChartGroupsSmallSlicesAsOther(t *testing.T) {
+	ta := newTestApp(t)
+	ta.seedFold()
 
 	l, a := ta.chart("/report?period=month&date=2026-10")
 	wantChart(t, l, a, []string{"Big", "Exactly3", "Other"}, []int64{940, 30, 30})
@@ -206,21 +235,27 @@ var (
 	breakdownTable = regexp.MustCompile(`(?s)<table class="breakdown">(.*?)</table>`)
 	tableRow       = regexp.MustCompile(`(?s)<tr>(.*?)</tr>`)
 	tableCell      = regexp.MustCompile(`(?s)<td>(.*?)</td>`)
-	tag            = regexp.MustCompile(`<[^>]*>`)
+	htmlTag        = regexp.MustCompile(`<[^>]*>`)
 )
 
-// table returns the breakdown table's rows as "Label Amount Share".
-func (ta *testApp) table(path string) []string {
+// breakdownHTML returns the inside of the breakdown table.
+func (ta *testApp) breakdownHTML(path string) string {
 	ta.t.Helper()
 	m := breakdownTable.FindStringSubmatch(ta.mustReport(path))
 	if m == nil {
 		ta.t.Fatalf("no breakdown table on %s", path)
 	}
+	return m[1]
+}
+
+// table returns the breakdown table's rows as "Label Amount Share".
+func (ta *testApp) table(path string) []string {
+	ta.t.Helper()
 	rows := []string{}
-	for _, r := range tableRow.FindAllStringSubmatch(m[1], -1) {
+	for _, r := range tableRow.FindAllStringSubmatch(ta.breakdownHTML(path), -1) {
 		var cells []string
 		for _, c := range tableCell.FindAllStringSubmatch(r[1], -1) {
-			cells = append(cells, strings.TrimSpace(tag.ReplaceAllString(c[1], "")))
+			cells = append(cells, strings.TrimSpace(htmlTag.ReplaceAllString(c[1], "")))
 		}
 		rows = append(rows, strings.Join(cells, " "))
 	}
@@ -229,11 +264,7 @@ func (ta *testApp) table(path string) []string {
 
 func TestReportTableListsEveryItem(t *testing.T) {
 	ta := newTestApp(t)
-	ta.seedIn("expense", "2026-10-02", "940", "Big", "S")
-	ta.seedIn("expense", "2026-10-03", "30", "Exactly3", "S")
-	ta.seedIn("expense", "2026-10-04", "20", "Small1", "S")
-	ta.seedIn("expense", "2026-10-05", "9", "Small2", "S")
-	ta.seedIn("expense", "2026-10-06", "1", "Small3", "S")
+	ta.seedFold()
 
 	got := ta.table("/report?period=month&date=2026-10")
 	want := []string{"Big €940 94.0%", "Exactly3 €30 3.0%", "Small1 €20 2.0%", "Small2 €9 0.9%", "Small3 €1 0.1%"}
@@ -245,26 +276,9 @@ func TestReportTableListsEveryItem(t *testing.T) {
 // otherGrey is the colour reserved for the "Other" slice.
 const otherGrey = "#bab0ac"
 
-func (ta *testApp) chartColours(path string) []string {
-	ta.t.Helper()
-	m := chartJSON.FindStringSubmatch(ta.mustReport(path))
-	if m == nil {
-		ta.t.Fatalf("no chart data on %s", path)
-	}
-	var d struct {
-		Colours []string `json:"colours"`
-	}
-	if err := json.Unmarshal([]byte(m[1]), &d); err != nil {
-		ta.t.Fatalf("chart data %q: %v", m[1], err)
-	}
-	return d.Colours
-}
-
 func TestReportChartColoursNamedSlicesDistinctlyAndOtherGrey(t *testing.T) {
 	ta := newTestApp(t)
-	for i := range 10 {
-		ta.seedIn("expense", fmt.Sprintf("2026-10-%02d", i+1), "1000", fmt.Sprintf("Cat%d", i), "S")
-	}
+	ta.seedTen()
 	ta.seedIn("expense", "2026-10-20", "1", "Tiny1", "S")
 	ta.seedIn("expense", "2026-10-21", "1", "Tiny2", "S")
 
@@ -289,12 +303,8 @@ var swatch = regexp.MustCompile(`<span class="swatch" style="background:\s*([^";
 // tableColours returns the breakdown table's swatch colours, row by row.
 func (ta *testApp) tableColours(path string) []string {
 	ta.t.Helper()
-	m := breakdownTable.FindStringSubmatch(ta.mustReport(path))
-	if m == nil {
-		ta.t.Fatalf("no breakdown table on %s", path)
-	}
 	out := []string{}
-	for _, s := range swatch.FindAllStringSubmatch(m[1], -1) {
+	for _, s := range swatch.FindAllStringSubmatch(ta.breakdownHTML(path), -1) {
 		out = append(out, s[1])
 	}
 	return out
@@ -302,17 +312,45 @@ func (ta *testApp) tableColours(path string) []string {
 
 func TestReportTableSwatchesMatchTheirSlice(t *testing.T) {
 	ta := newTestApp(t)
-	ta.seedIn("expense", "2026-10-02", "940", "Big", "S")
-	ta.seedIn("expense", "2026-10-03", "30", "Exactly3", "S")
-	ta.seedIn("expense", "2026-10-04", "20", "Small1", "S")
-	ta.seedIn("expense", "2026-10-05", "9", "Small2", "S")
-	ta.seedIn("expense", "2026-10-06", "1", "Small3", "S")
+	ta.seedFold()
 
 	path := "/report?period=month&date=2026-10"
 	chart := ta.chartColours(path) // Big, Exactly3, Other
 	want := []string{chart[0], chart[1], otherGrey, otherGrey, otherGrey}
 	if got := ta.tableColours(path); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("table colours = %q, want %q", got, want)
+	}
+}
+
+func TestReportChartFirstAndLastSlicesNeverShareAColour(t *testing.T) {
+	ta := newTestApp(t)
+	ta.seedTen()
+	ta.seedIn("expense", "2026-10-20", "1", "Lone", "S") // keeps its name: 11 named, no Other
+
+	c := ta.chartColours("/report?period=month&date=2026-10")
+	if len(c) != 11 {
+		t.Fatalf("colours = %q, want 11 named", c)
+	}
+	if c[10] == c[0] || c[10] == c[9] {
+		t.Errorf("last colour %q touches an equal neighbour: %q", c[10], c)
+	}
+}
+
+func TestReportChartPutsOtherLastEvenWhenLargest(t *testing.T) {
+	ta := newTestApp(t)
+	ta.seedIn("expense", "2026-10-01", "30", "Named", "S")
+	for i := range 20 {
+		ta.seedIn("expense", fmt.Sprintf("2026-10-%02d", i+2), "2", fmt.Sprintf("Small%d", i), "S") // 2/70 < 3%
+	}
+
+	l, a := ta.chart("/report?period=month&date=2026-10")
+	wantChart(t, l, a, []string{"Named", "Other"}, []int64{30, 40})
+}
+
+func TestReportTableEmptyPeriod(t *testing.T) {
+	ta := newTestApp(t)
+	if got := ta.table("/report?period=year&date=2020"); len(got) != 0 {
+		t.Errorf("table = %q, want no rows", got)
 	}
 }
 

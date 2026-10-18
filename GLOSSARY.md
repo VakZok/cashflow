@@ -53,7 +53,7 @@ A calendar month or a calendar year that a Report covers, or that the Transactio
 _Avoid_: Range, timeframe
 
 **Report**:
-The page showing figures for one Period, covering Income and Expense. Its pie chart groups items under 3% of the total as Other when there are at least two; the table beside it lists every item.
+The page showing figures for one Period, covering Income and Expense. Its pie chart groups items with a small share of the total as Other when there are at least two; the table below the pie chart lists every item.
 _Avoid_: Dashboard, summary
 
 **Transactions page**:

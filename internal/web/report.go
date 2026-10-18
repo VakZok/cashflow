@@ -102,7 +102,7 @@ const (
 // sliceColours colour the named slices in order, repeating past the tenth.
 var sliceColours = []string{
 	"#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f",
-	"#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#a0cbe8",
+	"#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#8cd17d",
 }
 
 // chartSel is the pie chart's Type (one with a Category pair, not a Levy) and Group-by.
@@ -149,7 +149,7 @@ type chartData struct {
 	Colours []string `json:"colours"`
 }
 
-// breakdownRow is one line of the table under the chart, which lists every
+// breakdownRow is one line of the table below the chart, which lists every
 // item, including those the chart groups as "Other".
 type breakdownRow struct{ Label, Amount, Share, Colour string }
 
@@ -157,42 +157,66 @@ type breakdownRow struct{ Label, Amount, Share, Colour string }
 // returns the chart data and the full breakdown. rows must be ordered by
 // amount, descending.
 func buildChart(rows []store.Slice) (chartData, []breakdownRow) {
-	cd := chartData{Labels: []string{}, Amounts: []int64{}, Colours: []string{}}
-	var total, other int64
+	var total int64
 	for _, r := range rows {
 		total += r.Amount
 	}
-	// rows are descending, so the small ones are a suffix starting at fold;
-	// a lone small slice keeps its name.
+	fold := foldStart(rows, total)
+
+	cd := chartData{Labels: []string{}, Amounts: []int64{}, Colours: []string{}}
+	for i, r := range rows[:fold] {
+		cd.Labels = append(cd.Labels, r.Name)
+		cd.Amounts = append(cd.Amounts, r.Amount)
+		cd.Colours = append(cd.Colours, sliceColour(i, fold, len(rows)))
+	}
+	if fold < len(rows) {
+		var other int64
+		for _, r := range rows[fold:] {
+			other += r.Amount
+		}
+		cd.Labels = append(cd.Labels, "Other")
+		cd.Amounts = append(cd.Amounts, other)
+		cd.Colours = append(cd.Colours, otherColour)
+	}
+
+	breakdown := make([]breakdownRow, len(rows))
+	for i, r := range rows {
+		breakdown[i] = breakdownRow{
+			Label:  r.Name,
+			Amount: formatEuro(r.Amount),
+			Share:  fmt.Sprintf("%.1f%%", float64(r.Amount)*100/float64(total)),
+			Colour: sliceColour(i, fold, len(rows)),
+		}
+	}
+	return cd, breakdown
+}
+
+// foldStart is the index from which rows go into "Other". rows are
+// descending, so the small ones are a suffix; a lone small row keeps its name,
+// and then foldStart is len(rows).
+func foldStart(rows []store.Slice, total int64) int {
 	fold := len(rows)
 	for fold > 0 && rows[fold-1].Amount*100 < otherThresholdPct*total {
 		fold--
 	}
 	if len(rows)-fold < 2 {
-		fold = len(rows)
+		return len(rows)
 	}
-	for i, r := range rows[:fold] {
-		cd.Labels = append(cd.Labels, r.Name)
-		cd.Amounts = append(cd.Amounts, r.Amount)
-		cd.Colours = append(cd.Colours, sliceColours[i%len(sliceColours)])
+	return fold
+}
+
+// sliceColour is the colour of row i of n, where rows from fold on are in
+// "Other". The pie wraps around, so without "Other" between them the last
+// named slice touches the first and must not share its colour.
+func sliceColour(i, fold, n int) string {
+	if i >= fold {
+		return otherColour
 	}
-	for _, r := range rows[fold:] {
-		other += r.Amount
+	c := i % len(sliceColours)
+	if c == 0 && i > 0 && i == n-1 {
+		c = 1
 	}
-	if other > 0 {
-		cd.Labels = append(cd.Labels, "Other")
-		cd.Amounts = append(cd.Amounts, other)
-		cd.Colours = append(cd.Colours, otherColour)
-	}
-	breakdown := make([]breakdownRow, len(rows))
-	for i, r := range rows {
-		colour := otherColour
-		if i < fold {
-			colour = cd.Colours[i]
-		}
-		breakdown[i] = breakdownRow{r.Name, formatEuro(r.Amount), fmt.Sprintf("%.1f%%", float64(r.Amount)*100/float64(total)), colour}
-	}
-	return cd, breakdown
+	return sliceColours[c]
 }
 
 type reportData struct {
