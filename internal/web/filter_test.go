@@ -91,8 +91,8 @@ func TestTheFilterControlsSubmitOnChangeWithoutAnApplyButton(t *testing.T) {
 	body := ta.get("/transactions?year=2026").Body
 	form := regexp.MustCompile(`(?s)<form[^>]*class="filters[^"]*".*?</form>`).FindString(body)
 	wantAll(t, form, `method="get"`, `action="/transactions"`)
-	wantAll(t, selectHTML(form, "year"), `onchange="this.form.submit()"`)
-	wantAll(t, selectHTML(form, "month"), `onchange="this.form.submit()"`)
+	wantAll(t, selectHTML(form, "year"), `onchange="applyFilter(this.form)"`)
+	wantAll(t, selectHTML(form, "month"), `onchange="applyFilter(this.form)"`)
 	wantNone(t, form, "<button", `type="submit"`, `name="page"`)
 }
 
@@ -353,7 +353,7 @@ func selectedID(ta *testApp, sel, name string) string {
 func TestChangingTheTypeDropsTheGroupingsSelection(t *testing.T) {
 	ta := typeFilterApp(t)
 	body := ta.get("/transactions").Body
-	wantAll(t, selectHTML(body, "type"), `this.form.querySelectorAll('.grouping')`, `e.disabled = true`, `this.form.submit()`)
+	wantAll(t, selectHTML(body, "type"), `this.form.querySelectorAll('.grouping')`, `e.disabled = true`, `applyFilter(this.form)`)
 	body = ta.get("/transactions?type=expense").Body
 	wantAll(t, selectHTML(body, "category"), `class="grouping"`)
 	wantAll(t, selectHTML(body, "subcategory"), `class="grouping"`)
@@ -466,7 +466,7 @@ func TestTheHoldingDropdownAppearsOnlyForInvestmentAndDivestment(t *testing.T) {
 	for _, typ := range []string{"investment", "divestment"} {
 		body := ta.get("/transactions?type=" + typ).Body
 		sel := selectHTML(body, "holding")
-		wantAll(t, sel, `aria-label="Holding"`, `<option value="">Holding</option>`, ">ETF<", ">Gold<", `onchange="this.form.submit()"`)
+		wantAll(t, sel, `aria-label="Holding"`, `<option value="">Holding</option>`, ">ETF<", ">Gold<", `onchange="applyFilter(this.form)"`)
 		wantNone(t, body, `name="search"`)
 		wantNone(t, selectHTML(body, "category")+selectHTML(body, "subcategory"), "<select")
 	}
@@ -596,4 +596,20 @@ func TestSearchAddsTheFilterToThePagerLinks(t *testing.T) {
 		ta.post("/transactions", expenseForm(fmt.Sprintf("2026-01-%02d", i), "3", fmt.Sprintf("Rent %d", i), "new", "Food", "new", "Cafe"))
 	}
 	wantAll(t, ta.get("/transactions?search=rent").Body, `href="/transactions?search=rent&amp;page=2"`, "1 / 2")
+}
+
+func TestSearchFieldIsCappedAndAnOverLongParameterIsTruncated(t *testing.T) {
+	ta := searchApp(t)
+	wantAll(t, ta.get("/transactions").Body, `name="search" maxlength="100"`)
+	long := strings.Repeat("é", 150)
+	body := ta.get("/transactions?search=" + url.QueryEscape(long)).Body
+	wantAll(t, body, `value="`+strings.Repeat("é", 100)+`"`)
+	wantNone(t, body, strings.Repeat("é", 101))
+}
+
+func TestFilterChangesSubmitThroughTheLastEnteredSearch(t *testing.T) {
+	ta := searchApp(t)
+	body := ta.get("/transactions?search=rent").Body
+	wantAll(t, body, "function applyFilter", "form.search.defaultValue", `name="type" aria-label="Type" onchange=`, `value="rent"`)
+	wantNone(t, body, "onchange=\"this.form.submit()\"")
 }
