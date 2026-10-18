@@ -61,9 +61,9 @@ func TestTheYearDropdownListsOnlyYearsWithTransactions(t *testing.T) {
 	addDated(ta, "2024-05-05", "2026-01-01", "2026-07-07")
 	body := ta.get("/transactions").Body
 	years := selectHTML(body, "year")
-	wantAll(t, years, `<option value="">All</option>`, `<option value="2026">2026</option>`, `<option value="2024">2024</option>`)
+	wantAll(t, years, `<option value="">Year</option>`, `<option value="2026">2026</option>`, `<option value="2024">2024</option>`)
 	wantNone(t, years, "2025", "selected")
-	if strings.Index(years, "All") > strings.Index(years, "2026") || strings.Index(years, "2026") > strings.Index(years, "2024") {
+	if strings.Index(years, "Year") > strings.Index(years, "2026") || strings.Index(years, "2026") > strings.Index(years, "2024") {
 		t.Errorf("years are not All, then newest first:\n%s", years)
 	}
 	if selectHTML(body, "month") != "" {
@@ -77,7 +77,7 @@ func TestTheMonthDropdownAppearsOnceAYearIsChosen(t *testing.T) {
 	body := ta.get("/transactions?year=2026").Body
 	wantAll(t, selectHTML(body, "year"), `<option value="2026" selected>2026</option>`)
 	months := selectHTML(body, "month")
-	wantAll(t, months, `<option value="">All</option>`, `<option value="1">Jan</option>`, `<option value="12">Dec</option>`)
+	wantAll(t, months, `<option value="">Month</option>`, `<option value="1">Jan</option>`, `<option value="12">Dec</option>`)
 	wantNone(t, months, "selected")
 	if strings.Count(months, "<option") != 13 {
 		t.Errorf("want All and 12 months:\n%s", months)
@@ -123,15 +123,25 @@ func TestThePagerCountsAndKeepsTheFilter(t *testing.T) {
 	wantAll(t, ta.get("/transactions?year=2026&month=8&page=9").Body, "2 / 2")
 }
 
-func TestClearShowsTextUnfilteredAndOnlyItsIconOnceAYearIsChosen(t *testing.T) {
+func TestClearIsTextOnlyAndRow1IsInThirdsInBothStates(t *testing.T) {
 	ta := newTestApp(t)
 	addDated(ta, "2026-01-01")
 	clear := regexp.MustCompile(`(?s)<a class="clear".*?</a>`)
-	wantAll(t, clear.FindString(ta.get("/transactions").Body), `href="/transactions"`, "<svg", "<span>Clear</span>")
-	tight := clear.FindString(ta.get("/transactions?year=2026&month=1").Body)
-	wantAll(t, tight, `href="/transactions"`, `aria-label="Clear"`, "<svg")
-	wantNone(t, tight, "<span>Clear</span>")
-	wantAll(t, ta.get("/transactions?year=2026").Body, `class="filters tight"`)
+	for _, path := range []string{"/transactions", "/transactions?year=2026&month=1"} {
+		got := clear.FindString(ta.get(path).Body)
+		wantAll(t, got, `href="/transactions"`, ">Clear</a>")
+		wantNone(t, got, "<svg")
+	}
+	wantAll(t, ta.get("/transactions").Body, `class="filters"`, "grid-template-columns: repeat(3, minmax(0, 1fr))", ".filters:not(.has-year) select.year { grid-column: span 2; }")
+	wantAll(t, ta.get("/transactions?year=2026").Body, `class="filters has-year"`)
+}
+
+func TestNoFilterDropdownOffersAll(t *testing.T) {
+	ta := newTestApp(t)
+	addDated(ta, "2026-01-01")
+	body := ta.get("/transactions?year=2026").Body
+	wantAll(t, body, `<option value="">Year</option>`, `<option value="">Month</option>`, `<option value="">Type</option>`)
+	wantNone(t, body, `<option value="">All</option>`)
 }
 
 func TestAnEmptyFilteredResultIsNotAnEmptyDatabase(t *testing.T) {
@@ -264,7 +274,7 @@ func TestChoosingATypeShowsOnlyTransactionsOfThatType(t *testing.T) {
 func TestTheTypeDropdownOffersAllThenEveryTypeAndKeepsTheChoice(t *testing.T) {
 	ta := typeFilterApp(t)
 	types := selectHTML(ta.get("/transactions").Body, "type")
-	wantAll(t, types, `aria-label="Type"`, `<option value="">All</option>`, `<option value="income">Income</option>`, `<option value="divestment">Divestment</option>`)
+	wantAll(t, types, `aria-label="Type"`, `<option value="">Type</option>`, `<option value="income">Income</option>`, `<option value="divestment">Divestment</option>`)
 	wantNone(t, types, "selected")
 	if strings.Count(types, "<option") != 7 {
 		t.Errorf("want All and six Types:\n%s", types)
@@ -427,7 +437,7 @@ func TestATamperedTypeOrGroupingInTheReturnValueNarrowsNothing(t *testing.T) {
 func TestClearResetsTypeAndGroupings(t *testing.T) {
 	ta := typeFilterApp(t)
 	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?type=expense&category=1").Body),
-		`href="/transactions"`, "<span>Clear</span>")
+		`href="/transactions"`, ">Clear</a>")
 }
 
 // holdingFilterApp holds an Investment and a Divestment of ETF, an Investment of Gold and an Expense.
@@ -510,7 +520,7 @@ func TestChangingTheTypeDropsTheHoldingAndClearResetsIt(t *testing.T) {
 	wantAll(t, selectHTML(body, "holding"), `class="grouping holding"`)
 	wantAll(t, selectHTML(body, "type"), `e.disabled = true`)
 	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?type=investment&holding=1").Body),
-		`href="/transactions"`, "<span>Clear</span>")
+		`href="/transactions"`, ">Clear</a>")
 }
 
 // searchApp holds an Investment in ETF World, an Expense "Etf fees", Expense "Rent" and a Levy "Rent tax".
