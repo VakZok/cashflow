@@ -38,15 +38,16 @@ type TypeSpec struct {
 	Description bool
 	Lists       *ListSet // the Category and Subcategory pair, nil if the Type takes none
 	Holding     bool
+	Positive    bool // the Sign: true adds to what the user keeps, false takes away from it
 }
 
 // Types lists every Type, in the order the entry form offers them.
 var Types = []TypeSpec{
 	{Type: TypeExpense, Label: "Expense", Description: true, Lists: &DefaultListSet},
-	{Type: TypeIncome, Label: "Income", Description: true, Lists: &DefaultListSet},
+	{Type: TypeIncome, Label: "Income", Description: true, Lists: &DefaultListSet, Positive: true},
 	{Type: TypeLevy, Label: "Levy", Description: true, Lists: &LevyListSet},
-	{Type: TypeRebate, Label: "Rebate", Description: true, Lists: &LevyListSet},
-	{Type: TypeInvestment, Label: "Investment", Holding: true},
+	{Type: TypeRebate, Label: "Rebate", Description: true, Lists: &LevyListSet, Positive: true},
+	{Type: TypeInvestment, Label: "Investment", Holding: true, Positive: true},
 	{Type: TypeDivestment, Label: "Divestment", Holding: true},
 }
 

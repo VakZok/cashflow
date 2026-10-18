@@ -7,6 +7,7 @@
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
 {{template "entry-style"}}
+{{template "sign-style"}}
   .pager { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
   .pager a, .pager span.arrow { display: flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border: 1px solid #ccc; border-radius: 50%; color: #444; }
   .pager span.arrow { color: #ccc; }
@@ -88,7 +89,7 @@
   <li id="tx-{{.ID}}">
     <a class="row" href="{{$.PageURL}}&amp;edit={{.ID}}#tx-{{.ID}}">
       <span>{{if .Holding}}{{.Holding}}{{else}}{{.Description}}{{end}}</span>
-      <span class="amount">{{euro .Amount}}</span>
+      {{signedAmount .Type .Amount}}
       <span class="meta">{{.Date}} · {{typeLabel .Type}}{{if .Category}} · {{.Category}} · {{.Subcategory}}{{end}}</span>
     </a>
   </li>

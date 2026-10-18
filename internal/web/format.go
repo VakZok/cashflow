@@ -43,6 +43,24 @@ func specsJSON() (template.JS, error) {
 	return template.JS(b), err
 }
 
+// signedEuro renders a magnitude with an explicit Sign (+€50 or −€50, true
+// minus U+2212) and the CSS class that colours it. The Report Net and the
+// Transaction lists share it.
+func signedEuro(amount int64, positive bool) (text, class string) {
+	if positive {
+		return "+" + formatEuro(amount), "net-positive"
+	}
+	return "−" + formatEuro(amount), "net-negative"
+}
+
+// signedAmount renders a Transaction amount with the Sign of its Type as a
+// coloured span.
+func signedAmount(typ string, amount int64) template.HTML {
+	spec, _ := store.SpecFor(typ)
+	text, class := signedEuro(amount, spec.Positive)
+	return template.HTML(`<span class="amount ` + class + `">` + template.HTMLEscapeString(text) + `</span>`)
+}
+
 // formatEuro renders whole euros as €1.234 (dot as thousands separator).
 func formatEuro(amount int64) string {
 	neg := amount < 0
