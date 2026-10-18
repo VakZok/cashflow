@@ -11,14 +11,13 @@
   .pager { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
   .pager a, .pager span.arrow { display: flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border: 1px solid #ccc; border-radius: 50%; color: #444; }
   .pager span.arrow { color: #ccc; }
-  .pager svg, a.clear svg { width: 1.4rem; height: 1.4rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  /* Row 1 of the filter bar never wraps: the Clear pill keeps its width, the dropdowns share the rest and truncate. */
-  .filters { display: grid; grid-template-columns: auto 1fr; gap: .5rem; align-items: center; }
-  .filters.tight { grid-template-columns: 2.75rem 1fr 1fr; }
+  .pager svg { width: 1.4rem; height: 1.4rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  /* Row 1 of the filter bar never wraps: Clear is a fixed third, the dropdowns share the rest and truncate. */
+  .filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; align-items: center; }
   .filters > * { min-width: 0; height: 2.75rem; margin-top: 0; }
+  .filters:not(.has-year) select.year { grid-column: span 2; }
   .filters select { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
-  a.clear { display: flex; align-items: center; justify-content: center; gap: .3rem; box-sizing: border-box; padding: 0 .9rem; border: 1px solid #ccc; border-radius: 1.375rem; color: #444; text-decoration: none; white-space: nowrap; }
-  .filters.tight a.clear { padding: 0; }
+  a.clear { display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 0 .9rem; border: 1px solid #ccc; border-radius: 1.375rem; color: #444; text-decoration: none; white-space: nowrap; }
   /* Row 2 spans the bar in thirds, so Type keeps its third whether or not groupings dropdowns follow. */
   .filters > .row2 { grid-column: 1 / -1; height: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
   .row2 > * { min-width: 0; height: 2.75rem; margin-top: 0; }
@@ -31,23 +30,23 @@
 <body>
 <h1>Transactions</h1>
 {{if .Years}}
-<form class="filters{{if .Filter.Year}} tight{{end}}" method="get" action="/transactions">
-  <a class="clear" href="/transactions" aria-label="Clear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>{{if not .Filter.Year}}<span>Clear</span>{{end}}</a>
-  <select name="year" aria-label="Year" onchange="this.form.submit()">
-    <option value="">All</option>
+<form class="filters{{if .Filter.Year}} has-year{{end}}" method="get" action="/transactions">
+  <a class="clear" href="/transactions">Clear</a>
+  <select class="year" name="year" aria-label="Year" onchange="this.form.submit()">
+    <option value="">Year</option>
     {{range .Years}}<option value="{{.}}"{{if eq . $.Filter.Year}} selected{{end}}>{{.}}</option>
     {{end}}
   </select>
   {{if .Filter.Year}}
   <select name="month" aria-label="Month" onchange="this.form.submit()">
-    <option value="">All</option>
+    <option value="">Month</option>
     {{range .Months}}<option value="{{.Number}}"{{if eq .Number $.Filter.Month}} selected{{end}}>{{.Label}}</option>
     {{end}}
   </select>
   {{end}}
   <div class="row2">
     <select name="type" aria-label="Type" onchange="this.form.querySelectorAll('.grouping').forEach(function (e) { e.disabled = true }); this.form.submit()">
-      <option value="">All</option>
+      <option value="">Type</option>
       {{range .Types}}<option value="{{.Type}}"{{if eq .Type $.Filter.Type}} selected{{end}}>{{.Label}}</option>
       {{end}}
     </select>
