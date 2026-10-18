@@ -45,7 +45,7 @@ Money moved from an investment back into cash, recorded as the principal returne
 _Avoid_: Disinvestment, withdrawal, sale
 
 **Holding**:
-A named investment (e.g. "ETF World") that Investments and Divestments are recorded against. Its invested amount is the sum of its Investments minus its Divestments.
+A named investment (e.g. "ETF World") that Investments and Divestments are recorded against. Its invested amount is the sum of its Investments minus its Divestments. A Holding cannot be deleted while any Transaction or Repeating entry uses it.
 _Avoid_: Asset, position, portfolio item
 
 **Period**:
@@ -59,6 +59,10 @@ _Avoid_: Dashboard, summary
 **Transactions page**:
 The page listing all Transactions from the newest date to the oldest, a few at a time, with arrows to move to the newer or older ones. Transactions can be edited and deleted from it. It can be narrowed by a Period, a Type, the Type's Category-like groupings or Holding, and a Search; the narrowing applies together, shows all matching Transactions across the pages, and survives editing and deleting. By default nothing narrows it. A single action clears all narrowing at once.
 _Avoid_: History, log, journal
+
+**Edit Categories page**:
+The page where Categories, Subcategories, Levy Categories, Levy Subcategories and Holdings are added, renamed and deleted, one list at a time. Names are unique within a list, ignoring case; the same name may appear in different lists. Moving all Transactions from one entry to another is not offered: the user edits them one by one.
+_Avoid_: Settings, Lists page, Adjust Categories
 
 **Type filter**:
 Narrows the Transactions page to one Type. Once a Type is chosen, its groupings can be narrowed too: Category and Subcategory for Income and Expense, Levy Category and Levy Subcategory for Levy and Rebate, Holding for Investment and Divestment. Each is a single choice from all existing values, and when two are set both must match. Changing the Type keeps the groupings when the new Type uses the same lists, and drops them otherwise.
@@ -77,19 +81,19 @@ Income minus Expense for a Period. Positive, negative, or exactly zero.
 _Avoid_: Net saved, balance, profit
 
 **Category**:
-A grouping of an Income or Expense Transaction (e.g. "Food"). The same Categories are shared by Income and Expense. Levies and Rebates use Levy Categories instead; Investments and Divestments have no Category.
+A grouping of an Income or Expense Transaction (e.g. "Food"). The same Categories are shared by Income and Expense. Levies and Rebates use Levy Categories instead; Investments and Divestments have no Category. A Category cannot be deleted while any Transaction or Repeating entry uses it.
 _Avoid_: Label, group
 
 **Subcategory**:
-A second, independent grouping of an Income or Expense Transaction (e.g. "Restaurant"). It is not nested under a Category: any Subcategory can be combined with any Category. Each Income or Expense Transaction has exactly one Category and exactly one Subcategory, and each is reported on separately. A Category or Subcategory that still has Transactions or Repeating entries cannot be deleted until they are reassigned.
+A second, independent grouping of an Income or Expense Transaction (e.g. "Restaurant"). It is not nested under a Category: any Subcategory can be combined with any Category. Each Income or Expense Transaction has exactly one Category and exactly one Subcategory, and each is reported on separately. A Subcategory cannot be deleted while any Transaction or Repeating entry uses it.
 _Avoid_: Child category, tag
 
 **Levy Category**:
-A grouping of a Levy or Rebate Transaction (e.g. "Income tax"). A separate list from Category: a Levy Category cannot be used on Income or Expense, and a Category cannot be used on a Levy or Rebate.
+A grouping of a Levy or Rebate Transaction (e.g. "Income tax"). A separate list from Category: a Levy Category cannot be used on Income or Expense, and a Category cannot be used on a Levy or Rebate. A Levy Category cannot be deleted while any Transaction or Repeating entry uses it.
 _Avoid_: Tax category
 
 **Levy Subcategory**:
-A second, independent grouping of a Levy or Rebate Transaction, related to Levy Category exactly as Subcategory is related to Category. A separate list from Subcategory.
+A second, independent grouping of a Levy or Rebate Transaction, related to Levy Category exactly as Subcategory is related to Category. A separate list from Subcategory. A Levy Subcategory cannot be deleted while any Transaction or Repeating entry uses it.
 _Avoid_: Tax subcategory
 
 **Duplicate**:
