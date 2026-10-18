@@ -1,11 +1,11 @@
 {{define "nav-style"}}<style>
-  body { padding-bottom: 5.5rem; }
+  body { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom)); }
   .bottom-nav { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(0rem + env(safe-area-inset-bottom)); display: flex; gap: .25rem; padding: .25rem; background: #fff; border: 1px solid #ccc; border-radius: 999px; box-shadow: 0 2px 10px rgba(0, 0, 0, .15); }
   .bottom-nav a { display: flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border-radius: 50%; color: #444; }
   .bottom-nav a[aria-current="page"] { background: #111; color: #fff; }
   .bottom-nav svg { width: 1.4rem; height: 1.4rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   @media (pointer: coarse) {
-    body:has(input:focus, select:focus, textarea:focus) .bottom-nav { display: none; }
+    body:has(input:is([type="text"], [type="search"], [type="number"]):focus, textarea:focus) .bottom-nav { display: none; }
   }
 </style>{{end}}
 
@@ -14,4 +14,12 @@
   <a href="/" aria-label="Add transaction"{{if eq . "add"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></a>
   <a href="/transactions" aria-label="Transactions"{{if eq . "transactions"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg></a>
   <a href="/report"aria-label="Report"{{if eq . "report"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"/><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/></svg></a>
-</nav>{{end}}
+</nav>
+<script>
+  document.addEventListener('change', function (e) {
+    if (e.target.tagName === 'SELECT') e.target.blur();
+  });
+  document.addEventListener('pointerdown', function (e) {
+    if (!e.target.closest('input, select, textarea, button, a, label') && document.activeElement) document.activeElement.blur();
+  });
+</script>{{end}}
