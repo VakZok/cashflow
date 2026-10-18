@@ -30,7 +30,7 @@ func TestAddLevyWithInlineLevyCategoriesShowsInList(t *testing.T) {
 		t.Fatalf("status %d, want 303\n%s", r.Status, r.Body)
 	}
 	body := ta.follow(r).Body
-	wantAll(t, body, "Income tax", "€250", "Levy", "Tax", "Federal")
+	wantAll(t, body, "Income tax", ">250<", "Levy", "Tax", "Federal")
 }
 
 func TestLevyCategoriesAreSeparateFromCategories(t *testing.T) {
