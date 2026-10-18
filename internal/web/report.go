@@ -94,7 +94,16 @@ const (
 
 	// otherThresholdPct: slices below this share of the total become "Other".
 	otherThresholdPct = 3
+
+	// otherColour is reserved for "Other", so no named slice looks like it.
+	otherColour = "#bab0ac"
 )
+
+// sliceColours colour the named slices in order, repeating past the tenth.
+var sliceColours = []string{
+	"#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f",
+	"#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#a0cbe8",
+}
 
 // chartSel is the pie chart's Type (one with a Category pair, not a Levy) and Group-by.
 type chartSel struct{ Type, Group string }
@@ -137,42 +146,60 @@ func (c chartSel) list() store.List {
 type chartData struct {
 	Labels  []string `json:"labels"`
 	Amounts []int64  `json:"amounts"`
+	Colours []string `json:"colours"`
 }
 
-type legendRow struct{ Label, Amount, Share string }
+// breakdownRow is one line of the table under the chart, which lists every
+// item, including those the chart groups as "Other".
+type breakdownRow struct{ Label, Amount, Share, Colour string }
 
-// buildChart groups slices below the threshold into "Other" and returns the
-// chart data and legend. rows must be ordered by amount, descending.
-func buildChart(rows []store.Slice) (chartData, []legendRow) {
-	cd := chartData{Labels: []string{}, Amounts: []int64{}}
+// buildChart groups two or more slices below the threshold into "Other" and
+// returns the chart data and the full breakdown. rows must be ordered by
+// amount, descending.
+func buildChart(rows []store.Slice) (chartData, []breakdownRow) {
+	cd := chartData{Labels: []string{}, Amounts: []int64{}, Colours: []string{}}
 	var total, other int64
 	for _, r := range rows {
 		total += r.Amount
 	}
-	for _, r := range rows {
-		if r.Amount*100 < otherThresholdPct*total {
-			other += r.Amount
-			continue
-		}
+	// rows are descending, so the small ones are a suffix starting at fold;
+	// a lone small slice keeps its name.
+	fold := len(rows)
+	for fold > 0 && rows[fold-1].Amount*100 < otherThresholdPct*total {
+		fold--
+	}
+	if len(rows)-fold < 2 {
+		fold = len(rows)
+	}
+	for i, r := range rows[:fold] {
 		cd.Labels = append(cd.Labels, r.Name)
 		cd.Amounts = append(cd.Amounts, r.Amount)
+		cd.Colours = append(cd.Colours, sliceColours[i%len(sliceColours)])
+	}
+	for _, r := range rows[fold:] {
+		other += r.Amount
 	}
 	if other > 0 {
 		cd.Labels = append(cd.Labels, "Other")
 		cd.Amounts = append(cd.Amounts, other)
+		cd.Colours = append(cd.Colours, otherColour)
 	}
-	legend := make([]legendRow, len(cd.Labels))
-	for i, l := range cd.Labels {
-		legend[i] = legendRow{l, formatEuro(cd.Amounts[i]), fmt.Sprintf("%.1f%%", float64(cd.Amounts[i])*100/float64(total))}
+	breakdown := make([]breakdownRow, len(rows))
+	for i, r := range rows {
+		colour := otherColour
+		if i < fold {
+			colour = cd.Colours[i]
+		}
+		breakdown[i] = breakdownRow{r.Name, formatEuro(r.Amount), fmt.Sprintf("%.1f%%", float64(r.Amount)*100/float64(total)), colour}
 	}
-	return cd, legend
+	return cd, breakdown
 }
 
 type reportData struct {
 	Chart       chartSel
 	ChartTypes  []store.TypeSpec
 	ChartData   chartData
-	Legend      []legendRow
+	Breakdown   []breakdownRow
 	Period      period
 	Prev, Next  string // empty when out of range
 	ToggleLabel string
@@ -216,7 +243,7 @@ func (a *App) report(w http.ResponseWriter, r *http.Request) {
 	default:
 		d.Net, d.NetClass = template.HTML(formatEuro(0)), "net-zero"
 	}
-	d.ChartData, d.Legend = buildChart(slices)
+	d.ChartData, d.Breakdown = buildChart(slices)
 	if prev := p.shifted(-1); prev.valid() {
 		d.Prev = prev.query(sel)
 	}
