@@ -16,7 +16,6 @@
 
 {{define "entry-style"}}  input, select, button { width: 100%; box-sizing: border-box; padding: .6rem; font-size: 1rem; margin-top: .25rem; }
   button { margin-top: 1rem; }
-  .errors { background: #fde8e8; color: #9b1c1c; padding: .5rem 1rem; border-radius: .25rem; }
 {{template "error-style"}}
   .tx-main { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .5rem; align-items: end; }
   .tx-main > * { min-width: 0; height: 2.75rem; }
@@ -122,15 +121,12 @@ function syncGroups(p) {
 
 {{/* edit-row is the body of the <li> of the Transaction being edited: its form, with the hidden return-to value. */}}
 {{define "edit-row"}}
-    {{with .Fields.Form.Errors}}
-    <div class="errors" role="alert"><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>
-    {{end}}
     <form method="post" action="/transactions/{{.ID}}#tx-{{.ID}}">
       <input type="hidden" name="return" value="{{.Return}}">
       {{template "fields" .Fields}}
       <div class="edit-actions">
         {{/* Apply comes first in the markup so Enter in a field presses it, not Delete; CSS shows it last. */}}
-        <button class="primary" type="submit" data-arm>Apply</button>
+        <button class="primary" type="submit" data-arm data-label="Apply" data-resting="Apply">{{or .Fields.Form.ButtonMessage "Apply"}}</button>
         <a class="button" href="{{.Discard}}">Discard</a>
         <button class="primary" type="submit" data-arm formaction="/transactions/{{.ID}}/delete" formnovalidate>Delete</button>
       </div>
