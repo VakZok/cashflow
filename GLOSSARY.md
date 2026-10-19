@@ -72,10 +72,6 @@ _Avoid_: Tab, view
 Narrows the Transactions page to those whose description or Holding contains the typed text, ignoring ASCII case. The text is matched literally, as one phrase. It is available for all Types except Investment and Divestment, where the Holding filter replaces it; the typed text survives a Type change that keeps it available.
 _Avoid_: Query, find
 
-**Newest Transactions**:
-The few Transactions with the most recent dates, shown on the add page so the user sees what is already entered. Newest means the latest Transaction date, not the latest time of entry: a Transaction entered today with an old date is not among them. Transactions on the same date are ordered by when they were entered, last first.
-_Avoid_: Latest, recent, last added
-
 **Net**:
 Income minus Expense for a Period. Positive, negative, or exactly zero.
 _Avoid_: Net saved, balance, profit

@@ -14,6 +14,10 @@ function onEdit(e) {
   var field = e.target;
   if (!field.form) return;
   field.classList.remove('invalid');
+  if (field.tagName === 'SELECT') { // a highlighted "new…" name input goes with its select
+    var newName = field.form.elements['new_' + field.name];
+    if (newName) newName.classList.remove('invalid');
+  }
   if (field.name === 'amount') {
     var bubble = field.parentNode.querySelector('.bubble');
     if (bubble) bubble.remove();
