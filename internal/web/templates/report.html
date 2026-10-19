@@ -10,20 +10,22 @@
   nav.period { display: flex; gap: .5rem; align-items: center; margin: 1rem 0; }
   nav.period a, nav.period input { padding: .6rem; font-size: 1rem; box-sizing: border-box; }
   nav.period a { border: 1px solid #ccc; border-radius: .25rem; text-decoration: none; color: inherit; }
+  nav.period a.toggle { color: #000; background: var(--field); border-color: var(--line); }
   form.picker { display: flex; gap: .5rem; flex: 1; }
-  form.picker input { flex: 1; min-width: 0; }
+  form.picker input { flex: 1; min-width: 0; border-radius: .25rem; }
   .net { font-size: 3rem; font-weight: 700; margin: 1rem 0 .25rem; text-align: center; }
 {{template "sign-style"}}
   .net-zero { color: #000; }
   .totals { text-align: center; color: #000; margin: 0; }
   form.chart-controls { display: flex; gap: .5rem; margin: 1.5rem 0 .5rem; }
-  form.chart-controls select { flex: 1; min-width: 0; padding: .6rem; font-size: 1rem; }
+  form.chart-controls select { flex: 1; min-width: 0; padding: .6rem 2rem .6rem .9rem; font-size: 1rem; }
   .chart-box { max-width: 20rem; margin: 0 auto; }
   table.breakdown { width: 100%; border-collapse: collapse; margin-top: 1rem; }
   table.breakdown td { padding: .25rem; }
   table.breakdown td:nth-child(n+2) { text-align: right; }
   .swatch { display: inline-block; width: .8em; height: .8em; border-radius: .2em; margin-right: .5em; vertical-align: baseline; }
 </style>
+{{template "field-style"}}
 {{template "nav-style"}}
 </head>
 <body>
@@ -31,6 +33,7 @@
 
 <nav class="period">
   {{if .Prev}}<a href="{{.Prev}}" aria-label="Previous">‹</a>{{end}}
+  <a class="toggle" href="{{.ToggleLink}}">{{.ToggleLabel}}</a>
   <form class="picker" method="get" action="/report">
     <input type="hidden" name="period" value="{{.Period.Kind}}">
     <input type="hidden" name="type" value="{{.Chart.Type}}">
@@ -39,7 +42,6 @@
     {{else}}<input type="month" name="date" min="{{.PickerMin}}-01" max="{{.PickerMax}}-12" value="{{.Period.Value}}" aria-label="Month" onchange="this.form.submit()">{{end}}
   </form>
   {{if .Next}}<a href="{{.Next}}" aria-label="Next">›</a>{{end}}
-  <a href="{{.ToggleLink}}">{{.ToggleLabel}}</a>
 </nav>
 
 <p class="net {{.NetClass}}">{{.Net}}</p>
@@ -70,7 +72,8 @@
   new Chart(document.getElementById("pie"), {
     type: "pie",
     data: { labels: data.labels, datasets: [{ data: data.amounts, backgroundColor: data.colours }] },
-    options: { animation: false, plugins: { legend: { display: false } } }
+    // de-DE groups thousands with "." in the tooltip, as the rest of the page does.
+    options: { locale: "de-DE", animation: false, plugins: { legend: { display: false } } }
   });
 </script>
 {{template "nav" "report"}}

@@ -16,7 +16,7 @@ func TestDeletingAnUnusedEntryRemovesItAndStaysOnThePage(t *testing.T) {
 	ta := newTestApp(t)
 	addEntries(ta, "category", 7)
 	row := openRow(ta.get("/categories?list=category&page=2&edit=7").Body)
-	if !regexp.MustCompile(`<button class="primary" type="submit" data-arm formaction="/categories/7/delete" formnovalidate>Delete</button>`).MatchString(row) {
+	if !regexp.MustCompile(`<button class="primary delete" type="submit" data-arm formaction="/categories/7/delete" formnovalidate>Delete</button>`).MatchString(row) {
 		t.Errorf("Delete is not a double-tap submit button:\n%s", row)
 	}
 	r := deleteEntry(ta, "category", "6")
@@ -46,7 +46,7 @@ func TestDeletingAnEntryUsedByTransactionsIsRefused(t *testing.T) {
 	if !regexp.MustCompile(`<button type="button"[^>]*>Delete</button>`).MatchString(row) || strings.Contains(row, "formaction") {
 		t.Errorf("Delete of an entry in use submits:\n%s", row)
 	}
-	wantAll(t, ta.get("/categories?list=category&edit=1").Body, "'In Use'", "3000")
+	wantAll(t, ta.get("/categories?list=category&edit=1").Body, "'In Use'", "2000")
 	if r := deleteEntry(ta, "category", "1"); r.Status != 409 {
 		t.Errorf("status %d, want 409", r.Status)
 	}

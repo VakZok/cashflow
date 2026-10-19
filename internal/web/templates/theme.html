@@ -1,6 +1,13 @@
 {{/* theme-style is the shared palette. Pages include it before their own style, so page rules such as button.armed win over it. */}}
 {{define "theme-style"}}<style>
-  :root { --bg: #f0eee6; --accent: #c15f3c; }
+  :root { --bg: #f0eee6; --accent: #c15f3c; --field: #fff; --line: #ccc; }
   body { background: var(--bg); }
   button.primary { background: var(--accent); color: #fff; border: 0; border-radius: .5rem; }
+</style>{{end}}
+
+{{/* field-style is the closed look of every form field: white with a thin grey border. Pages include it after their own style, so it wins over their resets; the opened dropdown list stays native. */}}
+{{define "field-style"}}<style>
+  input:not([type=hidden]), select { color: #000; background-color: var(--field); border: 1px solid var(--line); }
+  input:is([type=search], [type=date], [type=month]) { -webkit-appearance: none; appearance: none; }
+  select { -webkit-appearance: none; appearance: none; border-radius: 999px; padding-left: .9rem; padding-right: 2rem; background: var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right .75rem center / 1rem; }
 </style>{{end}}
