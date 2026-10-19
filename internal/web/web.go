@@ -148,7 +148,7 @@ type fieldsData struct {
 }
 
 // editView is a Transaction's row shown as a form, with where Discard goes and
-// the hidden "return" value that takes Change and Delete back to the same list.
+// the hidden "return" value that takes Apply and Delete back to the same list.
 type editView struct {
 	ID      int64
 	Fields  *fieldsData

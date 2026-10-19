@@ -99,6 +99,7 @@ func (a *App) categories(w http.ResponseWriter, r *http.Request) {
 				d.EditName = q.Get("name")
 				d.Taken = q.Get("taken") == "1"
 			}
+			break
 		}
 	}
 	if page > 1 {
@@ -165,19 +166,19 @@ func (a *App) renameCategory(w http.ResponseWriter, r *http.Request) {
 	} else if err := a.store.RenameNamed(c.List, id, name); errors.Is(err, store.ErrNameTaken) {
 		reopen = "&edit=" + strconv.FormatInt(id, 10) + "&name=" + url.QueryEscape(name) + "&taken=1"
 	} else if err != nil {
-		a.renameError(w, r, err)
+		a.entryError(w, r, err)
 		return
 	}
 	page, err := a.store.NamedPage(c.List, id)
 	if err != nil {
-		a.renameError(w, r, err)
+		a.entryError(w, r, err)
 		return
 	}
 	http.Redirect(w, r, categoriesURL(c, page)+reopen, http.StatusSeeOther)
 }
 
-// renameError answers a failed rename: 404 for a missing entry, else 500.
-func (a *App) renameError(w http.ResponseWriter, r *http.Request, err error) {
+// entryError answers a failed rename: 404 for a missing entry, else 500.
+func (a *App) entryError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, store.ErrEntryNotFound) {
 		http.NotFound(w, r)
 		return
