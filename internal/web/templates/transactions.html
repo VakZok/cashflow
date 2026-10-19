@@ -36,9 +36,9 @@
 <h1>Transactions</h1>
 {{if .Years}}
 <form class="filters{{if .Filter.Year}} has-year{{end}}" method="get" action="/transactions">
-  <a class="clear" href="/transactions">Clear</a>
+  <a class="clear" href="/transactions?year=all">Clear</a>
   <select class="year" name="year" aria-label="Year" onchange="applyFilter(this.form)">
-    <option value="">Year</option>
+    <option value="all">Year</option>
     {{range .Years}}<option value="{{printf "%04d" .}}"{{if eq . $.Filter.Year}} selected{{end}}>{{printf "%04d" .}}</option>
     {{end}}
   </select>

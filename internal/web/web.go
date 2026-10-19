@@ -393,7 +393,7 @@ func (a *App) updateTransaction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	ret := parseReturn(r.PostFormValue("return"))
+	ret := parseReturn(r.PostFormValue("return"), a.now())
 	if form.failed() {
 		// The Add page has no rows to edit: an unrecognised return shows the row on
 		// the Transactions page, at the page it sits on.
@@ -444,7 +444,7 @@ func (a *App) deleteTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Deleting the only row of the last page lands on the new last page.
-	ret, err := a.clamped(parseReturn(r.PostFormValue("return")))
+	ret, err := a.clamped(parseReturn(r.PostFormValue("return"), a.now()))
 	if err != nil {
 		a.serverError(w, err)
 		return

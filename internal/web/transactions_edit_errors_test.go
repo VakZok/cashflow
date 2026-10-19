@@ -35,14 +35,14 @@ func TestAClearedDescriptionIsHighlightedAndApplySaysMissingFieldsOnTheSameFilte
 	// Disarming after an "Approve" tap goes back to Apply, not to the message.
 	wantAll(t, row, `data-arm data-label="Apply"`)
 	// The row stays open in place, on the same filtered page.
-	wantAll(t, row, `action="/transactions/5#tx-5"`, `name="return" value="transactions:2?search=Item"`)
+	wantAll(t, row, `action="/transactions/5#tx-5"`, `name="return" value="transactions:2?year=all&amp;search=Item"`)
 	wantAll(t, r.Body, "2 / 3", `value="Item"`)
 }
 
 func TestAClearedDateAndAnUnnamedNewCategoryAreHighlighted(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 2)
-	f := changeForm(ta, "", "Item 01", "transactions:1")
+	f := changeForm(ta, "", "Item 01", "transactions:1?year=all")
 	f.Set("category", "new")
 	r := ta.post("/transactions/1", f)
 	row := editRow(r.Body, "1")
@@ -57,7 +57,7 @@ func TestAClearedDateAndAnUnnamedNewCategoryAreHighlighted(t *testing.T) {
 func TestAnUnselectedSubcategoryIsHighlighted(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 2)
-	f := changeForm(ta, "2026-09-01", "Item 01", "transactions:1")
+	f := changeForm(ta, "2026-09-01", "Item 01", "transactions:1?year=all")
 	f.Set("subcategory", "")
 	row := editRow(ta.post("/transactions/1", f).Body, "1")
 	if got := strings.Join(highlighted(row), ","); got != "edit-subcategory" {
@@ -71,7 +71,7 @@ func TestAnUnselectedSubcategoryIsHighlighted(t *testing.T) {
 func TestEditingARowIntoADuplicateShowsAlreadyExistsOnApply(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 12)
-	r := ta.post("/transactions/5", changeForm(ta, "2026-09-06", "item 06", "transactions:2"))
+	r := ta.post("/transactions/5", changeForm(ta, "2026-09-06", "item 06", "transactions:2?year=all"))
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("status %d, want 422", r.Status)
 	}
@@ -87,14 +87,14 @@ func TestEditingARowIntoADuplicateShowsAlreadyExistsOnApply(t *testing.T) {
 func TestAnInvalidAmountInAnEditRowShowsTheBubbleAndLeavesApplyAlone(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 2)
-	f := changeForm(ta, "2026-09-01", "Item 01", "transactions:1")
+	f := changeForm(ta, "2026-09-01", "Item 01", "transactions:1?year=all")
 	f.Set("amount", "0")
 	row := editRow(ta.post("/transactions/1", f).Body, "1")
 	wantAll(t, row, `<span class="bubble" role="alert">1 to 100.000.000</span>`)
 	if b := applyButton(t, row); b != "Apply" {
 		t.Errorf("Apply reads %q, want Apply", b)
 	}
-	if strings.Contains(editRow(ta.get("/transactions?edit=1").Body, "1"), `class="bubble"`) {
+	if strings.Contains(editRow(ta.get("/transactions?year=all&edit=1").Body, "1"), `class="bubble"`) {
 		t.Error("a freshly opened edit row shows the bubble")
 	}
 }
@@ -102,7 +102,7 @@ func TestAnInvalidAmountInAnEditRowShowsTheBubbleAndLeavesApplyAlone(t *testing.
 func TestAHandCraftedEditShowsInvalidInputOnApply(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 2)
-	f := changeForm(ta, "2026-09-01", "Item 01", "transactions:1")
+	f := changeForm(ta, "2026-09-01", "Item 01", "transactions:1?year=all")
 	f.Set("type", "bogus")
 	row := editRow(ta.post("/transactions/1", f).Body, "1")
 	if b := applyButton(t, row); b != "Invalid input" {
@@ -113,7 +113,7 @@ func TestAHandCraftedEditShowsInvalidInputOnApply(t *testing.T) {
 func TestNoErrorBoxIsLeftOnTheTransactionsPage(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 2)
-	f := changeForm(ta, "", "", "transactions:1")
+	f := changeForm(ta, "", "", "transactions:1?year=all")
 	f.Set("amount", "0")
 	f.Set("type", "bogus")
 	body := ta.post("/transactions/1", f).Body
@@ -122,7 +122,7 @@ func TestNoErrorBoxIsLeftOnTheTransactionsPage(t *testing.T) {
 			t.Errorf("the page still has %q", gone)
 		}
 	}
-	if b := applyButton(t, editRow(ta.get("/transactions?edit=1").Body, "1")); b != "Apply" {
+	if b := applyButton(t, editRow(ta.get("/transactions?year=all&edit=1").Body, "1")); b != "Apply" {
 		t.Errorf("a freshly opened row's Apply reads %q", b)
 	}
 }
