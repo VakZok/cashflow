@@ -86,7 +86,7 @@ func (s *Store) ReplaceRepeating(entries []RepeatingEntry) error {
 }
 
 // BookRepeating creates one Transaction per row of the stored list on date,
-// in one transaction, skipping each row that would be a Duplicate of a
+// in one database transaction, skipping each row that would be a Duplicate of a
 // Transaction already there (including one booked from an earlier row).
 func (s *Store) BookRepeating(date string) (booked, skipped int, err error) {
 	tx, err := s.db.Begin()

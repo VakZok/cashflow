@@ -471,10 +471,16 @@ func addedText(booked, skipped int) string {
 		return "All Transactions already exist. Saved List."
 	case skipped == 0:
 		return "Added " + transactionCount(booked) + " and saved List!"
-	case skipped == 1:
-		return "Added " + transactionCount(booked) + ", skipped 1 existing one, and saved List!"
 	}
-	return "Added " + transactionCount(booked) + ", skipped " + strconv.Itoa(skipped) + " existing ones, and saved List!"
+	return "Added " + transactionCount(booked) + ", skipped " + existingCount(skipped) + ", and saved List!"
+}
+
+// existingCount reads "1 existing one" or "n existing ones".
+func existingCount(n int) string {
+	if n == 1 {
+		return "1 existing one"
+	}
+	return strconv.Itoa(n) + " existing ones"
 }
 
 // transactionCount reads "1 Transaction" or "n Transactions".
