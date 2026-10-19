@@ -71,18 +71,26 @@ func TestTheYearDropdownListsOnlyYearsWithTransactions(t *testing.T) {
 	}
 }
 
-func TestTheMonthDropdownAppearsOnceAYearIsChosen(t *testing.T) {
+func TestTheMonthDropdownListsOnlyMonthsOfTheYearWithTransactions(t *testing.T) {
 	ta := newTestApp(t)
-	addDated(ta, "2026-01-01")
+	addDated(ta, "2026-12-31", "2026-03-01", "2025-06-01")
 	body := ta.get("/transactions?year=2026").Body
 	wantAll(t, selectHTML(body, "year"), `<option value="2026" selected>2026</option>`)
 	months := selectHTML(body, "month")
-	wantAll(t, months, `<option value="">Month</option>`, `<option value="1">Jan</option>`, `<option value="12">Dec</option>`)
-	wantNone(t, months, "selected")
-	if strings.Count(months, "<option") != 13 {
-		t.Errorf("want All and 12 months:\n%s", months)
+	wantAll(t, months, `<option value="">Month</option>`, `<option value="3">Mar</option>`, `<option value="12">Dec</option>`)
+	wantNone(t, months, "selected", "Jun")
+	if strings.Count(months, "<option") != 3 || strings.Index(months, "Mar") > strings.Index(months, "Dec") {
+		t.Errorf("want All, then Mar and Dec in order:\n%s", months)
 	}
 	wantAll(t, selectHTML(ta.get("/transactions?year=2026&month=3").Body, "month"), `<option value="3" selected>Mar</option>`)
+}
+
+func TestAMonthWithoutTransactionsFallsBackToTheWholeYear(t *testing.T) {
+	ta := newTestApp(t)
+	addDated(ta, "2026-03-01", "2026-12-31")
+	body := ta.get("/transactions?year=2026&month=6").Body
+	wantAll(t, body, "On 2026-03-01", "On 2026-12-31")
+	wantNone(t, selectHTML(body, "month"), "selected")
 }
 
 func TestTheFilterControlsSubmitOnChangeWithoutAnApplyButton(t *testing.T) {
@@ -151,7 +159,7 @@ func TestAnEmptyFilteredResultIsNotAnEmptyDatabase(t *testing.T) {
 	wantNone(t, empty, `class="filters`, "No matching Transactions.")
 
 	addDated(ta, "2026-01-01")
-	r := ta.get("/transactions?year=2026&month=2")
+	r := ta.get("/transactions?year=2026&month=1&type=income")
 	wantAll(t, r.Body, "No matching Transactions.", `name="year"`, `name="month"`)
 	wantNone(t, r.Body, "No Transactions yet.", `aria-label="Newer"`)
 }

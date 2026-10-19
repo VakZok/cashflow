@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
 <title>Report · Money Manager</title>
+{{template "theme-style"}}
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
   nav.period { display: flex; gap: .5rem; align-items: center; margin: 1rem 0; }
@@ -69,7 +70,7 @@
   new Chart(document.getElementById("pie"), {
     type: "pie",
     data: { labels: data.labels, datasets: [{ data: data.amounts, backgroundColor: data.colours }] },
-    options: { plugins: { legend: { display: false } } }
+    options: { animation: false, plugins: { legend: { display: false } } }
   });
 </script>
 {{template "nav" "report"}}

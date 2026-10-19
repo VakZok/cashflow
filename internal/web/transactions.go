@@ -22,8 +22,8 @@ type transactionsData struct {
 	Edit         *editView // the row being edited, nil if none
 
 	Filter filter
-	Years  []int // the Year dropdown's choices besides All; none means there are no Transactions
-	Months []monthChoice
+	Years  []int            // the Year dropdown's choices besides All; none means there are no Transactions
+	Months []monthChoice    // the Month dropdown's choices besides All: the chosen Year's months with Transactions
 	Types  []store.TypeSpec // the Type dropdown's choices besides All
 	// Groupings are the Category and Subcategory dropdowns of the chosen Type, nil if it has none.
 	Groupings *groupings
@@ -176,6 +176,15 @@ func (f filter) among(years []int) filter {
 	return f
 }
 
+// amongMonths drops a Month that no Transaction of the Year is dated in: it
+// is not a choice of the Month dropdown.
+func (f filter) amongMonths(months []int) filter {
+	if f.Month != 0 && !slices.Contains(months, f.Month) {
+		f.Month = 0
+	}
+	return f
+}
+
 // store is the filter as the store applies it.
 func (f filter) store() store.Filter {
 	sf := store.Filter{Type: f.Type, CategoryID: f.Category, SubcategoryID: f.Subcategory, HoldingID: f.Holding, Search: f.Search}
@@ -236,15 +245,15 @@ type monthChoice struct {
 	Label  string
 }
 
-// monthChoices are the Month dropdown's choices besides All, January first.
-var monthChoices = func() []monthChoice {
-	out := make([]monthChoice, 12)
-	for i := range out {
-		m := time.Month(i + 1)
-		out[i] = monthChoice{int(m), m.String()[:3]}
+// monthChoices are the Month dropdown's choices besides All for the months
+// (1-12), in their order.
+func monthChoices(months []int) []monthChoice {
+	out := make([]monthChoice, len(months))
+	for i, m := range months {
+		out[i] = monthChoice{m, time.Month(m).String()[:3]}
 	}
 	return out
-}()
+}
 
 // returnTo is where Apply, Delete and Discard take the user back to: the add
 // page, or a page of the Transactions page with its filter. It is a closed set
@@ -340,6 +349,14 @@ func (a *App) renderTransactions(w http.ResponseWriter, status, page int, f filt
 		return
 	}
 	f = f.among(years)
+	var months []int
+	if f.Year != 0 {
+		if months, err = a.store.TransactionMonths(f.Year); err != nil {
+			a.serverError(w, err)
+			return
+		}
+		f = f.amongMonths(months)
+	}
 	g, f, err := a.groupings(f)
 	if err != nil {
 		a.serverError(w, err)
@@ -353,7 +370,7 @@ func (a *App) renderTransactions(w http.ResponseWriter, status, page int, f filt
 	pages := pageCount(total)
 	page = clampPage(page, total)
 
-	d := transactionsData{Page: page, Pages: pages, PageURL: transactionsURL(f, page), Filter: f, Years: years, Months: monthChoices, Types: filterTypes, Groupings: g}
+	d := transactionsData{Page: page, Pages: pages, PageURL: transactionsURL(f, page), Filter: f, Years: years, Months: monthChoices(months), Types: filterTypes, Groupings: g}
 	if total > 0 {
 		if d.Transactions, err = a.store.ListTransactionsPage(f.store(), store.PageSize, (page-1)*store.PageSize); err != nil {
 			a.serverError(w, err)

@@ -61,7 +61,7 @@ func TestChangeUpdatesTheTransactionAndLandsOnItsRow(t *testing.T) {
 		t.Fatalf("status %d, location %q; want 303 /#tx-1\n%s", r.Status, r.Location, r.Body)
 	}
 	row := editRow(ta.follow(r).Body, "1")
-	wantAll(t, row, "Late lunch", ">15<", "2026-10-04")
+	wantAll(t, row, "Late lunch", ">−15<", "2026-10-04")
 	if strings.Contains(row, ">Lunch<") {
 		t.Errorf("old description still shown: %s", row)
 	}
@@ -76,7 +76,7 @@ func TestChangeWithoutChangingAnythingSucceeds(t *testing.T) {
 	if r.Status != http.StatusSeeOther {
 		t.Fatalf("status %d, want 303\n%s", r.Status, r.Body)
 	}
-	wantAll(t, editRow(ta.follow(r).Body, "1"), "Lunch", ">12<", "Food", "Cafe")
+	wantAll(t, editRow(ta.follow(r).Body, "1"), "Lunch", ">−12<", "Food", "Cafe")
 }
 
 func TestChangingTheTypeAppliesTheNewTypesFields(t *testing.T) {
@@ -90,7 +90,7 @@ func TestChangingTheTypeAppliesTheNewTypesFields(t *testing.T) {
 			t.Fatalf("%d %s->%s: status %d\n%s", i, from, to, r.Status, r.Body)
 		}
 		row := editRow(ta.follow(r).Body, "1")
-		wantAll(t, row, ">20<", "2026-10-03")
+		wantAll(t, row, "20</span>", "2026-10-03")
 		if to == "investment" || to == "divestment" {
 			wantAll(t, row, "<span>Other</span>")
 			if strings.Contains(row, "Misc") || strings.Contains(row, "Thing") {
@@ -127,7 +127,7 @@ func TestChangeRejectsWhatCreateRejectsAndKeepsTheRowInEditMode(t *testing.T) {
 		wantAll(t, row, `role="alert"`, `action="/transactions/1#tx-1"`)
 	}
 	// The stored Transaction is unchanged.
-	wantAll(t, editRow(ta.get("/").Body, "1"), "Lunch", ">10<")
+	wantAll(t, editRow(ta.get("/").Body, "1"), "Lunch", ">−10<")
 }
 
 func TestEditIsNeverADuplicateOfItselfButOfOthers(t *testing.T) {

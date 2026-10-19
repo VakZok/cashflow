@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 )
 
@@ -245,6 +246,27 @@ func (s *Store) TransactionYears() ([]int, error) {
 			return nil, err
 		}
 		out = append(out, y)
+	}
+	return out, rows.Err()
+}
+
+// TransactionMonths returns the months (1-12) of the year that have at least
+// one Transaction, January first.
+func (s *Store) TransactionMonths(year int) ([]int, error) {
+	rows, err := s.db.Query(
+		"SELECT DISTINCT CAST(substr(date, 6, 2) AS INTEGER) AS m FROM transactions WHERE date >= ? AND date < ? ORDER BY m",
+		fmt.Sprintf("%04d-01-01", year), fmt.Sprintf("%04d-01-01", year+1))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []int
+	for rows.Next() {
+		var m int
+		if err := rows.Scan(&m); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
 	}
 	return out, rows.Err()
 }

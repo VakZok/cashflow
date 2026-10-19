@@ -52,14 +52,14 @@ func signedEuro(amount int64, positive bool) (text, class string) {
 	return "−" + formatEuro(amount), "net-negative"
 }
 
-// signedAmount renders a Transaction amount as a bare number (1.234) in a
-// span coloured by the Sign of its Type, for the Transaction lists.
+// signedAmount renders a Transaction amount with the Sign of its Type and no
+// euro symbol (+1.234 or −1.234, true minus U+2212), for the Transaction lists.
 func signedAmount(typ string, amount int64) template.HTML {
-	class := "net-negative"
+	sign := "−"
 	if spec, _ := store.SpecFor(typ); spec.Positive {
-		class = "net-positive"
+		sign = "+"
 	}
-	return template.HTML(`<span class="amount ` + class + `">` + groupThousands(amount) + `</span>`)
+	return template.HTML(`<span class="amount">` + sign + groupThousands(amount) + `</span>`)
 }
 
 // formatEuro renders whole euros as €1.234 (dot as thousands separator).
