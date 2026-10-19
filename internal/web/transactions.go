@@ -23,8 +23,8 @@ type transactionsData struct {
 	Edit         *editView // the row being edited, nil if none
 
 	Filter filter
-	Years  []int            // the Year dropdown's choices besides All; none means there are no Transactions
-	Months []monthChoice    // the Month dropdown's choices besides All: the chosen Year's months with Transactions
+	Years  []int            // the Year dropdown's choices besides All: years with Transactions and the current one; none means there are no Transactions
+	Months []monthChoice    // the Month dropdown's choices besides All: the chosen Year's months with Transactions, and the current one
 	Types  []store.TypeSpec // the Type dropdown's choices besides All
 	// Groupings are the Category and Subcategory dropdowns of the chosen Type, nil if it has none.
 	Groupings *groupings
@@ -71,9 +71,16 @@ var filterTypes = func() []store.TypeSpec {
 	return out
 }()
 
-// parseFilter reads ?year=&month=&type=&category=&subcategory=&holding=; anything
-// missing or invalid is All.
-func parseFilter(q url.Values) filter {
+// filterParams are the URL parameters that carry a filter.
+var filterParams = []string{"year", "month", "type", "category", "subcategory", "holding", "search"}
+
+// parseFilter reads ?year=&month=&type=&category=&subcategory=&holding=&search=.
+// Without any of them it is now's year and month; otherwise anything missing
+// or invalid is All (so "year=all" is every year).
+func parseFilter(q url.Values, now time.Time) filter {
+	if !slices.ContainsFunc(filterParams, q.Has) {
+		return filter{Year: now.Year(), Month: int(now.Month())}
+	}
 	var f filter
 	if y := q.Get("year"); len(y) == len(yearLayout) && wholeNumber.MatchString(y) {
 		f.Year, _ = strconv.Atoi(y)
@@ -168,8 +175,21 @@ func (a *App) groupings(f filter) (*groupings, filter, error) {
 	return g, f, nil
 }
 
-// among drops a Year that no Transaction is dated in (with its Month): it is
-// not a choice of the Year dropdown.
+// withCurrent is the dropdown's choices with the current one added in its
+// place, keeping the order (descending for Years, ascending for Months).
+func withCurrent(choices []int, current int, descending bool) []int {
+	if slices.Contains(choices, current) {
+		return choices
+	}
+	out := append(slices.Clone(choices), current)
+	slices.Sort(out)
+	if descending {
+		slices.Reverse(out)
+	}
+	return out
+}
+
+// among drops a Year that is not a choice of the Year dropdown (with its Month).
 func (f filter) among(years []int) filter {
 	if f.Year != 0 && !slices.Contains(years, f.Year) {
 		f.Year, f.Month = 0, 0
@@ -177,8 +197,7 @@ func (f filter) among(years []int) filter {
 	return f
 }
 
-// amongMonths drops a Month that no Transaction of the Year is dated in: it
-// is not a choice of the Month dropdown.
+// amongMonths drops a Month that is not a choice of the Month dropdown.
 func (f filter) amongMonths(months []int) filter {
 	if f.Month != 0 && !slices.Contains(months, f.Month) {
 		f.Month = 0
@@ -204,11 +223,12 @@ func (f filter) store() store.Filter {
 	return sf
 }
 
-// query is the filter's URL parameters, "" when it narrows nothing.
+// query is the filter's URL parameters. It always carries the Year, "all"
+// for All, as no parameters at all is the current month.
 func (f filter) query() string {
-	var parts []string
+	parts := []string{"year=all"}
 	if f.Year != 0 {
-		parts = append(parts, "year="+fmt.Sprintf("%04d", f.Year))
+		parts[0] = "year=" + fmt.Sprintf("%04d", f.Year)
 	}
 	if f.Month != 0 {
 		parts = append(parts, "month="+strconv.Itoa(f.Month))
@@ -232,15 +252,11 @@ func (f filter) query() string {
 }
 
 // Active reports whether the filter narrows anything.
-func (f filter) Active() bool { return f.query() != "" }
+func (f filter) Active() bool { return f != filter{} }
 
 // transactionsURL is the page of the Transactions page narrowed by the filter.
 func transactionsURL(f filter, page int) string {
-	q := f.query()
-	if q != "" {
-		q += "&"
-	}
-	return "/transactions?" + q + "page=" + strconv.Itoa(page)
+	return "/transactions?" + f.query() + "&page=" + strconv.Itoa(page)
 }
 
 // monthChoice is a choice of the Month dropdown.
@@ -270,8 +286,8 @@ type returnTo struct {
 const returnAdd, returnTransactionsPrefix = "add", "transactions:"
 
 // parseReturn reads the hidden "return" value back; anything unrecognised is
-// the add page, and an unrecognised filter narrows nothing.
-func parseReturn(s string) returnTo {
+// the add page, and the filter is read as parseFilter reads it.
+func parseReturn(s string, now time.Time) returnTo {
 	rest, ok := strings.CutPrefix(s, returnTransactionsPrefix)
 	if !ok {
 		return returnTo{}
@@ -285,7 +301,7 @@ func parseReturn(s string) returnTo {
 		return returnTo{}
 	}
 	q, _ := url.ParseQuery(query)
-	return returnTo{Page: n, Filter: parseFilter(q)}
+	return returnTo{Page: n, Filter: parseFilter(q, now)}
 }
 
 // String is the value of the hidden "return" input.
@@ -293,11 +309,7 @@ func (r returnTo) String() string {
 	if r.Page == 0 {
 		return returnAdd
 	}
-	s := returnTransactionsPrefix + strconv.Itoa(r.Page)
-	if q := r.Filter.query(); q != "" {
-		s += "?" + q
-	}
-	return s
+	return returnTransactionsPrefix + strconv.Itoa(r.Page) + "?" + r.Filter.query()
 }
 
 // URL is the page itself, which is where Discard and Delete go.
@@ -324,8 +336,9 @@ func pageCount(total int) int { return (total + store.PageSize - 1) / store.Page
 // clampPage is the nearest valid page; page 1 even when there are no Transactions.
 func clampPage(page, total int) int { return max(1, min(page, pageCount(total))) }
 
-// transactions renders the Transactions page. A bad page parameter falls back
-// to the nearest valid page, a bad filter parameter to All.
+// transactions renders the Transactions page, on the current month without
+// filter parameters. A bad page parameter falls back to the nearest valid
+// page, a bad filter parameter to All.
 func (a *App) transactions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	page, _ := strconv.Atoi(q.Get("page"))
@@ -341,7 +354,7 @@ func (a *App) transactions(w http.ResponseWriter, r *http.Request) {
 			edit = &editing{ID: id, Form: formOf(t)}
 		}
 	}
-	a.renderTransactions(w, http.StatusOK, page, parseFilter(q), edit)
+	a.renderTransactions(w, http.StatusOK, page, parseFilter(q, a.now()), edit)
 }
 
 // renderTransactions renders the Transactions page at the page, narrowed by
@@ -352,12 +365,21 @@ func (a *App) renderTransactions(w http.ResponseWriter, status, page int, f filt
 		a.serverError(w, err)
 		return
 	}
+	// The current year and month are choices even before they have
+	// Transactions; without any Transaction there are no choices at all.
+	now := a.now()
+	if len(years) > 0 {
+		years = withCurrent(years, now.Year(), true)
+	}
 	f = f.among(years)
 	var months []int
 	if f.Year != 0 {
 		if months, err = a.store.TransactionMonths(f.Year); err != nil {
 			a.serverError(w, err)
 			return
+		}
+		if f.Year == now.Year() {
+			months = withCurrent(months, int(now.Month()), false)
 		}
 		f = f.amongMonths(months)
 	}

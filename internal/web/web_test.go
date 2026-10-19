@@ -65,7 +65,7 @@ func TestPastAndFutureDatesAreAccepted(t *testing.T) {
 		if r.Status != http.StatusSeeOther {
 			t.Fatalf("date %s: status %d, want 303", date, r.Status)
 		}
-		if body := ta.get("/transactions").Body; !strings.Contains(body, date) {
+		if body := ta.get("/transactions?year=all").Body; !strings.Contains(body, date) {
 			t.Errorf("list missing %s", date)
 		}
 	}

@@ -22,12 +22,12 @@ func TestClickingARowOnTheTransactionsPageOpensItsEditFormOnTheSamePage(t *testi
 	ta := newTestApp(t)
 	addTransactions(ta, 12)
 
-	wantAll(t, editRow(ta.get("/transactions?page=2").Body, "5"), `href="/transactions?page=2&amp;edit=5#tx-5"`)
+	wantAll(t, editRow(ta.get("/transactions?year=all&page=2").Body, "5"), `href="/transactions?year=all&amp;page=2&amp;edit=5#tx-5"`)
 
-	r := ta.get("/transactions?page=2&edit=5")
+	r := ta.get("/transactions?year=all&page=2&edit=5")
 	row := editRow(r.Body, "5")
-	wantAll(t, row, `action="/transactions/5#tx-5"`, `name="return" value="transactions:2"`, `value="Item 05"`,
-		`href="/transactions?page=2"`, "Discard", "Apply", "Delete", `formaction="/transactions/5/delete"`)
+	wantAll(t, row, `action="/transactions/5#tx-5"`, `name="return" value="transactions:2?year=all"`, `value="Item 05"`,
+		`href="/transactions?year=all&amp;page=2"`, "Discard", "Apply", "Delete", `formaction="/transactions/5/delete"`)
 	if strings.Index(row, "Apply") >= strings.Index(row, "Discard") || strings.Index(row, "Discard") >= strings.Index(row, "Delete") {
 		t.Errorf("buttons are not Apply, Discard, Delete in the markup:\n%s", row)
 	}
@@ -51,16 +51,16 @@ func TestChangeOnTheTransactionsPageFollowsTheRowToItsNewPage(t *testing.T) {
 	addTransactions(ta, 12)
 
 	// Same date: back to the same page, at the row.
-	r := ta.post("/transactions/5", changeForm(ta, "2026-09-05", "Item 05 changed", "transactions:2"))
-	if r.Status != http.StatusSeeOther || r.Location != "/transactions?page=2#tx-5" {
-		t.Fatalf("status %d, location %q; want 303 /transactions?page=2#tx-5\n%s", r.Status, r.Location, r.Body)
+	r := ta.post("/transactions/5", changeForm(ta, "2026-09-05", "Item 05 changed", "transactions:2?year=all"))
+	if r.Status != http.StatusSeeOther || r.Location != "/transactions?year=all&page=2#tx-5" {
+		t.Fatalf("status %d, location %q; want 303 /transactions?year=all&page=2#tx-5\n%s", r.Status, r.Location, r.Body)
 	}
 	wantAll(t, ta.follow(r).Body, "Item 05 changed")
 
 	// A new date moves it: from page 1 to the oldest, page 3.
-	r = ta.post("/transactions/12", changeForm(ta, "2026-08-01", "Item 12", "transactions:1"))
-	if r.Status != http.StatusSeeOther || r.Location != "/transactions?page=3#tx-12" {
-		t.Fatalf("status %d, location %q; want 303 /transactions?page=3#tx-12", r.Status, r.Location)
+	r = ta.post("/transactions/12", changeForm(ta, "2026-08-01", "Item 12", "transactions:1?year=all"))
+	if r.Status != http.StatusSeeOther || r.Location != "/transactions?year=all&page=3#tx-12" {
+		t.Fatalf("status %d, location %q; want 303 /transactions?year=all&page=3#tx-12", r.Status, r.Location)
 	}
 	wantAll(t, editRow(ta.follow(r).Body, "12"), "2026-08-01")
 }
@@ -84,16 +84,16 @@ func TestInvalidChangeWithAnUnrecognisedReturnShowsTheRowOnTheTransactionsPage(t
 		if r.Status != http.StatusUnprocessableEntity {
 			t.Fatalf("return %q: status %d, want 422", ret, r.Status)
 		}
-		wantAll(t, editRow(r.Body, "5"), `action="/transactions/5#tx-5"`, `name="return" value="transactions:2"`)
+		wantAll(t, editRow(r.Body, "5"), `action="/transactions/5#tx-5"`, `name="return" value="transactions:2?year=all"`)
 	}
 }
 
 func TestDeleteFromTheTransactionsPageReturnsToTheSamePage(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 12)
-	r := ta.post("/transactions/5/delete", url.Values{"return": {"transactions:2"}})
-	if r.Status != http.StatusSeeOther || r.Location != "/transactions?page=2" {
-		t.Fatalf("status %d, location %q; want 303 /transactions?page=2", r.Status, r.Location)
+	r := ta.post("/transactions/5/delete", url.Values{"return": {"transactions:2?year=all"}})
+	if r.Status != http.StatusSeeOther || r.Location != "/transactions?year=all&page=2" {
+		t.Fatalf("status %d, location %q; want 303 /transactions?year=all&page=2", r.Status, r.Location)
 	}
 	body := ta.follow(r).Body
 	wantAll(t, body, "2 / 3", "Item 02")
@@ -105,9 +105,9 @@ func TestDeleteFromTheTransactionsPageReturnsToTheSamePage(t *testing.T) {
 func TestDeletingTheOnlyRowOfTheLastPageLandsOnTheNewLastPage(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 11)
-	r := ta.post("/transactions/1/delete", url.Values{"return": {"transactions:3"}})
-	if r.Status != http.StatusSeeOther || r.Location != "/transactions?page=2" {
-		t.Fatalf("status %d, location %q; want 303 /transactions?page=2", r.Status, r.Location)
+	r := ta.post("/transactions/1/delete", url.Values{"return": {"transactions:3?year=all"}})
+	if r.Status != http.StatusSeeOther || r.Location != "/transactions?year=all&page=2" {
+		t.Fatalf("status %d, location %q; want 303 /transactions?year=all&page=2", r.Status, r.Location)
 	}
 	wantAll(t, ta.follow(r).Body, "Item 06", "2 / 2")
 }
@@ -115,9 +115,9 @@ func TestDeletingTheOnlyRowOfTheLastPageLandsOnTheNewLastPage(t *testing.T) {
 func TestDeletingTheLastTransactionShowsTheEmptyState(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 1)
-	r := ta.post("/transactions/1/delete", url.Values{"return": {"transactions:1"}})
-	if r.Status != http.StatusSeeOther || r.Location != "/transactions?page=1" {
-		t.Fatalf("status %d, location %q; want 303 /transactions?page=1", r.Status, r.Location)
+	r := ta.post("/transactions/1/delete", url.Values{"return": {"transactions:1?year=all"}})
+	if r.Status != http.StatusSeeOther || r.Location != "/transactions?year=all&page=1" {
+		t.Fatalf("status %d, location %q; want 303 /transactions?year=all&page=1", r.Status, r.Location)
 	}
 	wantAll(t, ta.follow(r).Body, "No Transactions yet.")
 }
@@ -135,17 +135,17 @@ func TestInvalidChangeFromTheTransactionsPageRerendersThatPage(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 12)
 
-	bad := changeForm(ta, "2026-09-05", "Item 05", "transactions:2")
+	bad := changeForm(ta, "2026-09-05", "Item 05", "transactions:2?year=all")
 	bad.Set("amount", "0")
 	r := ta.post("/transactions/5", bad)
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("status %d, want 422", r.Status)
 	}
 	wantAll(t, r.Body, "2 / 3", "Item 03")
-	wantAll(t, editRow(r.Body, "5"), `name="return" value="transactions:2"`, `class="bubble"`)
+	wantAll(t, editRow(r.Body, "5"), `name="return" value="transactions:2?year=all"`, `class="bubble"`)
 
 	// A Duplicate of another Transaction.
-	dup := changeForm(ta, "2026-09-06", "Item 06", "transactions:2")
+	dup := changeForm(ta, "2026-09-06", "Item 06", "transactions:2?year=all")
 	r = ta.post("/transactions/5", dup)
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("duplicate: status %d, want 422", r.Status)
@@ -175,8 +175,8 @@ func TestATamperedReturnValueFallsBackToTheAddPage(t *testing.T) {
 func TestAReturnValuePastTheEndIsClampedToTheLastPage(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 12)
-	r := ta.post("/transactions/12/delete", url.Values{"return": {"transactions:999"}})
-	if r.Location != "/transactions?page=3" {
-		t.Errorf("location %q, want /transactions?page=3", r.Location)
+	r := ta.post("/transactions/12/delete", url.Values{"return": {"transactions:999?year=all"}})
+	if r.Location != "/transactions?year=all&page=3" {
+		t.Errorf("location %q, want /transactions?year=all&page=3", r.Location)
 	}
 }

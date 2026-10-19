@@ -71,7 +71,7 @@ func TestRenameChangesTheNameOnTransactionsAndRepeatingEntries(t *testing.T) {
 		t.Fatalf("status %d, Location %q", r.Status, r.Location)
 	}
 	wantAll(t, ta.follow(r).Body, "<span>Groceries</span>", "1 Trans. + 1 Rep.</span>")
-	for _, path := range []string{"/transactions", "/", "/repeating"} {
+	for _, path := range []string{"/transactions?year=all", "/", "/repeating"} {
 		body := ta.get(path).Body
 		wantAll(t, body, "Groceries")
 		if strings.Contains(body, "Food") {

@@ -56,14 +56,14 @@ func TestChoosingAMonthShowsOnlyThatCalendarMonthOfTheYear(t *testing.T) {
 	wantNone(t, body, "On 2027-01-01", "On 2026-03-01")
 }
 
-func TestTheYearDropdownListsOnlyYearsWithTransactions(t *testing.T) {
+func TestTheYearDropdownListsYearsWithTransactionsAndTheCurrentOne(t *testing.T) {
 	ta := newTestApp(t)
-	addDated(ta, "2024-05-05", "2026-01-01", "2026-07-07")
-	body := ta.get("/transactions").Body
+	addDated(ta, "2023-05-05", "2025-01-01", "2025-07-07")
+	body := ta.get("/transactions?year=all").Body
 	years := selectHTML(body, "year")
-	wantAll(t, years, `<option value="">Year</option>`, `<option value="2026">2026</option>`, `<option value="2024">2024</option>`)
-	wantNone(t, years, "2025", "selected")
-	if strings.Index(years, "Year") > strings.Index(years, "2026") || strings.Index(years, "2026") > strings.Index(years, "2024") {
+	wantAll(t, years, `<option value="all">Year</option>`, `<option value="2026">2026</option>`, `<option value="2025">2025</option>`, `<option value="2023">2023</option>`)
+	wantNone(t, years, "2024", "selected")
+	if strings.Index(years, "Year") > strings.Index(years, "2026") || strings.Index(years, "2026") > strings.Index(years, "2025") || strings.Index(years, "2025") > strings.Index(years, "2023") {
 		t.Errorf("years are not All, then newest first:\n%s", years)
 	}
 	if selectHTML(body, "month") != "" {
@@ -71,18 +71,22 @@ func TestTheYearDropdownListsOnlyYearsWithTransactions(t *testing.T) {
 	}
 }
 
-func TestTheMonthDropdownListsOnlyMonthsOfTheYearWithTransactions(t *testing.T) {
+func TestTheMonthDropdownListsMonthsOfTheYearWithTransactionsAndTheCurrentOne(t *testing.T) {
 	ta := newTestApp(t)
 	addDated(ta, "2026-12-31", "2026-03-01", "2025-06-01")
 	body := ta.get("/transactions?year=2026").Body
 	wantAll(t, selectHTML(body, "year"), `<option value="2026" selected>2026</option>`)
 	months := selectHTML(body, "month")
-	wantAll(t, months, `<option value="">Month</option>`, `<option value="3">Mar</option>`, `<option value="12">Dec</option>`)
+	wantAll(t, months, `<option value="">Month</option>`, `<option value="3">Mar</option>`, `<option value="10">Oct</option>`, `<option value="12">Dec</option>`)
 	wantNone(t, months, "selected", "Jun")
-	if strings.Count(months, "<option") != 3 || strings.Index(months, "Mar") > strings.Index(months, "Dec") {
-		t.Errorf("want All, then Mar and Dec in order:\n%s", months)
+	if strings.Count(months, "<option") != 4 || strings.Index(months, "Mar") > strings.Index(months, "Oct") || strings.Index(months, "Oct") > strings.Index(months, "Dec") {
+		t.Errorf("want All, then Mar, Oct and Dec in order:\n%s", months)
 	}
 	wantAll(t, selectHTML(ta.get("/transactions?year=2026&month=3").Body, "month"), `<option value="3" selected>Mar</option>`)
+	// The current month is only added to the current year.
+	if months := selectHTML(ta.get("/transactions?year=2025").Body, "month"); strings.Count(months, "<option") != 2 {
+		t.Errorf("want All and Jun for 2025:\n%s", months)
+	}
 }
 
 func TestAMonthWithoutTransactionsFallsBackToTheWholeYear(t *testing.T) {
@@ -135,12 +139,12 @@ func TestClearIsTextOnlyAndRow1IsInThirdsInBothStates(t *testing.T) {
 	ta := newTestApp(t)
 	addDated(ta, "2026-01-01")
 	clear := regexp.MustCompile(`(?s)<a class="clear".*?</a>`)
-	for _, path := range []string{"/transactions", "/transactions?year=2026&month=1"} {
+	for _, path := range []string{"/transactions?year=all", "/transactions?year=2026&month=1"} {
 		got := clear.FindString(ta.get(path).Body)
-		wantAll(t, got, `href="/transactions"`, ">Clear</a>")
+		wantAll(t, got, `href="/transactions?year=all"`, ">Clear</a>")
 		wantNone(t, got, "<svg")
 	}
-	wantAll(t, ta.get("/transactions").Body, `class="filters"`, "grid-template-columns: repeat(3, minmax(0, 1fr))", ".filters:not(.has-year) select.year { grid-column: span 2; }")
+	wantAll(t, ta.get("/transactions?year=all").Body, `class="filters"`, "grid-template-columns: repeat(3, minmax(0, 1fr))", ".filters:not(.has-year) select.year { grid-column: span 2; }")
 	wantAll(t, ta.get("/transactions?year=2026").Body, `class="filters has-year"`)
 }
 
@@ -148,7 +152,7 @@ func TestNoFilterDropdownOffersAll(t *testing.T) {
 	ta := newTestApp(t)
 	addDated(ta, "2026-01-01")
 	body := ta.get("/transactions?year=2026").Body
-	wantAll(t, body, `<option value="">Year</option>`, `<option value="">Month</option>`, `<option value="">Type</option>`)
+	wantAll(t, body, `<option value="all">Year</option>`, `<option value="">Month</option>`, `<option value="">Type</option>`)
 	wantNone(t, body, `<option value="">All</option>`)
 }
 
@@ -209,14 +213,15 @@ func TestDeleteFromAFilteredPageReturnsToItClamped(t *testing.T) {
 	wantAll(t, ta.follow(r).Body, "1 / 1", "Aug 06")
 }
 
-func TestATamperedFilterInTheReturnValueNarrowsNothing(t *testing.T) {
+func TestATamperedFilterInTheReturnValueFallsBack(t *testing.T) {
 	ta := newTestApp(t)
 	addMonths(ta, 6)
 	for i, c := range []struct{ ret, want string }{
-		{"transactions:1?year=evil", "/transactions?page=1"},
-		{"transactions:1?year=2026%26page%3D9", "/transactions?page=1"},
-		{"transactions:1?month=8", "/transactions?page=1"},
-		{"transactions:1?%zz", "/transactions?page=1"},
+		{"transactions:1?year=evil", "/transactions?year=all&page=1"},
+		{"transactions:1?year=2026%26page%3D9", "/transactions?year=all&page=1"},
+		{"transactions:1?month=8", "/transactions?year=all&page=1"},
+		// Without readable filter parameters it is the current month, as the page opens.
+		{"transactions:1?%zz", "/transactions?year=2026&month=10&page=1"},
 		{"transactions:1?year=2026&month=//evil.example", "/transactions?year=2026&page=1"},
 	} {
 		if r := ta.post(fmt.Sprintf("/transactions/%d/delete", 12-i), url.Values{"return": {c.ret}}); r.Location != c.want {
@@ -441,7 +446,7 @@ func TestThePagerAndEditKeepTypeAndGroupings(t *testing.T) {
 	}
 	ta.post("/transactions", url.Values{"type": {"income"}, "date": {"2026-08-09"}, "amount": {"3"}, "description": {"Inc"},
 		"category": {"1"}, "subcategory": {"1"}})
-	q := "type=expense&category=1&subcategory=1"
+	q := "year=all&type=expense&category=1&subcategory=1"
 	p1 := ta.get("/transactions?" + q).Body
 	wantAll(t, p1, "1 / 2", `href="/transactions?`+strings.ReplaceAll(q, "&", "&amp;")+`&amp;page=2" aria-label="Older"`,
 		`href="/transactions?`+strings.ReplaceAll(q, "&", "&amp;")+`&amp;page=1&amp;edit=7#tx-7"`)
@@ -459,25 +464,25 @@ func TestChangeDeleteAndDiscardReturnToThePageWithTypeAndGroupings(t *testing.T)
 	form := changeForm(ta, "2026-08-01", "Exp 01", ret)
 	form.Set("type", "income")
 	r := ta.post("/transactions/1", form)
-	if r.Status != 303 || r.Location != "/transactions?type=expense&category=1&subcategory=1&page=1" {
+	if r.Status != 303 || r.Location != "/transactions?year=all&type=expense&category=1&subcategory=1&page=1" {
 		t.Fatalf("status %d, location %q", r.Status, r.Location)
 	}
 	r = ta.post("/transactions/2/delete", url.Values{"return": {ret}})
-	if r.Location != "/transactions?type=expense&category=1&subcategory=1&page=1" {
+	if r.Location != "/transactions?year=all&type=expense&category=1&subcategory=1&page=1" {
 		t.Errorf("delete: location %q", r.Location)
 	}
 	wantAll(t, ta.get("/transactions?type=expense&category=1&subcategory=1&page=1&edit=6").Body,
-		`href="/transactions?type=expense&amp;category=1&amp;subcategory=1&amp;page=1"`)
+		`href="/transactions?year=all&amp;type=expense&amp;category=1&amp;subcategory=1&amp;page=1"`)
 }
 
 func TestATamperedTypeOrGroupingInTheReturnValueNarrowsNothing(t *testing.T) {
 	ta := newTestApp(t)
 	addMonths(ta, 6)
 	for i, c := range []struct{ ret, want string }{
-		{"transactions:1?type=evil", "/transactions?page=1"},
-		{"transactions:1?type=expense%26page%3D9", "/transactions?page=1"},
-		{"transactions:1?type=expense&category=//evil.example", "/transactions?type=expense&page=1"},
-		{"transactions:1?category=1", "/transactions?page=1"},
+		{"transactions:1?type=evil", "/transactions?year=all&page=1"},
+		{"transactions:1?type=expense%26page%3D9", "/transactions?year=all&page=1"},
+		{"transactions:1?type=expense&category=//evil.example", "/transactions?year=all&type=expense&page=1"},
+		{"transactions:1?category=1", "/transactions?year=all&page=1"},
 	} {
 		if r := ta.post(fmt.Sprintf("/transactions/%d/delete", 12-i), url.Values{"return": {c.ret}}); r.Location != c.want {
 			t.Errorf("%q: status %d, location %q, want %q", c.ret, r.Status, r.Location, c.want)
@@ -488,7 +493,7 @@ func TestATamperedTypeOrGroupingInTheReturnValueNarrowsNothing(t *testing.T) {
 func TestClearResetsTypeAndGroupings(t *testing.T) {
 	ta := typeFilterApp(t)
 	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?type=expense&category=1").Body),
-		`href="/transactions"`, ">Clear</a>")
+		`href="/transactions?year=all"`, ">Clear</a>")
 }
 
 // holdingFilterApp holds an Investment and a Divestment of ETF, an Investment of Gold and an Expense.
@@ -558,9 +563,9 @@ func TestTheHoldingSurvivesPagerEditAndReturns(t *testing.T) {
 	ta := holdingFilterApp(t)
 	gold := holdingID(ta, "Gold")
 	q := "type=investment&holding=" + gold
-	wantAll(t, ta.get("/transactions?"+q+"&page=1&edit=3").Body, `href="/transactions?type=investment&amp;holding=`+gold+`&amp;page=1"`)
+	wantAll(t, ta.get("/transactions?"+q+"&page=1&edit=3").Body, `href="/transactions?year=all&amp;type=investment&amp;holding=`+gold+`&amp;page=1"`)
 	r := ta.post("/transactions/3/delete", url.Values{"return": {"transactions:1?" + q}})
-	if r.Location != "/transactions?"+q+"&page=1" {
+	if r.Location != "/transactions?year=all&"+q+"&page=1" {
 		t.Errorf("delete: location %q", r.Location)
 	}
 }
@@ -570,7 +575,7 @@ func TestClearResetsTheHolding(t *testing.T) {
 	body := ta.get("/transactions?type=investment").Body
 	wantAll(t, selectHTML(body, "holding"), `class="grouping holding"`)
 	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?type=investment&holding=1").Body),
-		`href="/transactions"`, ">Clear</a>")
+		`href="/transactions?year=all"`, ">Clear</a>")
 }
 
 // searchApp holds an Investment in ETF World, an Expense "Etf fees", Expense "Rent" and a Levy "Rent tax".
@@ -626,15 +631,15 @@ func TestSearchTextSurvivesTypeChangesWhereTheFieldExistsAndIsDroppedOtherwise(t
 	body := ta.get("/transactions?type=investment&search=etf").Body
 	wantNone(t, body, "<span>Rent", `value="etf"`, "No matching Transactions.")
 	wantAll(t, body, "ETF World")
-	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?search=rent").Body), `href="/transactions"`)
+	wantAll(t, regexp.MustCompile(`(?s)<a class="clear".*?</a>`).FindString(ta.get("/transactions?search=rent").Body), `href="/transactions?year=all"`)
 }
 
 func TestSearchSurvivesPagerEditAndReturns(t *testing.T) {
 	ta := searchApp(t)
 	body := ta.get("/transactions?search=rent&edit=3").Body
-	wantAll(t, body, `href="/transactions?search=rent&amp;page=1"`, `value="transactions:1?search=rent"`)
+	wantAll(t, body, `href="/transactions?year=all&amp;search=rent&amp;page=1"`, `value="transactions:1?year=all&amp;search=rent"`)
 	r := ta.post("/transactions/3/delete", url.Values{"return": {"transactions:1?search=rent"}})
-	if r.Location != "/transactions?search=rent&page=1" {
+	if r.Location != "/transactions?year=all&search=rent&page=1" {
 		t.Errorf("delete: location %q", r.Location)
 	}
 	wantNone(t, ta.get("/transactions?search=rent").Body, "<span>Rent</span>")
@@ -645,7 +650,7 @@ func TestSearchAddsTheFilterToThePagerLinks(t *testing.T) {
 	for i := 1; i <= 6; i++ {
 		ta.post("/transactions", expenseForm(fmt.Sprintf("2026-01-%02d", i), "3", fmt.Sprintf("Rent %d", i), "new", "Food", "new", "Cafe"))
 	}
-	wantAll(t, ta.get("/transactions?search=rent").Body, `href="/transactions?search=rent&amp;page=2"`, "1 / 2")
+	wantAll(t, ta.get("/transactions?search=rent").Body, `href="/transactions?year=all&amp;search=rent&amp;page=2"`, "1 / 2")
 }
 
 func TestSearchFieldIsCappedAndAnOverLongParameterIsTruncated(t *testing.T) {

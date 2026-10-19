@@ -36,7 +36,7 @@ func TestAddTransactionsBooksOneTransactionPerRowAndStaysOnThePage(t *testing.T)
 		t.Errorf("button %q", b)
 	}
 
-	home := ta.get("/transactions").Body
+	home := ta.get("/transactions?year=all").Body
 	wantAll(t, home, "Salary", "Rent", "2026-09-15")
 	report := ta.mustReport("/report?period=month&date=2026-09")
 	wantAll(t, report, "2.000", "800")
@@ -51,7 +51,7 @@ func TestAddTransactionsBooksOneTransactionPerRowAndStaysOnThePage(t *testing.T)
 func TestAddTransactionsFromTheMonthPickerBooksOnTheFirst(t *testing.T) {
 	ta := newTestApp(t)
 	ta.addTransactions("2026-09", repRow("expense", "8", "Rent"))
-	wantAll(t, ta.get("/transactions").Body, "2026-09-01")
+	wantAll(t, ta.get("/transactions?year=all").Body, "2026-09-01")
 }
 
 func TestAddTransactionsSaysTransactionInTheSingular(t *testing.T) {
@@ -218,7 +218,7 @@ func TestAddTransactionsBooksLevyAndRebateWithTheirLevyLists(t *testing.T) {
 		t.Fatalf("status %d, button %q", r.Status, addButtonText(t, r.Body))
 	}
 
-	home := ta.get("/transactions").Body
+	home := ta.get("/transactions?year=all").Body
 	wantAll(t, home, "Income tax", ">−250<", "Tax refund", ">+40<", "Tax", "Federal")
 
 	// Levy and Rebate stay out of the Report, as for ordinary ones: only the Income is counted.
@@ -267,7 +267,7 @@ func TestAddTransactionsBooksInvestmentAndDivestmentAgainstTheirHolding(t *testi
 	if r.Status != http.StatusOK || addButtonText(t, r.Body) != "Added 3 Transactions and saved List!" {
 		t.Fatalf("status %d, button %q", r.Status, addButtonText(t, r.Body))
 	}
-	wantAll(t, ta.get("/transactions").Body, "ETF World", ">+300<", "Bonds", ">−100<", "Investment", "Divestment")
+	wantAll(t, ta.get("/transactions?year=all").Body, "ETF World", ">+300<", "Bonds", ">−100<", "Investment", "Divestment")
 }
 
 func TestAddTransactionsSkipsAHoldingBookedWhateverTheType(t *testing.T) {

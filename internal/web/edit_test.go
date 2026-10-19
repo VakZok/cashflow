@@ -18,7 +18,7 @@ func TestClickingARowOffersItsEditFormPrefilled(t *testing.T) {
 	ta.post("/transactions", validForm("investment", "2026-10-03", "90", "ETF World"))
 
 	list := ta.get("/transactions").Body
-	wantAll(t, editRow(list, "1"), `href="/transactions?page=1&amp;edit=1#tx-1"`, "Lunch")
+	wantAll(t, editRow(list, "1"), `href="/transactions?year=2026&amp;month=10&amp;page=1&amp;edit=1#tx-1"`, "Lunch")
 
 	row := editRow(ta.get("/transactions?edit=1").Body, "1")
 	wantAll(t, row,
@@ -26,7 +26,7 @@ func TestClickingARowOffersItsEditFormPrefilled(t *testing.T) {
 		`value="2026-10-02"`, `value="12"`, `value="Lunch"`,
 		`<option value="expense" selected>`,
 		`>Food</option>`, `>Cafe</option>`,
-		`href="/transactions?page=1"`, "Discard",
+		`href="/transactions?year=2026&amp;month=10&amp;page=1"`, "Discard",
 		"Apply", "Delete", `formaction="/transactions/1/delete"`)
 	if strings.Contains(row, "Add</button>") {
 		t.Error("edit row still offers Add")
