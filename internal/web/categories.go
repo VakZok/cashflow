@@ -177,11 +177,40 @@ func (a *App) renameCategory(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, categoriesURL(c, page)+reopen, http.StatusSeeOther)
 }
 
-// entryError answers a failed rename: 404 for a missing entry, else 500.
+// entryError answers a failed rename or delete: 404 for a missing entry, else 500.
 func (a *App) entryError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, store.ErrEntryNotFound) {
 		http.NotFound(w, r)
 		return
 	}
 	a.serverError(w, err)
+}
+
+// deleteCategory deletes the entry of the chosen list and redirects to the page
+// it sat on, which falls back to the page before if that is now empty. An entry
+// a Transaction or Repeating entry uses is refused with 409 and stays.
+func (a *App) deleteCategory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	c := choiceFor(r.PostForm.Get("list"))
+	page, err := a.store.NamedPage(c.List, id)
+	if err != nil {
+		a.entryError(w, r, err)
+		return
+	}
+	if err := a.store.DeleteNamed(c.List, id); errors.Is(err, store.ErrEntryInUse) {
+		http.Error(w, "entry in use", http.StatusConflict)
+		return
+	} else if err != nil {
+		a.entryError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, categoriesURL(c, page), http.StatusSeeOther)
 }

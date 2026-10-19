@@ -16,6 +16,7 @@
   .count { color: #666; white-space: nowrap; }
   .rename { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
   .rename > * { min-width: 0; }
+  .rename > .last { order: 1; }
   a.button { display: flex; align-items: center; justify-content: center; box-sizing: border-box; height: 2.75rem; font-size: 1rem; color: inherit; background: #efefef; border-radius: .5rem; text-decoration: none; }
 {{template "arm-style"}}
 {{template "pager-style"}}
@@ -42,11 +43,15 @@
   <li class="editing">
     <form class="rename" method="post" action="/categories/{{.ID}}">
       <input type="hidden" name="list" value="{{$.Current.Key}}">
-      {{/* Delete is wired up in a later ticket; as a plain button it never submits, so Enter in the name presses Apply. */}}
-      <button type="button">Delete</button>
+      {{/* Apply comes first in the markup so Enter in the name presses it, not Delete; CSS shows it last. */}}
+      <button id="apply" class="last" type="submit" data-arm data-label="Apply">{{if $.Taken}}Taken{{else}}Apply{{end}}</button>
+      {{if or .Transactions .Repeating}}
+      <button type="button" class="in-use" data-label="Delete">Delete</button>
+      {{else}}
+      <button type="submit" data-arm formaction="/categories/{{.ID}}/delete" formnovalidate>Delete</button>
+      {{end}}
       <input type="text" name="name" required maxlength="50" aria-label="Name" value="{{$.EditName}}" autocomplete="off">
       <a class="button" href="{{$.PageURL}}">Discard</a>
-      <button id="apply" type="submit" data-arm data-label="Apply">{{if $.Taken}}Taken{{else}}Apply{{end}}</button>
     </form>
   </li>
   {{else}}
@@ -68,6 +73,17 @@
 </script>
 {{end}}
 {{template "arm-script"}}
+{{if .EditID}}
+<script>
+  // An entry in use cannot be deleted: its Delete button only says "In Use" for 3 s, and sends nothing.
+  var inUse = document.querySelector('button.in-use')
+  if (inUse) inUse.addEventListener('click', function () {
+    inUse.textContent = 'In Use'
+    clearTimeout(inUse.timer)
+    inUse.timer = setTimeout(function () { inUse.textContent = inUse.dataset.label }, 3000)
+  })
+</script>
+{{end}}
 {{if .Taken}}
 <script>
   // The flag is one-off: drop it from the URL so a reload doesn't show it again, and reset the button after 3 s unless it was armed meanwhile.

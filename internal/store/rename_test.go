@@ -95,3 +95,24 @@ func TestNamedPageIsThePageTheEntrySortsOn(t *testing.T) {
 		t.Errorf("err = %v, want ErrEntryNotFound", err)
 	}
 }
+
+func TestDeleteNamedRemovesUnusedRefusesUsedAndReportsMissing(t *testing.T) {
+	s, _ := open(t)
+	unused := idOf(t, s, store.CategoryList, "Unused")
+	if err := s.DeleteNamed(store.CategoryList, unused); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteNamed(store.CategoryList, unused); !errors.Is(err, store.ErrEntryNotFound) {
+		t.Errorf("err = %v, want ErrEntryNotFound", err)
+	}
+	if _, err := s.AddTransaction(expense(t, s, "2026-10-05", "Lunch")); err != nil {
+		t.Fatal(err)
+	}
+	used := idOf(t, s, store.CategoryList, "C")
+	if err := s.DeleteNamed(store.CategoryList, used); !errors.Is(err, store.ErrEntryInUse) {
+		t.Errorf("err = %v, want ErrEntryInUse", err)
+	}
+	if got := names(t, s, store.CategoryList); len(got) != 1 {
+		t.Errorf("names = %v, want the used entry to stay", got)
+	}
+}
