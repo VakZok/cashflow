@@ -17,9 +17,7 @@ func TestListAmountsCarryTheSignOfTheirType(t *testing.T) {
 		t.Run(c.typ, func(t *testing.T) {
 			ta := newTestApp(t)
 			ta.seedType(c.typ, "1234")
-			for _, path := range []string{"/", "/transactions"} {
-				wantAll(t, ta.get(path).Body, `<span class="amount">`+c.want+`</span>`)
-			}
+			wantAll(t, ta.get("/transactions").Body, `<span class="amount">`+c.want+`</span>`)
 		})
 	}
 }

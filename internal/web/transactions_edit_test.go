@@ -46,12 +46,6 @@ func TestEditingARowOnAnotherPageOfTheTransactionsPageShowsNoForm(t *testing.T) 
 	}
 }
 
-func TestAddPageEditFormReturnsToTheAddPage(t *testing.T) {
-	ta := newTestApp(t)
-	addTransactions(ta, 7)
-	wantAll(t, editRow(ta.get("/?edit=7").Body, "7"), `name="return" value="add"`, `href="/"`)
-}
-
 func TestChangeOnTheTransactionsPageFollowsTheRowToItsNewPage(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 12)
@@ -74,10 +68,23 @@ func TestChangeOnTheTransactionsPageFollowsTheRowToItsNewPage(t *testing.T) {
 func TestChangeFromTheAddPageStillReturnsToTheAddPage(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 7)
-	// The date change pushes the row out of the 5 shown: the add page does not follow it.
 	r := ta.post("/transactions/7", changeForm(ta, "2026-01-01", "Item 07", "add"))
 	if r.Status != http.StatusSeeOther || r.Location != "/#tx-7" {
 		t.Fatalf("status %d, location %q; want 303 /#tx-7", r.Status, r.Location)
+	}
+}
+
+func TestInvalidChangeWithAnUnrecognisedReturnShowsTheRowOnTheTransactionsPage(t *testing.T) {
+	for _, ret := range []string{"add", "", "nonsense"} {
+		ta := newTestApp(t)
+		addTransactions(ta, 12)
+		bad := changeForm(ta, "2026-09-05", "Item 05", ret)
+		bad.Set("amount", "0")
+		r := ta.post("/transactions/5", bad)
+		if r.Status != http.StatusUnprocessableEntity {
+			t.Fatalf("return %q: status %d, want 422", ret, r.Status)
+		}
+		wantAll(t, editRow(r.Body, "5"), `action="/transactions/5#tx-5"`, `name="return" value="transactions:2"`)
 	}
 }
 

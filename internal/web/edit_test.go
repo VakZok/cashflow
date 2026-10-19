@@ -17,26 +17,26 @@ func TestClickingARowOffersItsEditFormPrefilled(t *testing.T) {
 	ta.post("/transactions", expenseForm("2026-10-02", "12", "Lunch", "new", "Food", "new", "Cafe"))
 	ta.post("/transactions", validForm("investment", "2026-10-03", "90", "ETF World"))
 
-	list := ta.get("/").Body
-	wantAll(t, editRow(list, "1"), `href="/?edit=1#tx-1"`, "Lunch")
+	list := ta.get("/transactions").Body
+	wantAll(t, editRow(list, "1"), `href="/transactions?page=1&amp;edit=1#tx-1"`, "Lunch")
 
-	row := editRow(ta.get("/?edit=1").Body, "1")
+	row := editRow(ta.get("/transactions?edit=1").Body, "1")
 	wantAll(t, row,
 		`action="/transactions/1#tx-1"`,
 		`value="2026-10-02"`, `value="12"`, `value="Lunch"`,
 		`<option value="expense" selected>`,
 		`>Food</option>`, `>Cafe</option>`,
-		`href="/"`, "Discard",
+		`href="/transactions?page=1"`, "Discard",
 		"Apply", "Delete", `formaction="/transactions/1/delete"`)
 	if strings.Contains(row, "Add</button>") {
 		t.Error("edit row still offers Add")
 	}
 	// Only the row being edited turns into a form.
-	if other := editRow(ta.get("/?edit=1").Body, "2"); strings.Contains(other, "<form") {
+	if other := editRow(ta.get("/transactions?edit=1").Body, "2"); strings.Contains(other, "<form") {
 		t.Errorf("other row is a form: %s", other)
 	}
 
-	inv := editRow(ta.get("/?edit=2").Body, "2")
+	inv := editRow(ta.get("/transactions?edit=2").Body, "2")
 	wantAll(t, inv, `<option value="investment" selected>`, `value="90"`, `>ETF World</option>`)
 }
 
@@ -60,7 +60,7 @@ func TestChangeUpdatesTheTransactionAndLandsOnItsRow(t *testing.T) {
 	if r.Status != http.StatusSeeOther || r.Location != "/#tx-1" {
 		t.Fatalf("status %d, location %q; want 303 /#tx-1\n%s", r.Status, r.Location, r.Body)
 	}
-	row := editRow(ta.follow(r).Body, "1")
+	row := editRow(ta.get("/transactions").Body, "1")
 	wantAll(t, row, "Late lunch", ">−15<", "2026-10-04")
 	if strings.Contains(row, ">Lunch<") {
 		t.Errorf("old description still shown: %s", row)
@@ -76,7 +76,7 @@ func TestChangeWithoutChangingAnythingSucceeds(t *testing.T) {
 	if r.Status != http.StatusSeeOther {
 		t.Fatalf("status %d, want 303\n%s", r.Status, r.Body)
 	}
-	wantAll(t, editRow(ta.follow(r).Body, "1"), "Lunch", ">−12<", "Food", "Cafe")
+	wantAll(t, editRow(ta.get("/transactions").Body, "1"), "Lunch", ">−12<", "Food", "Cafe")
 }
 
 func TestChangingTheTypeAppliesTheNewTypesFields(t *testing.T) {
@@ -89,7 +89,7 @@ func TestChangingTheTypeAppliesTheNewTypesFields(t *testing.T) {
 		if r.Status != http.StatusSeeOther {
 			t.Fatalf("%d %s->%s: status %d\n%s", i, from, to, r.Status, r.Body)
 		}
-		row := editRow(ta.follow(r).Body, "1")
+		row := editRow(ta.get("/transactions").Body, "1")
 		wantAll(t, row, "20</span>", "2026-10-03")
 		if to == "investment" || to == "divestment" {
 			wantAll(t, row, "<span>Other</span>")
@@ -127,7 +127,7 @@ func TestChangeRejectsWhatCreateRejectsAndKeepsTheRowInEditMode(t *testing.T) {
 		wantAll(t, row, `role="alert"`, `action="/transactions/1#tx-1"`)
 	}
 	// The stored Transaction is unchanged.
-	wantAll(t, editRow(ta.get("/").Body, "1"), "Lunch", ">−10<")
+	wantAll(t, editRow(ta.get("/transactions").Body, "1"), "Lunch", ">−10<")
 }
 
 func TestEditIsNeverADuplicateOfItselfButOfOthers(t *testing.T) {
@@ -184,7 +184,7 @@ func TestDeleteRemovesTheTransactionAndReturnsToTheList(t *testing.T) {
 	if r.Status != http.StatusSeeOther || r.Location != "/" {
 		t.Fatalf("status %d, location %q; want 303 /", r.Status, r.Location)
 	}
-	body := ta.follow(r).Body
+	body := ta.get("/transactions").Body
 	if editRow(body, "2") != "" || strings.Contains(body, "Item income") {
 		t.Error("deleted Transaction still listed")
 	}
@@ -195,7 +195,7 @@ func TestDeleteRemovesTheTransactionAndReturnsToTheList(t *testing.T) {
 func TestApplyIsTheFormsDefaultButton(t *testing.T) {
 	ta := newTestApp(t)
 	ta.post("/transactions", validForm("expense", "2026-10-02", "10", "Lunch"))
-	row := editRow(ta.get("/?edit=1").Body, "1")
+	row := editRow(ta.get("/transactions?edit=1").Body, "1")
 	// Enter in a field presses the first submit button: that must not be Delete.
 	if first := strings.Index(row, "<button"); first < 0 || strings.Index(row, "Apply") > strings.Index(row, "Delete") {
 		t.Errorf("Delete precedes Apply in the row:\n%s", row)

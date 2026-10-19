@@ -39,10 +39,10 @@ func TestAddExpenseShowsInList(t *testing.T) {
 	ta := newTestApp(t)
 
 	r := ta.post("/transactions", expenseForm("2026-10-01", "1234", "Rent", "new", "Housing", "new", "Monthly"))
-	if r.Status != http.StatusSeeOther || r.Location != "/" {
-		t.Fatalf("POST = %d -> %q, want 303 -> /", r.Status, r.Location)
+	if r.Status != http.StatusSeeOther || r.Location != "/?added=1" {
+		t.Fatalf("POST = %d -> %q, want 303 -> /?added=1", r.Status, r.Location)
 	}
-	body := ta.follow(r).Body
+	body := ta.get("/transactions").Body
 	for _, want := range []string{"2026-10-01", ">−1.234<", "Rent", "Housing", "Monthly"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("list missing %q in:\n%s", want, body)
@@ -65,7 +65,7 @@ func TestPastAndFutureDatesAreAccepted(t *testing.T) {
 		if r.Status != http.StatusSeeOther {
 			t.Fatalf("date %s: status %d, want 303", date, r.Status)
 		}
-		if body := ta.follow(r).Body; !strings.Contains(body, date) {
+		if body := ta.get("/transactions").Body; !strings.Contains(body, date) {
 			t.Errorf("list missing %s", date)
 		}
 	}
@@ -79,10 +79,11 @@ func TestInvalidAmountsAreRejectedWithMessage(t *testing.T) {
 			if r.Status != http.StatusUnprocessableEntity {
 				t.Fatalf("status %d, want 422", r.Status)
 			}
-			if !strings.Contains(r.Body, "Amount must be a whole number of euros between 1 and 100.000.000") {
-				t.Errorf("missing amount message in:\n%s", r.Body)
+			wantAll(t, r.Body, `<span class="bubble" role="alert">1 to 100.000.000</span>`)
+			if strings.Contains(r.Body, `class="invalid"`) || strings.Contains(r.Body, "Missing fields") {
+				t.Errorf("an amount is not a missing field:\n%s", r.Body)
 			}
-			if strings.Contains(ta.get("/").Body, "Lunch") {
+			if strings.Contains(ta.get("/transactions").Body, "Lunch") {
 				t.Error("rejected expense was stored")
 			}
 		})
@@ -138,7 +139,7 @@ func TestHostileInputIsStoredAsPlainTextAndEscaped(t *testing.T) {
 	ta := newTestApp(t)
 	evil := "x'); DROP TABLE transactions;--"
 	ta.post("/transactions", expenseForm("2026-10-05", "5", evil, "new", "<script>alert(1)</script>", "new", "B"))
-	body := ta.get("/").Body
+	body := ta.get("/transactions").Body + ta.get("/").Body
 	if strings.Contains(body, "<script>alert(1)</script>") {
 		t.Error("category name rendered unescaped")
 	}
@@ -166,13 +167,14 @@ func TestInvalidDateAndMissingFieldsAreRejected(t *testing.T) {
 		form url.Values
 		msg  string
 	}{
-		"bad date":        {expenseForm("05/10/2026", "5", "x", "new", "A", "new", "B"), "Date must be in the format YYYY-MM-DD"},
-		"impossible date": {expenseForm("2026-02-30", "5", "x", "new", "A", "new", "B"), "Date must be in the format YYYY-MM-DD"},
-		"no description":  {expenseForm("2026-10-05", "5", "  ", "new", "A", "new", "B"), "Description is required"},
-		"no category":     {expenseForm("2026-10-05", "5", "x", "", "", "new", "B"), "Category is required"},
-		"empty new cat":   {expenseForm("2026-10-05", "5", "x", "new", " ", "new", "B"), "Category is required"},
-		"no subcategory":  {expenseForm("2026-10-05", "5", "x", "new", "A", "", ""), "Subcategory is required"},
-		"unknown cat id":  {expenseForm("2026-10-05", "5", "x", "999", "", "new", "B"), "Category is required"},
+		"bad date":        {expenseForm("05/10/2026", "5", "x", "new", "A", "new", "B"), "Invalid input"},
+		"impossible date": {expenseForm("2026-02-30", "5", "x", "new", "A", "new", "B"), "Invalid input"},
+		"cleared date":    {expenseForm("", "5", "x", "new", "A", "new", "B"), "Missing fields"},
+		"no description":  {expenseForm("2026-10-05", "5", "  ", "new", "A", "new", "B"), "Missing fields"},
+		"no category":     {expenseForm("2026-10-05", "5", "x", "", "", "new", "B"), "Missing fields"},
+		"empty new cat":   {expenseForm("2026-10-05", "5", "x", "new", " ", "new", "B"), "Missing fields"},
+		"no subcategory":  {expenseForm("2026-10-05", "5", "x", "new", "A", "", ""), "Missing fields"},
+		"unknown cat id":  {expenseForm("2026-10-05", "5", "x", "999", "", "new", "B"), "Invalid input"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -208,7 +210,7 @@ func TestInlineCategoriesAreUsableImmediatelyAndInAnyCombination(t *testing.T) {
 	if r.Status != http.StatusSeeOther {
 		t.Fatalf("existing ids: status %d, want 303", r.Status)
 	}
-	if !strings.Contains(ta.follow(r).Body, "Drinks") {
+	if !strings.Contains(ta.get("/transactions").Body, "Drinks") {
 		t.Error("expense with existing Category/Subcategory not listed")
 	}
 }
@@ -231,7 +233,7 @@ func TestAmountFormatting(t *testing.T) {
 	amounts := map[string]string{"7": "7", "999": "999", "1000": "1.000", "1234": "1.234", "1234567": "1.234.567"}
 	for in, want := range amounts {
 		ta.post("/transactions", expenseForm("2026-10-05", in, "amt"+in, "new", "C", "new", "S"))
-		if body := ta.get("/").Body; !strings.Contains(body, ">−"+want+"<") {
+		if body := ta.get("/transactions").Body; !strings.Contains(body, ">−"+want+"<") {
 			t.Errorf("amount %s: want %s in its own element in list", in, want)
 		}
 	}
@@ -241,7 +243,7 @@ func TestListIsNewestFirst(t *testing.T) {
 	ta := newTestApp(t)
 	ta.post("/transactions", expenseForm("2026-01-01", "1", "entry-older", "new", "C", "new", "S"))
 	ta.post("/transactions", expenseForm("2026-03-01", "1", "entry-newer", "new", "C", "new", "S"))
-	body := ta.get("/").Body
+	body := ta.get("/transactions").Body
 	if strings.Index(body, "entry-newer") > strings.Index(body, "entry-older") {
 		t.Error("list is not ordered newest first")
 	}
@@ -251,7 +253,7 @@ func TestDataPersistsAcrossRestart(t *testing.T) {
 	ta := newTestApp(t)
 	ta.post("/transactions", expenseForm("2026-10-01", "50", "Persisted", "new", "C", "new", "S"))
 	ta.restart()
-	if !strings.Contains(ta.get("/").Body, "Persisted") {
+	if !strings.Contains(ta.get("/transactions").Body, "Persisted") {
 		t.Error("Transaction lost after restart")
 	}
 }
@@ -291,7 +293,7 @@ func TestAddIncomeShowsInListWithType(t *testing.T) {
 	if r.Status != http.StatusSeeOther {
 		t.Fatalf("POST = %d, want 303", r.Status)
 	}
-	body := ta.follow(r).Body
+	body := ta.get("/transactions").Body
 	for _, want := range []string{"Salary", ">+2.500<", "Work", "Employer", "Income"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("list missing %q in:\n%s", want, body)
@@ -316,11 +318,7 @@ func TestIncomeRequiresCategoryAndSubcategory(t *testing.T) {
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422", r.Status)
 	}
-	for _, want := range []string{"Category is required.", "Subcategory is required."} {
-		if !strings.Contains(r.Body, want) {
-			t.Errorf("missing %q", want)
-		}
-	}
+	wantAll(t, r.Body, "Missing fields", `id="category" class="invalid"`, `id="subcategory" class="invalid"`)
 }
 
 func TestUnknownTypeIsRejected(t *testing.T) {
@@ -372,7 +370,7 @@ func TestSharedValidationRunsForAllTypes(t *testing.T) {
 			ta := newTestApp(t)
 			for _, amount := range []string{"0", "-5", "12.50", "1e3", "abc", "", "100000001"} {
 				r := ta.post("/transactions", validForm(typ, "2026-10-05", amount, "Label"))
-				if r.Status != http.StatusUnprocessableEntity || !strings.Contains(r.Body, "Amount must be a whole number of euros") {
+				if r.Status != http.StatusUnprocessableEntity || !strings.Contains(r.Body, "1 to 100.000.000") {
 					t.Errorf("amount %q: status %d", amount, r.Status)
 				}
 			}
@@ -400,10 +398,10 @@ func TestInvestmentAndDivestmentShowInListWithHolding(t *testing.T) {
 		t.Run(typ, func(t *testing.T) {
 			ta := newTestApp(t)
 			r := ta.post("/transactions", holdingForm(typ, "2026-10-03", "1500", "new", "ETF World"))
-			if r.Status != http.StatusSeeOther || r.Location != "/" {
-				t.Fatalf("POST = %d -> %q, want 303 -> /", r.Status, r.Location)
+			if r.Status != http.StatusSeeOther || r.Location != "/?added=1" {
+				t.Fatalf("POST = %d -> %q, want 303 -> /?added=1", r.Status, r.Location)
 			}
-			body := ta.follow(r).Body
+			body := ta.get("/transactions").Body
 			if !strings.Contains(body, "<span>ETF World</span>") || !strings.Contains(body, "1.500</span>") ||
 				!strings.Contains(body, "2026-10-03 · "+label+"</span>") {
 				t.Errorf("list entry wrong in:\n%s", body)
@@ -424,7 +422,7 @@ func TestHoldingsAreReusedAndMatchedCaseInsensitively(t *testing.T) {
 	if r := ta.post("/transactions", holdingForm("investment", "2026-10-03", "10", id, "")); r.Status != http.StatusSeeOther {
 		t.Fatalf("existing holding id: status %d, want 303", r.Status)
 	}
-	if n := strings.Count(ta.get("/").Body, "<span>ETF World</span>"); n != 3 {
+	if n := strings.Count(ta.get("/transactions").Body, "<span>ETF World</span>"); n != 3 {
 		t.Errorf("list shows ETF World %d times, want 3 (first spelling kept)", n)
 	}
 }
@@ -434,10 +432,10 @@ func TestHoldingValidation(t *testing.T) {
 		form url.Values
 		msg  string
 	}{
-		"missing":       {holdingForm("investment", "2026-10-05", "5", "", ""), "Holding is required."},
-		"empty new":     {holdingForm("investment", "2026-10-05", "5", "new", "  "), "Holding is required."},
-		"unknown id":    {holdingForm("divestment", "2026-10-05", "5", "999", ""), "Holding is required."},
-		"name too long": {holdingForm("investment", "2026-10-05", "5", "new", strings.Repeat("a", 51)), "Holding name must be at most 50 characters."},
+		"missing":       {holdingForm("investment", "2026-10-05", "5", "", ""), "Missing fields"},
+		"empty new":     {holdingForm("investment", "2026-10-05", "5", "new", "  "), "Missing fields"},
+		"unknown id":    {holdingForm("divestment", "2026-10-05", "5", "999", ""), "Invalid input"},
+		"name too long": {holdingForm("investment", "2026-10-05", "5", "new", strings.Repeat("a", 51)), "Invalid input"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -513,11 +511,7 @@ func TestIncomeAndExpenseRejectHolding(t *testing.T) {
 			if r.Status != http.StatusUnprocessableEntity {
 				t.Fatalf("status %d, want 422", r.Status)
 			}
-			for _, want := range []string{"Description is required.", "Category is required."} {
-				if !strings.Contains(r.Body, want) {
-					t.Errorf("missing %q", want)
-				}
-			}
+			wantAll(t, r.Body, "Missing fields", `id="description" class="invalid"`, `id="category" class="invalid"`)
 		})
 	}
 }
@@ -582,9 +576,7 @@ func TestDuplicateDateAndDescriptionIsRejectedWithMessage(t *testing.T) {
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("duplicate POST = %d, want 422", r.Status)
 	}
-	if !strings.Contains(r.Body, "An entry for this date and description already exists, edit it instead") {
-		t.Errorf("missing duplicate message in:\n%s", r.Body)
-	}
+	wantAll(t, r.Body, "Already exists")
 	if !strings.Contains(r.Body, `value="coffee"`) {
 		t.Errorf("entered description not kept in:\n%s", r.Body)
 	}
@@ -616,9 +608,7 @@ func TestDuplicateDateAndHoldingIsRejectedWithMessage(t *testing.T) {
 		if r.Status != http.StatusUnprocessableEntity {
 			t.Fatalf("%s POST = %d, want 422", typ, r.Status)
 		}
-		if !strings.Contains(r.Body, "An entry for this date and holding already exists, edit it instead") {
-			t.Errorf("%s: missing duplicate message in:\n%s", typ, r.Body)
-		}
+		wantAll(t, r.Body, "Already exists")
 		if !strings.Contains(r.Body, `value="70"`) {
 			t.Errorf("%s: entered amount not kept in:\n%s", typ, r.Body)
 		}

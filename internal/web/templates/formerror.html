@@ -1,0 +1,41 @@
+{{/* error-style is the shared error treatment of the entry forms: a red outline on a field with a problem, and the speech bubble on the amount. */}}
+{{define "error-style"}}  input.invalid:not([type=hidden]), select.invalid { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .amount-wrap { position: relative; }
+  .amount-wrap input { height: 100%; margin-top: 0; }
+  .bubble { position: absolute; right: 0; bottom: calc(100% + .4rem); z-index: 1; padding: .3rem .5rem; border-radius: .4rem; background: #333; color: #fff; font-size: .8rem; white-space: nowrap; }
+  .bubble::after { content: ""; position: absolute; top: 100%; right: 1rem; border: .35rem solid transparent; border-top-color: #333; }
+{{end}}
+
+{{/* error-script clears a field's highlight and the amount bubble when the field is edited, puts back the submit button's label on any edit of its form, ends a success text after 2 seconds, and keeps the scroll position across the submit of a form marked data-keep-scroll. A submit button names its label in data-resting and marks a success text with data-flash. */}}
+{{define "error-script"}}<script>
+document.addEventListener('input', onEdit);
+document.addEventListener('change', onEdit);
+function onEdit(e) {
+  var field = e.target;
+  if (!field.form) return;
+  field.classList.remove('invalid');
+  if (field.name === 'amount') {
+    var bubble = field.parentNode.querySelector('.bubble');
+    if (bubble) bubble.remove();
+  }
+  restoreButtons(field.form);
+}
+function restoreButtons(form) {
+  form.querySelectorAll('button[data-resting]').forEach(function (b) { b.textContent = b.dataset.resting; });
+}
+document.querySelectorAll('button[data-flash]').forEach(function (b) {
+  setTimeout(function () { b.textContent = b.dataset.resting; }, 2000);
+  history.replaceState(null, '', location.pathname); // a reload does not show the success text again
+});
+document.addEventListener('submit', function (e) {
+  if (!e.target.hasAttribute('data-keep-scroll')) return;
+  try { sessionStorage.setItem('scrollY', window.scrollY); } catch (err) {}
+});
+try {
+  var savedY = sessionStorage.getItem('scrollY');
+  if (savedY !== null) {
+    sessionStorage.removeItem('scrollY');
+    window.scrollTo(0, +savedY);
+  }
+} catch (err) {}
+</script>{{end}}
