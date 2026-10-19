@@ -246,7 +246,7 @@ var monthChoices = func() []monthChoice {
 	return out
 }()
 
-// returnTo is where Change, Delete and Discard take the user back to: the add
+// returnTo is where Apply, Delete and Discard take the user back to: the add
 // page, or a page of the Transactions page with its filter. It is a closed set
 // so the hidden form value can never redirect anywhere else.
 type returnTo struct {

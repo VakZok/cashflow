@@ -1,0 +1,29 @@
+{{define "arm-style"}}  button.armed { background: #9b1c1c; color: #fff; }{{end}}
+
+{{/* arm-script makes every button[data-arm] need a second tap. The button's resting label is its data-label, or its text when it has none. */}}
+{{define "arm-script"}}<script>
+// A data-arm button needs a second tap: the first one arms it ("Approve"),
+// which disarms itself after 3 seconds, on any other tap and on editing a field.
+var armed = null, armTimer = null;
+function disarm() {
+  if (!armed) return;
+  armed.textContent = armed.dataset.label;
+  armed.classList.remove('armed');
+  armed = null;
+  clearTimeout(armTimer);
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-arm]');
+  if (b && b === armed) return; // second tap: let the form submit
+  disarm();
+  if (!b) return;
+  e.preventDefault();
+  armed = b;
+  if (!b.dataset.label) b.dataset.label = b.textContent;
+  b.textContent = 'Approve';
+  b.classList.add('armed');
+  armTimer = setTimeout(disarm, 3000);
+});
+document.addEventListener('input', disarm);
+document.addEventListener('change', disarm);
+</script>{{end}}

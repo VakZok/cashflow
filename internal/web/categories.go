@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -51,7 +52,11 @@ type categoriesData struct {
 	Entries      []store.NamedUsage
 	Page, Pages  int
 	Newer, Older string
+	PageURL      string // this page, without any edit; Discard goes back to it
 	Added        string // addedNew, addedExists or "" for the Add button's label
+	EditID       int64  // the entry whose row is open, 0 for none
+	EditName     string // the text in the open row's name field
+	Taken        bool   // the open row's rename was refused: Apply shows "Taken"
 }
 
 // categoriesURL is the page of the list on the Edit Categories page.
@@ -81,6 +86,20 @@ func (a *App) categories(w http.ResponseWriter, r *http.Request) {
 		if d.Entries, err = a.store.ListNamedPage(c.List, store.PageSize, (page-1)*store.PageSize); err != nil {
 			a.serverError(w, err)
 			return
+		}
+	}
+	d.PageURL = categoriesURL(c, page)
+	if editID, err := strconv.ParseInt(q.Get("edit"), 10, 64); err == nil {
+		for _, e := range d.Entries {
+			if e.ID != editID {
+				continue
+			}
+			d.EditID, d.EditName = e.ID, e.Name
+			if q.Has("name") {
+				d.EditName = q.Get("name")
+				d.Taken = q.Get("taken") == "1"
+			}
+			break
 		}
 	}
 	if page > 1 {
@@ -119,4 +138,50 @@ func (a *App) addCategory(w http.ResponseWriter, r *http.Request) {
 		flag = addedNew
 	}
 	http.Redirect(w, r, categoriesURL(c, page)+"&added="+url.QueryEscape(flag), http.StatusSeeOther)
+}
+
+// renameCategory renames the entry of the chosen list and redirects to the page
+// the entry now sorts on. A name another entry of the list has, ignoring case,
+// is refused: nothing changes and the redirect reopens the entry's row with the
+// typed text, flagged for the Apply button. A blank name changes nothing.
+func (a *App) renameCategory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	c := choiceFor(r.PostForm.Get("list"))
+	name := strings.TrimSpace(strings.ToValidUTF8(r.PostForm.Get("name"), ""))
+	if utf8.RuneCountInString(name) > maxNameLen {
+		http.Error(w, "name too long", http.StatusBadRequest)
+		return
+	}
+	reopen := "" // the query that keeps the entry's row open
+	if name == "" {
+		reopen = "&edit=" + strconv.FormatInt(id, 10)
+	} else if err := a.store.RenameNamed(c.List, id, name); errors.Is(err, store.ErrNameTaken) {
+		reopen = "&edit=" + strconv.FormatInt(id, 10) + "&name=" + url.QueryEscape(name) + "&taken=1"
+	} else if err != nil {
+		a.entryError(w, r, err)
+		return
+	}
+	page, err := a.store.NamedPage(c.List, id)
+	if err != nil {
+		a.entryError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, categoriesURL(c, page)+reopen, http.StatusSeeOther)
+}
+
+// entryError answers a failed rename: 404 for a missing entry, else 500.
+func (a *App) entryError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, store.ErrEntryNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	a.serverError(w, err)
 }

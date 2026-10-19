@@ -62,6 +62,7 @@ func New(cfg Config) (*App, error) {
 	a.mux.HandleFunc("POST /transactions/{id}/delete", a.deleteTransaction)
 	a.mux.HandleFunc("GET /categories", a.categories)
 	a.mux.HandleFunc("POST /categories", a.addCategory)
+	a.mux.HandleFunc("POST /categories/{id}", a.renameCategory)
 	a.mux.HandleFunc("GET /repeating", a.repeating)
 	a.mux.HandleFunc("POST /repeating", a.saveRepeating)
 	return a, nil
@@ -147,7 +148,7 @@ type fieldsData struct {
 }
 
 // editView is a Transaction's row shown as a form, with where Discard goes and
-// the hidden "return" value that takes Change and Delete back to the same list.
+// the hidden "return" value that takes Apply and Delete back to the same list.
 type editView struct {
 	ID      int64
 	Fields  *fieldsData

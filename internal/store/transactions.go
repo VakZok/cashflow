@@ -469,3 +469,50 @@ func (s *Store) AddNamed(l List, name string) (page int, created bool, err error
 	err = s.db.QueryRow("SELECT COUNT(*) FROM "+l.table+" WHERE name < ? COLLATE NOCASE", name).Scan(&before)
 	return before/PageSize + 1, n == 1, err
 }
+
+// RenameNamed gives the entry of the list a new name. Transactions and
+// Repeating entries refer to it by id, so they show the new name. A rename that
+// only changes the case of the entry's own name goes through; another entry's
+// name, ignoring ASCII case, is refused with ErrNameTaken and changes nothing.
+func (s *Store) RenameNamed(l List, id int64, name string) error {
+	name = strings.TrimSpace(name)
+	res, err := s.db.Exec(
+		"UPDATE "+l.table+" SET name = ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM "+l.table+" WHERE name = ? AND id != ?)",
+		name, id, name, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 1 {
+		return nil
+	}
+	exists, err := s.NamedExists(l, id)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrEntryNotFound
+	}
+	return ErrNameTaken
+}
+
+// NamedPage returns the page (of PageSize entries, from 1) the entry sits on in
+// the list ordered by name, or ErrEntryNotFound.
+func (s *Store) NamedPage(l List, id int64) (int, error) {
+	var before int
+	err := s.db.QueryRow(
+		"SELECT COUNT(*) FROM "+l.table+" WHERE name < (SELECT name FROM "+l.table+" WHERE id = ?) COLLATE NOCASE", id).Scan(&before)
+	if err != nil {
+		return 0, err
+	}
+	if exists, err := s.NamedExists(l, id); err != nil || !exists {
+		if err == nil {
+			err = ErrEntryNotFound
+		}
+		return 0, err
+	}
+	return before/PageSize + 1, nil
+}

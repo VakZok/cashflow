@@ -99,6 +99,12 @@ var ErrDuplicate = errors.New("duplicate transaction")
 // ErrNotFound means the Transaction does not exist (any more).
 var ErrNotFound = errors.New("transaction not found")
 
+// ErrNameTaken means another entry of the list already has the name, ignoring ASCII case.
+var ErrNameTaken = errors.New("name taken")
+
+// ErrEntryNotFound means the list entry does not exist (any more).
+var ErrEntryNotFound = errors.New("entry not found")
+
 // translate maps a unique-constraint violation to ErrDuplicate.
 func translate(err error) error {
 	var se *sqlite.Error

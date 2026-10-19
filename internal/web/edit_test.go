@@ -27,7 +27,7 @@ func TestClickingARowOffersItsEditFormPrefilled(t *testing.T) {
 		`<option value="expense" selected>`,
 		`>Food</option>`, `>Cafe</option>`,
 		`href="/"`, "Discard",
-		"Change", "Delete", `formaction="/transactions/1/delete"`)
+		"Apply", "Delete", `formaction="/transactions/1/delete"`)
 	if strings.Contains(row, "Add</button>") {
 		t.Error("edit row still offers Add")
 	}
@@ -192,13 +192,13 @@ func TestDeleteRemovesTheTransactionAndReturnsToTheList(t *testing.T) {
 	wantAll(t, editRow(body, "3"), "Item investment")
 }
 
-func TestChangeIsTheFormsDefaultButton(t *testing.T) {
+func TestApplyIsTheFormsDefaultButton(t *testing.T) {
 	ta := newTestApp(t)
 	ta.post("/transactions", validForm("expense", "2026-10-02", "10", "Lunch"))
 	row := editRow(ta.get("/?edit=1").Body, "1")
 	// Enter in a field presses the first submit button: that must not be Delete.
-	if first := strings.Index(row, "<button"); first < 0 || strings.Index(row, "Change") > strings.Index(row, "Delete") {
-		t.Errorf("Delete precedes Change in the row:\n%s", row)
+	if first := strings.Index(row, "<button"); first < 0 || strings.Index(row, "Apply") > strings.Index(row, "Delete") {
+		t.Errorf("Delete precedes Apply in the row:\n%s", row)
 	}
 }
 
