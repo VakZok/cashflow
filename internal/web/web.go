@@ -95,9 +95,8 @@ type entryForm struct {
 	NewLevyCategory    string
 	LevySubcategory    string
 	NewLevySubcategory string
-	Errors             []string
 
-	// The structured form of the problems, which the shared error treatment
+	// The problems of a submitted form, which the shared error treatment
 	// renders: the fields to highlight (by input name), the amount bubble and
 	// the message of the submit button.
 	Missing   map[string]bool
@@ -134,19 +133,19 @@ func (f entryForm) ButtonMessage() string {
 // Bad reports whether the input of that name is highlighted.
 func (f entryForm) Bad(field string) bool { return f.Missing[field] }
 
-// fail records a problem with its message, for the places that still list messages.
-func (f *entryForm) fail(p problem, msg string) {
-	f.Errors = append(f.Errors, msg)
-	f.Problem = max(f.Problem, p)
-}
+// failed reports whether the form has a problem.
+func (f entryForm) failed() bool { return f.Problem != noProblem }
+
+// fail records a problem.
+func (f *entryForm) fail(p problem) { f.Problem = max(f.Problem, p) }
 
 // missing records that the input of that name has nothing in it.
-func (f *entryForm) missing(field, msg string) {
+func (f *entryForm) missing(field string) {
 	if f.Missing == nil {
 		f.Missing = map[string]bool{}
 	}
 	f.Missing[field] = true
-	f.fail(problemMissing, msg)
+	f.fail(problemMissing)
 }
 
 // choice is the value of a select with an inline "new..." option, bound to
@@ -316,11 +315,6 @@ func withSpec(form entryForm) entryForm {
 const dateLayout = "2006-01-02"
 
 const (
-	errDuplicate        = "An entry for this date and description already exists, edit it instead."
-	errDuplicateHolding = "An entry for this date and holding already exists, edit it instead."
-)
-
-const (
 	errAmount         = "Amount must be a whole number of euros between 1 and 100.000.000."
 	errDescriptionLen = "Description must be at most 100 characters."
 )
@@ -351,18 +345,18 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	nt, spec, err := a.prepare(&form, 0)
+	nt, err := a.prepare(&form, 0)
 	if err != nil {
 		a.serverError(w, err)
 		return
 	}
-	if len(form.Errors) > 0 {
+	if form.failed() {
 		a.renderIndex(w, http.StatusUnprocessableEntity, form, false)
 		return
 	}
 	if _, err = a.store.AddTransaction(nt); err != nil {
 		if errors.Is(err, store.ErrDuplicate) {
-			form.fail(problemDuplicate, duplicateMessage(spec))
+			form.fail(problemDuplicate)
 			a.renderIndex(w, http.StatusUnprocessableEntity, form, false)
 			return
 		}
@@ -390,14 +384,14 @@ func (a *App) updateTransaction(w http.ResponseWriter, r *http.Request) {
 		a.serverError(w, err)
 		return
 	}
-	nt, spec, err := a.prepare(&form, id)
+	nt, err := a.prepare(&form, id)
 	if err != nil {
 		a.serverError(w, err)
 		return
 	}
-	if len(form.Errors) == 0 {
+	if !form.failed() {
 		if err = a.store.UpdateTransaction(id, nt); errors.Is(err, store.ErrDuplicate) {
-			form.fail(problemDuplicate, duplicateMessage(spec))
+			form.fail(problemDuplicate)
 		} else if errors.Is(err, store.ErrNotFound) {
 			http.NotFound(w, r)
 			return
@@ -407,7 +401,7 @@ func (a *App) updateTransaction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	ret := parseReturn(r.PostFormValue("return"))
-	if len(form.Errors) > 0 {
+	if form.failed() {
 		// The Add page has no rows to edit: an unrecognised return shows the row on
 		// the Transactions page, at the page it sits on.
 		if ret.Page == 0 {
@@ -474,14 +468,6 @@ func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	return id, true
 }
 
-// duplicateMessage is the rejection of a Transaction colliding with another one.
-func duplicateMessage(spec store.TypeSpec) string {
-	if spec.Holding {
-		return errDuplicateHolding
-	}
-	return errDuplicate
-}
-
 // readForm reads the submitted entry form, writing the response itself if the
 // request is malformed.
 func readForm(w http.ResponseWriter, r *http.Request) (entryForm, bool) {
@@ -508,42 +494,42 @@ func readForm(w http.ResponseWriter, r *http.Request) (entryForm, bool) {
 	}, true
 }
 
-// prepare validates the form, appending to form.Errors, and if it is valid
+// prepare validates the form, recording its problems on it, and if it is valid
 // returns the Transaction it describes, creating inline "new..." entries.
 // excludeID is the Transaction being edited (0 on create): it is never a
 // Duplicate of itself.
-func (a *App) prepare(form *entryForm, excludeID int64) (store.NewTransaction, store.TypeSpec, error) {
+func (a *App) prepare(form *entryForm, excludeID int64) (store.NewTransaction, error) {
 	spec, known := store.SpecFor(form.Type)
 	if !known {
-		form.fail(problemInvalid, "Type must be "+typeChoices()+".")
+		form.fail(problemInvalid)
 	}
 	if form.Date == "" {
-		form.missing("date", "Date is required.")
-	} else if msg := validateDate(form.Date); msg != "" {
-		form.fail(problemInvalid, msg)
+		form.missing("date")
+	} else if validateDate(form.Date) != "" {
+		form.fail(problemInvalid)
 	}
 	amount, ok := parseAmount(form.Amount)
 	if !ok {
 		form.AmountBad = true
-		form.fail(problemAmount, errAmount)
+		form.fail(problemAmount)
 	}
 	var nt store.NewTransaction
 	if known {
 		if err := a.validateFields(form, spec); err != nil {
-			return nt, spec, err
+			return nt, err
 		}
-		if len(form.Errors) == 0 && spec.Description {
+		if !form.failed() && spec.Description {
 			taken, err := a.store.DescriptionTaken(form.Date, form.Description, form.Type, excludeID)
 			if err != nil {
-				return nt, spec, err
+				return nt, err
 			}
 			if taken {
-				form.fail(problemDuplicate, errDuplicate)
+				form.fail(problemDuplicate)
 			}
 		}
 	}
-	if len(form.Errors) > 0 {
-		return nt, spec, nil
+	if form.failed() {
+		return nt, nil
 	}
 
 	// Everything is valid: only now create inline "new..." entries.
@@ -555,11 +541,11 @@ func (a *App) prepare(form *entryForm, excludeID int64) (store.NewTransaction, s
 	if spec.Lists != nil {
 		categoryID, err := a.resolveChoice(form.category(*spec.Lists))
 		if err != nil {
-			return nt, spec, err
+			return nt, err
 		}
 		subcategoryID, err := a.resolveChoice(form.subcategory(*spec.Lists))
 		if err != nil {
-			return nt, spec, err
+			return nt, err
 		}
 		if spec.TakesLists(store.LevyListSet) {
 			nt.LevyCategoryID, nt.LevySubcategoryID = categoryID, subcategoryID
@@ -569,13 +555,13 @@ func (a *App) prepare(form *entryForm, excludeID int64) (store.NewTransaction, s
 	}
 	if spec.Holding {
 		if nt.HoldingID, err = a.resolveChoice(form.holding()); err != nil {
-			return nt, spec, err
+			return nt, err
 		}
 	}
-	return nt, spec, nil
+	return nt, nil
 }
 
-// validateFields appends an error for every field the Type does not take but
+// validateFields records a problem for every field the Type does not take but
 // was submitted, and for every field it takes but is missing or too long.
 func (a *App) validateFields(form *entryForm, spec store.TypeSpec) error {
 	set := store.DefaultListSet
@@ -583,22 +569,22 @@ func (a *App) validateFields(form *entryForm, spec store.TypeSpec) error {
 		set = *spec.Lists
 	}
 	if !spec.Description && form.Description != "" {
-		form.fail(problemInvalid, spec.Label+" takes no Description.")
+		form.fail(problemInvalid)
 	}
 	for _, other := range []store.ListSet{store.DefaultListSet, store.LevyListSet} {
 		if !spec.TakesLists(other) && form.submitted(other) {
-			form.fail(problemInvalid, spec.Label+" takes no "+other.Category.Label+" or "+other.Subcategory.Label+".")
+			form.fail(problemInvalid)
 		}
 	}
 	if !spec.Holding && (form.Holding != "" || form.NewHolding != "") {
-		form.fail(problemInvalid, spec.Label+" takes no Holding.")
+		form.fail(problemInvalid)
 	}
 
 	if spec.Description {
 		if form.Description == "" {
-			form.missing("description", "Description is required.")
+			form.missing("description")
 		} else if utf8.RuneCountInString(form.Description) > store.MaxDescriptionLen {
-			form.fail(problemInvalid, errDescriptionLen)
+			form.fail(problemInvalid)
 		}
 	}
 	var required []choice
@@ -610,7 +596,7 @@ func (a *App) validateFields(form *entryForm, spec store.TypeSpec) error {
 	}
 	for _, c := range required {
 		if utf8.RuneCountInString(c.newName) > store.MaxNameLen {
-			form.fail(problemInvalid, c.list.Label+" name must be at most 50 characters.")
+			form.fail(problemInvalid)
 		}
 	}
 	for _, c := range required {
@@ -621,11 +607,11 @@ func (a *App) validateFields(form *entryForm, spec store.TypeSpec) error {
 		switch {
 		case ok:
 		case c.value == "":
-			form.missing(c.inputName(), c.list.Label+" is required.")
+			form.missing(c.inputName())
 		case c.value == newOption && c.newName == "":
-			form.missing("new_"+c.inputName(), c.list.Label+" is required.")
+			form.missing("new_" + c.inputName())
 		default: // an id the UI never offers
-			form.fail(problemInvalid, c.list.Label+" is required.")
+			form.fail(problemInvalid)
 		}
 	}
 	return nil

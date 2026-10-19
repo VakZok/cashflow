@@ -124,7 +124,10 @@ func TestChangeRejectsWhatCreateRejectsAndKeepsTheRowInEditMode(t *testing.T) {
 			continue
 		}
 		row := editRow(r.Body, "1")
-		wantAll(t, row, `role="alert"`, `action="/transactions/1#tx-1"`)
+		wantAll(t, row, `action="/transactions/1#tx-1"`)
+		if applyButton(t, row) == "Apply" && !strings.Contains(row, `class="bubble"`) {
+			t.Errorf("%s: the row shows no problem:\n%s", name, row)
+		}
 	}
 	// The stored Transaction is unchanged.
 	wantAll(t, editRow(ta.get("/transactions").Body, "1"), "Lunch", ">−10<")
@@ -149,7 +152,9 @@ func TestEditIsNeverADuplicateOfItselfButOfOthers(t *testing.T) {
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("onto another: status %d, want 422", r.Status)
 	}
-	wantAll(t, editRow(r.Body, "1"), errDuplicateText)
+	if b := applyButton(t, editRow(r.Body, "1")); b != "Already exists" {
+		t.Errorf("onto another: Apply reads %q", b)
+	}
 
 	// Holdings: own date+holding fine, another's rejected.
 	hold := optionValue(t, body, "holding", "ETF")
@@ -161,10 +166,10 @@ func TestEditIsNeverADuplicateOfItselfButOfOthers(t *testing.T) {
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("holding onto another: status %d, want 422", r.Status)
 	}
-	wantAll(t, editRow(r.Body, "3"), "date and holding")
+	if b := applyButton(t, editRow(r.Body, "3")); b != "Already exists" {
+		t.Errorf("holding onto another: Apply reads %q", b)
+	}
 }
-
-const errDuplicateText = "date and description already exists"
 
 func TestEditAndDeleteOfAMissingTransactionAre404(t *testing.T) {
 	ta := newTestApp(t)

@@ -142,7 +142,7 @@ func TestInvalidChangeFromTheTransactionsPageRerendersThatPage(t *testing.T) {
 		t.Fatalf("status %d, want 422", r.Status)
 	}
 	wantAll(t, r.Body, "2 / 3", "Item 03")
-	wantAll(t, editRow(r.Body, "5"), `role="alert"`, `name="return" value="transactions:2"`, "Amount must be a whole number")
+	wantAll(t, editRow(r.Body, "5"), `name="return" value="transactions:2"`, `class="bubble"`)
 
 	// A Duplicate of another Transaction.
 	dup := changeForm(ta, "2026-09-06", "Item 06", "transactions:2")
@@ -150,7 +150,9 @@ func TestInvalidChangeFromTheTransactionsPageRerendersThatPage(t *testing.T) {
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("duplicate: status %d, want 422", r.Status)
 	}
-	wantAll(t, editRow(r.Body, "5"), errDuplicateText)
+	if b := applyButton(t, editRow(r.Body, "5")); b != "Already exists" {
+		t.Errorf("duplicate: Apply reads %q", b)
+	}
 	wantAll(t, r.Body, "2 / 3")
 }
 
