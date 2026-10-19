@@ -116,6 +116,18 @@ func TestReportNavigationLinks(t *testing.T) {
 	)
 }
 
+func TestReportPeriodArrowsUseThePagerChevrons(t *testing.T) {
+	ta := newTestApp(t)
+	body := ta.mustReport("/report?period=month&date=2026-01")
+	wantAll(t, body,
+		`aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>`,
+		`aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>`,
+	)
+	if strings.ContainsAny(body, "‹›") {
+		t.Errorf("Report still has text arrows:\n%s", body)
+	}
+}
+
 func TestReportDirectPicker(t *testing.T) {
 	ta := newTestApp(t)
 	wantAll(t, ta.mustReport("/report?period=month&date=2026-03"), `method="get" action="/report"`, `type="month"`, `value="2026-03"`)
