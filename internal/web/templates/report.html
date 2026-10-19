@@ -8,9 +8,11 @@
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
   nav.period { display: flex; gap: .5rem; align-items: center; margin: 1rem 0; }
-  nav.period a, nav.period input { padding: .6rem; font-size: 1rem; box-sizing: border-box; }
-  nav.period a { border: 1px solid #ccc; border-radius: .25rem; text-decoration: none; color: inherit; }
-  nav.period a.toggle { color: #000; background: var(--field); border-color: var(--line); }
+  /* One fixed height for the whole row, so the round arrows match the toggle and picker exactly. */
+  nav.period a, nav.period input { height: 2.5rem; padding: 0 .6rem; font-size: 1rem; box-sizing: border-box; }
+  nav.period a { display: flex; align-items: center; flex: none; border: 1px solid var(--line); border-radius: .25rem; text-decoration: none; color: #000; background: var(--field); }
+  nav.period a.arrow { justify-content: center; width: 2.5rem; padding: 0; border-radius: 50%; color: #444; }
+  nav.period svg { width: 1.4rem; height: 1.4rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   form.picker { display: flex; gap: .5rem; flex: 1; }
   form.picker input { flex: 1; min-width: 0; border-radius: .25rem; }
   .net { font-size: 3rem; font-weight: 700; margin: 1rem 0 .25rem; text-align: center; }
@@ -32,7 +34,7 @@
 <h1>Report</h1>
 
 <nav class="period">
-  {{if .Prev}}<a href="{{.Prev}}" aria-label="Previous">‹</a>{{end}}
+  {{if .Prev}}<a class="arrow" href="{{.Prev}}" aria-label="Previous">{{template "chevron-left"}}</a>{{end}}
   <a class="toggle" href="{{.ToggleLink}}">{{.ToggleLabel}}</a>
   <form class="picker" method="get" action="/report">
     <input type="hidden" name="period" value="{{.Period.Kind}}">
@@ -41,7 +43,7 @@
     {{if .PickerYear}}<input type="number" name="date" min="{{.PickerMin}}" max="{{.PickerMax}}" value="{{.Period.Value}}" aria-label="Year" onchange="this.form.submit()">
     {{else}}<input type="month" name="date" min="{{printf "%04d" .PickerMin}}-01" max="{{.PickerMax}}-12" value="{{.Period.Value}}" aria-label="Month" onchange="this.form.submit()">{{end}}
   </form>
-  {{if .Next}}<a href="{{.Next}}" aria-label="Next">›</a>{{end}}
+  {{if .Next}}<a class="arrow" href="{{.Next}}" aria-label="Next">{{template "chevron-right"}}</a>{{end}}
 </nav>
 
 <p class="net {{.NetClass}}">{{.Net}}</p>
