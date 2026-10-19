@@ -18,7 +18,7 @@ function onEdit(e) {
     var newName = field.form.elements['new_' + field.name];
     if (newName) newName.classList.remove('invalid');
   }
-  if (field.name === 'amount') {
+  if (field.parentNode.classList.contains('amount-wrap')) {
     var bubble = field.parentNode.querySelector('.bubble');
     if (bubble) bubble.remove();
   }

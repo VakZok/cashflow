@@ -10,15 +10,9 @@ import (
 	"github.com/VakZok/money_manager_app/internal/store"
 )
 
-const (
-	errIncomplete       = "All fields must be filled in for every row."
-	errTooManyRows      = "The list can hold at most 50 rows."
-	errInListDuplicates = "Duplicate rows in the list: "
-	errNothingToAdd     = "The list is empty, there is nothing to add."
-)
-
 // repeatingRow is one row of the Repeating form: submitted values (so a
-// rejected submission keeps what was typed). Index only names its inputs.
+// rejected submission keeps what was typed) and their problems. Index only
+// names its inputs.
 type repeatingRow struct {
 	Index          int
 	Type           string
@@ -38,6 +32,25 @@ type repeatingRow struct {
 	NewHolding string
 
 	holdingName string // set on save: the Holding's name, existing or new
+
+	// The problems of a submitted row, which the shared error treatment
+	// renders: the fields to highlight (by input name without the row
+	// index), the amount bubble, and the mark of a row that duplicates an
+	// earlier one.
+	Missing   map[string]bool
+	AmountBad bool
+	Duplicate bool
+}
+
+// Bad reports whether the row's input of that name (without the row index) is highlighted.
+func (r repeatingRow) Bad(field string) bool { return r.Missing[field] }
+
+// missing records that the row's input of that name has nothing in it.
+func (r *repeatingRow) missing(field string) {
+	if r.Missing == nil {
+		r.Missing = map[string]bool{}
+	}
+	r.Missing[field] = true
 }
 
 // TakesHolding reports whether the row's Type takes a Holding instead of
@@ -93,8 +106,40 @@ type repeatingData struct {
 	Holdings          []store.Named
 	MaxRows           int
 	Date              string
-	Errors            []string // shown in the box below the buttons
-	Notice            string   // likewise; never persisted
+	DateMissing       bool // the month picker is highlighted
+	// Save and Add are the Save List and Add Transactions buttons.
+	Save, Add listButton
+}
+
+// listButton is a submit button of the Repeating form while it shows a
+// problem or a success text; the zero listButton shows its usual label.
+type listButton struct {
+	Label string // "" is the usual label
+	Flash bool   // Label is a success text, shown for a moment
+}
+
+// listProblems is what is wrong with a submitted list, as the pressed button shows it.
+type listProblems struct {
+	missing, duplicate bool
+	invalid            bool // only a hand-crafted request gets here
+	amount             bool // shown by the amount's bubble, not by the button
+}
+
+func (p listProblems) failed() bool { return p.missing || p.duplicate || p.invalid || p.amount }
+
+// button is the pressed button showing the problems.
+func (p listProblems) button() listButton {
+	switch {
+	case p.missing && p.duplicate:
+		return listButton{Label: "Duplicate rows and missing fields"}
+	case p.missing:
+		return listButton{Label: "Missing fields"}
+	case p.invalid:
+		return listButton{Label: "Invalid input"}
+	case p.duplicate:
+		return listButton{Label: "Duplicate rows"}
+	}
+	return listButton{}
 }
 
 // repeatingTypes are the Types a Repeating row can take: all of them.
@@ -144,21 +189,23 @@ func (a *App) repeating(w http.ResponseWriter, r *http.Request) {
 		a.serverError(w, err)
 		return
 	}
-	notice := ""
+	d := repeatingData{Rows: rows, Date: a.defaultBookingDate()}
 	if r.URL.Query().Get("saved") == "1" {
-		notice = "List saved"
+		d.Save = listButton{Label: "List saved!", Flash: true}
 	}
-	a.renderRepeating(w, http.StatusOK, rows, a.defaultBookingDate(), nil, notice)
+	a.renderRepeating(w, http.StatusOK, d)
 }
 
-func (a *App) renderRepeating(w http.ResponseWriter, status int, rows []repeatingRow, date string, errs []string, notice string) {
-	if len(rows) == 0 {
-		rows = []repeatingRow{{Type: store.TypeExpense}}
+// renderRepeating renders the Repeating page with d's rows, date and buttons;
+// it fills in the choices.
+func (a *App) renderRepeating(w http.ResponseWriter, status int, d repeatingData) {
+	if len(d.Rows) == 0 {
+		d.Rows = []repeatingRow{{Type: store.TypeExpense}}
 	}
-	for i := range rows {
-		rows[i].Index = i
+	for i := range d.Rows {
+		d.Rows[i].Index = i
 	}
-	d := repeatingData{Rows: rows, Types: repeatingTypes(), MaxRows: store.MaxRepeating, Date: date, Errors: errs, Notice: notice}
+	d.Types, d.MaxRows = repeatingTypes(), store.MaxRepeating
 	var err error
 	if d.Categories, err = a.store.ListNamed(store.DefaultListSet.Category); err != nil {
 		a.serverError(w, err)
@@ -197,7 +244,7 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 			date += "-01" // month picker: book on the 1st
 		}
 	}
-	var rows, filled []repeatingRow
+	var rows []repeatingRow
 	for _, n := range r.PostForm["row"] {
 		row := repeatingRow{
 			Type:           r.PostFormValue("type_" + n),
@@ -217,22 +264,17 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 			NewHolding: strings.TrimSpace(r.PostFormValue("new_holding_" + n)),
 		}
 		rows = append(rows, row)
-		if !row.blank() {
-			filled = append(filled, row)
+	}
+	var filled []*repeatingRow
+	for i := range rows {
+		if !rows[i].blank() {
+			filled = append(filled, &rows[i])
 		}
 	}
 
-	var errs []string
-	addError := func(msg string) {
-		for _, e := range errs {
-			if e == msg {
-				return
-			}
-		}
-		errs = append(errs, msg)
-	}
+	var p listProblems
 	if len(filled) > store.MaxRepeating {
-		addError(errTooManyRows)
+		p.invalid = true
 	}
 	entries := make([]store.RepeatingEntry, 0, len(filled))
 	holdings, err := a.store.ListNamed(store.HoldingList)
@@ -240,56 +282,65 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 		a.serverError(w, err)
 		return
 	}
-	for i := range filled {
-		row := &filled[i]
+	for _, row := range filled {
 		spec, ok := repeatingSpec(row.Type)
 		if !ok {
-			addError("Type must be " + repeatingTypeChoices() + ".")
-			continue
-		}
-		choices := row.choices(spec)
-		complete := row.Amount != "" && (spec.Holding || row.Description != "")
-		for _, c := range choices {
-			ok, err := a.validChoice(c)
-			if err != nil {
-				a.serverError(w, err)
-				return
-			}
-			complete = complete && ok
-		}
-		if !complete {
-			addError(errIncomplete)
+			p.invalid = true
 			continue
 		}
 		amount, ok := parseAmount(row.Amount)
-		if !ok {
-			addError(errAmount)
+		switch {
+		case row.Amount == "":
+			row.missing("amount")
+		case !ok:
+			row.AmountBad, p.amount = true, true
 		}
 		if spec.Holding {
 			row.Description = ""
-			row.holdingName = row.NewHolding
+			if row.Holding == newOption {
+				row.holdingName = row.NewHolding
+			}
 			for _, h := range holdings {
 				if row.Holding == strconv.FormatInt(h.ID, 10) {
 					row.holdingName = h.Name
 				}
 			}
+		} else if row.Description == "" {
+			row.missing("description")
 		} else if utf8.RuneCountInString(row.Description) > store.MaxDescriptionLen {
-			addError(errDescriptionLen)
+			p.invalid = true
 		}
-		for _, c := range choices {
-			if c.value == newOption && utf8.RuneCountInString(c.newName) > store.MaxNameLen {
-				addError(c.list.Label + " name must be at most 50 characters.")
+		for _, c := range row.choices(spec) {
+			if utf8.RuneCountInString(c.newName) > store.MaxNameLen {
+				p.invalid = true
+			}
+			ok, err := a.validChoice(c)
+			if err != nil {
+				a.serverError(w, err)
+				return
+			}
+			switch {
+			case ok:
+			case c.value == "":
+				row.missing(c.inputName())
+			case c.value == newOption && c.newName == "":
+				row.missing("new_" + c.inputName())
+			default: // an id the UI never offers
+				p.invalid = true
 			}
 		}
+		p.missing = p.missing || len(row.Missing) > 0
 		entries = append(entries, store.RepeatingEntry{Type: row.Type, Amount: amount, Description: row.Description})
 	}
-	if len(errs) == 0 {
-		if dups := inListDuplicates(filled); len(dups) > 0 {
-			addError(errInListDuplicates + strings.Join(dups, ", "))
+	p.duplicate = markInListDuplicates(filled)
+	if p.failed() {
+		d := repeatingData{Rows: rows, Date: date}
+		if r.PostFormValue("action") == "add" {
+			d.Add = p.button()
+		} else {
+			d.Save = p.button()
 		}
-	}
-	if len(errs) > 0 {
-		a.renderRepeating(w, http.StatusUnprocessableEntity, rows, date, errs, "")
+		a.renderRepeating(w, http.StatusUnprocessableEntity, d)
 		return
 	}
 
@@ -337,33 +388,36 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 
 // collision names how a row collides with others of the same list when
 // booked on one date (the Duplicate rule, ADR 0006, minus the date): rows with
-// equal key collide, and label is what the error calls them. Each Type with
-// its own rule adds a case here.
-func (r repeatingRow) collision() (key, label string) {
+// equal key collide. ok is false for a row that collides with none, as it
+// lacks the field its rule compares. Each Type with its own rule adds a case here.
+func (r repeatingRow) collision() (key string, ok bool) {
+	if _, known := repeatingSpec(r.Type); !known {
+		return "", false
+	}
 	if r.TakesHolding() {
 		// Whatever the Type: a Holding can be booked once per date.
-		return "holding\x00" + asciiLower(r.holdingName), r.holdingName
+		return "holding\x00" + asciiLower(r.holdingName), r.holdingName != ""
 	}
-	return r.Type + "\x00" + asciiLower(r.Description), r.Description
+	return r.Type + "\x00" + asciiLower(r.Description), r.Description != ""
 }
 
-// inListDuplicates returns the labels of the groups of rows that collide with
-// each other, in first-seen order.
-func inListDuplicates(rows []repeatingRow) []string {
-	count := map[string]int{}
+// markInListDuplicates marks every row that collides with an earlier one,
+// so the first row of each set of colliding rows stays unmarked, and reports
+// whether it marked any.
+func markInListDuplicates(rows []*repeatingRow) bool {
+	seen := map[string]bool{}
+	marked := false
 	for _, r := range rows {
-		key, _ := r.collision()
-		count[key]++
-	}
-	var labels []string
-	for _, r := range rows {
-		key, label := r.collision()
-		if count[key] > 1 {
-			labels = append(labels, label)
-			count[key] = 0
+		key, ok := r.collision()
+		switch {
+		case !ok:
+		case seen[key]:
+			r.Duplicate, marked = true, true
+		default:
+			seen[key] = true
 		}
 	}
-	return labels
+	return marked
 }
 
 // asciiLower folds ASCII case only, like SQLite's NOCASE the Duplicate rule uses.
@@ -379,14 +433,16 @@ func asciiLower(s string) string {
 
 // addTransactions books the just-saved list on date. The list is already
 // saved, so every failure here re-renders it as stored, without booking.
+// The result is shown on the Add Transactions button.
 func (a *App) addTransactions(w http.ResponseWriter, date string, rowCount int) {
-	var errs []string
-	notice := ""
-	switch msg := validateDate(date); {
-	case msg != "":
-		errs = []string{msg}
+	d := repeatingData{Date: date}
+	switch {
+	case date == "":
+		d.DateMissing, d.Add.Label = true, "Missing fields"
+	case !validDate(date):
+		d.Add.Label = "Invalid input"
 	case rowCount == 0:
-		errs = []string{errNothingToAdd}
+		d.Add.Label = "List is empty"
 	default:
 		booked, duplicates, err := a.store.BookRepeating(date)
 		switch {
@@ -394,32 +450,29 @@ func (a *App) addTransactions(w http.ResponseWriter, date string, rowCount int) 
 			a.serverError(w, err)
 			return
 		case len(duplicates) > 0:
-			errs = []string{"Already exists on " + date + ": " + strings.Join(duplicates, ", ")}
-		case booked == 1:
-			notice = "1 Transaction added for " + date + "."
+			d.Add.Label = "Already exists"
 		default:
-			notice = strconv.Itoa(booked) + " Transactions added for " + date + "."
+			d.Add = listButton{Label: "Added " + transactionCount(booked) + " and saved List!", Flash: true}
 		}
 	}
-	rows, err := a.savedRows()
-	if err != nil {
+	var err error
+	if d.Rows, err = a.savedRows(); err != nil {
 		a.serverError(w, err)
 		return
 	}
 	status := http.StatusOK
-	if len(errs) > 0 {
+	if !d.Add.Flash {
 		status = http.StatusUnprocessableEntity
 	}
-	a.renderRepeating(w, status, rows, date, errs, notice)
+	a.renderRepeating(w, status, d)
 }
 
-// repeatingTypeChoices reads "Expense or Income" from the Types a row can take.
-func repeatingTypeChoices() string {
-	var labels []string
-	for _, s := range repeatingTypes() {
-		labels = append(labels, s.Label)
+// transactionCount reads "1 Transaction" or "n Transactions".
+func transactionCount(n int) string {
+	if n == 1 {
+		return "1 Transaction"
 	}
-	return strings.Join(labels[:len(labels)-1], ", ") + " or " + labels[len(labels)-1]
+	return strconv.Itoa(n) + " Transactions"
 }
 
 func (r repeatingRow) holding() choice {

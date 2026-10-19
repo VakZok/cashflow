@@ -31,36 +31,33 @@ func TestAddTransactionsBooksOneTransactionPerRowAndStaysOnThePage(t *testing.T)
 	if r.Status != http.StatusOK {
 		t.Fatalf("status %d\n%s", r.Status, r.Body)
 	}
-	wantAll(t, r.Body, "2 Transactions added for 2026-09-15.", `value="Salary"`, `value="Rent"`, `value="2026-09"`)
+	wantAll(t, r.Body, `value="Salary"`, `value="Rent"`, `value="2026-09"`, `data-resting="Add Transactions" data-flash>`)
+	if b := addButtonText(t, r.Body); b != "Added 2 Transactions and saved List!" {
+		t.Errorf("button %q", b)
+	}
 
 	home := ta.get("/transactions").Body
 	wantAll(t, home, "Salary", "Rent", "2026-09-15")
 	report := ta.mustReport("/report?period=month&date=2026-09")
 	wantAll(t, report, "2.000", "800")
 
-	// The list is unchanged and the notice is gone on the next load.
+	// The list is unchanged and the success text is gone on the next load.
 	again := ta.get("/repeating").Body
-	if rowCount(again) != 2 || strings.Contains(again, "added for") {
+	if rowCount(again) != 2 || addButtonText(t, again) != "Add Transactions" {
 		t.Errorf("reload:\n%s", again)
 	}
 }
 
 func TestAddTransactionsFromTheMonthPickerBooksOnTheFirst(t *testing.T) {
 	ta := newTestApp(t)
-	wantAll(t, ta.addTransactions("2026-09", repRow("expense", "8", "Rent")).Body, "1 Transaction added for 2026-09-01.")
+	ta.addTransactions("2026-09", repRow("expense", "8", "Rent"))
+	wantAll(t, ta.get("/transactions").Body, "2026-09-01")
 }
 
 func TestAddTransactionsSaysTransactionInTheSingular(t *testing.T) {
 	ta := newTestApp(t)
-	wantAll(t, ta.addTransactions("2026-10-01", repRow("expense", "8", "Rent")).Body, "1 Transaction added for 2026-10-01.")
-}
-
-func TestAddTransactionsNoticeComesAfterTheButtons(t *testing.T) {
-	ta := newTestApp(t)
-	body := ta.addTransactions("2026-10-01", repRow("expense", "8", "Rent")).Body
-	b, n := strings.Index(body, "Add Transactions"), strings.Index(body, "Transaction added")
-	if b < 0 || n < b {
-		t.Errorf("button at %d, notice at %d", b, n)
+	if b := addButtonText(t, ta.addTransactions("2026-10-01", repRow("expense", "8", "Rent")).Body); b != "Added 1 Transaction and saved List!" {
+		t.Errorf("button %q", b)
 	}
 }
 
@@ -77,10 +74,7 @@ func TestAddTransactionsTwiceForTheSameMonthReportsDuplicatesAndKeepsTheList(t *
 	ta.addTransactions("2026-10-01", rows...)
 	// The second press drops Salary from the list; Rent and Gym collide.
 	r := ta.addTransactions("2026-10-01", rows[:2]...)
-	if r.Status != http.StatusUnprocessableEntity {
-		t.Fatalf("status %d, want 422\n%s", r.Status, r.Body)
-	}
-	wantAll(t, r.Body, "Already exists on 2026-10-01: Rent, Gym")
+	wantRejected(t, r, "add", "Already exists", "")
 
 	// Salary is not booked a second time, and the saved list is the one shown.
 	if n := strings.Count(ta.get("/transactions").Body, "Salary"); n != 1 {
@@ -96,32 +90,27 @@ func TestDuplicateListsEveryCollidingRowAndBooksNothing(t *testing.T) {
 	ta := newTestApp(t)
 	ta.post("/transactions", expenseForm("2026-10-01", "5", "rent", "new", "Cat", "new", "Sub"))
 	r := ta.addTransactions("2026-10-01", repRow("income", "5", "Salary"), repRow("expense", "800", "Rent"))
-	if r.Status != http.StatusUnprocessableEntity {
-		t.Fatalf("status %d", r.Status)
-	}
-	wantAll(t, r.Body, "Already exists on 2026-10-01: Rent", `value="Salary"`)
+	wantRejected(t, r, "add", "Already exists", "")
+	wantAll(t, r.Body, `value="Salary"`)
 	if strings.Contains(ta.get("/transactions").Body, "Salary") {
 		t.Error("Salary was booked despite the Duplicate")
 	}
 }
 
-func TestDuplicateErrorComesAfterTheAddTransactionsButton(t *testing.T) {
+func TestAddTransactionsWithAnEmptyListSaysSo(t *testing.T) {
 	ta := newTestApp(t)
-	ta.addTransactions("2026-10-01", repRow("expense", "8", "Rent"))
-	body := ta.addTransactions("2026-10-01", repRow("expense", "8", "Rent")).Body
-	b, e := strings.Index(body, "Add Transactions"), strings.Index(body, "Already exists")
-	if b < 0 || e < b {
-		t.Errorf("button at %d, error at %d", b, e)
+	mustSave(t, ta, repeatingForm(repRow("expense", "8", "Rent")))
+	r := ta.addTransactions("2026-10-01", [7]string{"expense", "", "", "", "", "", ""})
+	wantRejected(t, r, "add", "List is empty", "")
+	if rowCount(ta.get("/repeating").Body) != 1 || strings.Contains(ta.get("/repeating").Body, "Rent") {
+		t.Error("the empty list was not saved")
 	}
 }
 
 func TestAddTransactionsRejectsRowsCollidingWithEachOtherBeforeSavingOrBooking(t *testing.T) {
 	ta := newTestApp(t)
 	r := ta.addTransactions("2026-10-01", repRow("income", "5", "Salary"), repRow("expense", "7", "Rent"), repRow("expense", "8", "rent"))
-	if r.Status != http.StatusUnprocessableEntity {
-		t.Fatalf("status %d\n%s", r.Status, r.Body)
-	}
-	wantAll(t, r.Body, "Duplicate rows in the list: Rent")
+	wantRejected(t, r, "add", "Duplicate rows", "", 2)
 	if body := ta.get("/transactions").Body; !strings.Contains(body, "No Transactions yet.") {
 		t.Errorf("a Transaction was booked:\n%s", body)
 	}
@@ -133,14 +122,8 @@ func TestAddTransactionsRejectsRowsCollidingWithEachOtherBeforeSavingOrBooking(t
 func TestAddTransactionsWithAnIncompleteListDoesNothing(t *testing.T) {
 	ta := newTestApp(t)
 	r := ta.addTransactions("2026-10-01", repRow("expense", "9", "Fine"), [7]string{"income", "", "Salary", "new", "C", "new", "S"})
-	if r.Status != http.StatusUnprocessableEntity {
-		t.Fatalf("status %d", r.Status)
-	}
-	wantAll(t, r.Body, errIncomplete, `value="Fine"`, `value="2026-10"`)
-	b, e := strings.Index(r.Body, "Add Transactions"), strings.Index(r.Body, errIncomplete)
-	if b < 0 || e < b {
-		t.Errorf("button at %d, error at %d", b, e)
-	}
+	wantRejected(t, r, "add", "Missing fields", "amount_1")
+	wantAll(t, r.Body, `value="Fine"`, `value="2026-10"`)
 	if strings.Contains(ta.get("/repeating").Body, "Fine") {
 		t.Error("the list was saved")
 	}
@@ -151,18 +134,20 @@ func TestAddTransactionsWithAnIncompleteListDoesNothing(t *testing.T) {
 
 func TestAddTransactionsWithAnInvalidDateBooksNothingButSavesTheList(t *testing.T) {
 	ta := newTestApp(t)
-	for date, want := range map[string]string{
-		"":            "Date must be in the format YYYY-MM-DD.",
-		"01.10.2026":  "Date must be in the format YYYY-MM-DD.",
-		"2026-02-30":  "Date must be in the format YYYY-MM-DD.",
-		"0000-12-31":  "Date must be between 0001 and 9999.",
-		"10000-01-01": "Date must be in the format YYYY-MM-DD.",
+	for date, button := range map[string]string{
+		"":            "Missing fields",
+		"01.10.2026":  "Invalid input",
+		"2026-02-30":  "Invalid input",
+		"0000-12-31":  "Invalid input",
+		"10000-01-01": "Invalid input",
 	} {
 		r := ta.addTransactions(date, repRow("expense", "8", "Rent"))
-		if r.Status != http.StatusUnprocessableEntity {
-			t.Fatalf("date %q: status %d", date, r.Status)
+		inputs := ""
+		if date == "" {
+			inputs = "date"
 		}
-		wantAll(t, r.Body, want, `value="Rent"`)
+		wantRejected(t, r, "add", button, inputs)
+		wantAll(t, r.Body, `value="Rent"`)
 		if body := ta.get("/transactions").Body; !strings.Contains(body, "No Transactions yet.") {
 			t.Errorf("date %q: a Transaction was created", date)
 		}
@@ -202,10 +187,9 @@ func TestAddTransactionsBooksLevyAndRebateWithTheirLevyLists(t *testing.T) {
 		[7]string{"levy", "250", "Income tax", "new", "Tax", "new", "Federal"},
 		[7]string{"rebate", "40", "Tax refund", "new", "Tax", "new", "Federal"},
 		repRow("income", "2000", "Salary"))
-	if r.Status != http.StatusOK {
-		t.Fatalf("status %d\n%s", r.Status, r.Body)
+	if r.Status != http.StatusOK || addButtonText(t, r.Body) != "Added 3 Transactions and saved List!" {
+		t.Fatalf("status %d, button %q", r.Status, addButtonText(t, r.Body))
 	}
-	wantAll(t, r.Body, "3 Transactions added for 2026-09-15.")
 
 	home := ta.get("/transactions").Body
 	wantAll(t, home, "Income tax", ">−250<", "Tax refund", ">+40<", "Tax", "Federal")
@@ -223,10 +207,7 @@ func TestAddTransactionsReportsLevyDuplicatesAndBooksNothing(t *testing.T) {
 	ta.post("/transactions", levyForm("2026-10-01", "5", "income TAX", "new", "Tax", "new", "Federal"))
 	r := ta.addTransactions("2026-10-01",
 		repRow("income", "5", "Salary"), repRow("levy", "250", "Income tax"), repRow("rebate", "3", "Refund"))
-	if r.Status != http.StatusUnprocessableEntity {
-		t.Fatalf("status %d, want 422\n%s", r.Status, r.Body)
-	}
-	wantAll(t, r.Body, "Already exists on 2026-10-01: Income tax")
+	wantRejected(t, r, "add", "Already exists", "")
 	if body := ta.get("/transactions").Body; strings.Contains(body, "Salary") || strings.Contains(body, "Refund") {
 		t.Errorf("rows were booked despite the Duplicate:\n%s", body)
 	}
@@ -238,19 +219,15 @@ func TestRebateIsNotADuplicateOfAnIncomeWithTheSameDescriptionAndDate(t *testing
 	ta.post("/transactions", url.Values{"type": {"income"}, "date": {"2026-10-01"}, "amount": {"40"}, "description": {"Refund"},
 		"category": {"new"}, "new_category": {"Cat2"}, "subcategory": {"new"}, "new_subcategory": {"Sub2"}})
 	r := ta.addTransactions("2026-10-01", repRow("rebate", "40", "refund"))
-	if r.Status != http.StatusOK {
-		t.Fatalf("status %d, want 200\n%s", r.Status, r.Body)
+	if r.Status != http.StatusOK || addButtonText(t, r.Body) != "Added 1 Transaction and saved List!" {
+		t.Fatalf("status %d, button %q", r.Status, addButtonText(t, r.Body))
 	}
-	wantAll(t, r.Body, "1 Transaction added for 2026-10-01.")
 }
 
 func TestAddTransactionsWithAnIncompleteLevyRowBooksNothing(t *testing.T) {
 	ta := newTestApp(t)
 	r := ta.addTransactions("2026-10-01", repRow("income", "5", "Salary"), [7]string{"levy", "250", "Tax", "", "", "", ""})
-	if r.Status != http.StatusUnprocessableEntity {
-		t.Fatalf("status %d, want 422", r.Status)
-	}
-	wantAll(t, r.Body, errIncomplete)
+	wantRejected(t, r, "add", "Missing fields", "levy_category_1,levy_subcategory_1")
 	if strings.Contains(ta.get("/transactions").Body, "Salary") {
 		t.Error("Salary was booked")
 	}
@@ -260,10 +237,9 @@ func TestAddTransactionsBooksInvestmentAndDivestmentAgainstTheirHolding(t *testi
 	ta := newTestApp(t)
 	r := ta.addTransactions("2026-09-15",
 		holdRow("investment", "300", "new", "ETF World"), holdRow("divestment", "100", "new", "Bonds"), repRow("income", "2000", "Salary"))
-	if r.Status != http.StatusOK {
-		t.Fatalf("status %d\n%s", r.Status, r.Body)
+	if r.Status != http.StatusOK || addButtonText(t, r.Body) != "Added 3 Transactions and saved List!" {
+		t.Fatalf("status %d, button %q", r.Status, addButtonText(t, r.Body))
 	}
-	wantAll(t, r.Body, "3 Transactions added for 2026-09-15.")
 	wantAll(t, ta.get("/transactions").Body, "ETF World", ">+300<", "Bonds", ">−100<", "Investment", "Divestment")
 }
 
@@ -271,10 +247,7 @@ func TestAddTransactionsReportsHoldingDuplicatesByHoldingNameWhateverTheType(t *
 	ta := newTestApp(t)
 	ta.post("/transactions", holdingForm("divestment", "2026-10-01", "40", "new", "ETF"))
 	r := ta.addTransactions("2026-10-01", repRow("income", "5", "Salary"), holdRow("investment", "50", "1", ""))
-	if r.Status != http.StatusUnprocessableEntity {
-		t.Fatalf("status %d, want 422\n%s", r.Status, r.Body)
-	}
-	wantAll(t, r.Body, "Already exists on 2026-10-01: ETF")
+	wantRejected(t, r, "add", "Already exists", "")
 	if strings.Contains(ta.get("/transactions").Body, "Salary") {
 		t.Error("Salary was booked despite the Duplicate")
 	}
@@ -284,7 +257,7 @@ func TestAddTransactionsBooksNothingWhenOnlySomeHoldingRowsCollide(t *testing.T)
 	ta := newTestApp(t)
 	ta.post("/transactions", holdingForm("investment", "2026-10-01", "40", "new", "ETF"))
 	r := ta.addTransactions("2026-10-01", holdRow("investment", "5", "new", "Gold"), holdRow("divestment", "6", "1", ""))
-	wantAll(t, r.Body, "Already exists on 2026-10-01: ETF")
+	wantRejected(t, r, "add", "Already exists", "")
 	if body := ta.get("/transactions").Body; strings.Contains(body, ">+5<") || strings.Contains(body, ">−6<") {
 		t.Error("the Gold or the colliding row was booked")
 	}
@@ -293,20 +266,16 @@ func TestAddTransactionsBooksNothingWhenOnlySomeHoldingRowsCollide(t *testing.T)
 func TestAddTransactionsRejectsInvestmentAndDivestmentOfTheSameHolding(t *testing.T) {
 	ta := newTestApp(t)
 	r := ta.addTransactions("2026-10-01", holdRow("investment", "5", "new", "ETF"), holdRow("divestment", "6", "new", "ETF"))
-	if r.Status != http.StatusUnprocessableEntity {
-		t.Fatalf("status %d, want 422", r.Status)
-	}
-	wantAll(t, r.Body, "Duplicate rows in the list: ETF")
+	wantRejected(t, r, "add", "Duplicate rows", "", 1)
 	if strings.Contains(ta.get("/transactions").Body, "ETF") || strings.Contains(ta.get("/repeating").Body, ">ETF</option>") {
 		t.Error("something was saved or booked")
 	}
 }
 
-func TestAddTransactionsTwiceReportsTheHoldingNameAgain(t *testing.T) {
+func TestAddTransactionsTwiceWithAPickedHoldingFindsTheDuplicate(t *testing.T) {
 	ta := newTestApp(t)
 	ta.addTransactions("2026-10-01", holdRow("investment", "5", "new", "ETF"))
-	r := ta.addTransactions("2026-10-01", holdRow("investment", "5", "1", ""))
-	wantAll(t, r.Body, "Already exists on 2026-10-01: ETF")
+	wantRejected(t, ta.addTransactions("2026-10-01", holdRow("investment", "5", "1", "")), "add", "Already exists", "")
 }
 
 func TestMonthPickerHasAnAccessibleNameButNoVisibleLabel(t *testing.T) {
