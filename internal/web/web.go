@@ -60,6 +60,8 @@ func New(cfg Config) (*App, error) {
 	a.mux.HandleFunc("POST /transactions", a.createTransaction)
 	a.mux.HandleFunc("POST /transactions/{id}", a.updateTransaction)
 	a.mux.HandleFunc("POST /transactions/{id}/delete", a.deleteTransaction)
+	a.mux.HandleFunc("GET /categories", a.categories)
+	a.mux.HandleFunc("POST /categories", a.addCategory)
 	a.mux.HandleFunc("GET /repeating", a.repeating)
 	a.mux.HandleFunc("POST /repeating", a.saveRepeating)
 	return a, nil

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
+<title>Edit Categories</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
+  input, select, button { width: 100%; box-sizing: border-box; padding: .6rem; font-size: 1rem; height: 2.75rem; }
+  select { border-radius: 1.375rem; padding: 0 1rem; }
+  .add { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-top: .5rem; }
+  .add > * { min-width: 0; }
+  ul.entries { list-style: none; padding: 0; }
+  ul.entries li { display: flex; justify-content: space-between; gap: .5rem; padding: .6rem 0; border-bottom: 1px solid #ddd; }
+  .count { color: #666; white-space: nowrap; }
+{{template "pager-style"}}
+</style>
+{{template "nav-style"}}
+</head>
+<body>
+<h1>Edit Categories</h1>
+<form method="get" action="/categories">
+  <select name="list" aria-label="List" onchange="this.form.submit()">
+    {{range .Choices}}<option value="{{.Key}}"{{if eq .Key $.Current.Key}} selected{{end}}>{{.List.Label}}</option>
+    {{end}}
+  </select>
+</form>
+<form class="add" method="post" action="/categories">
+  <input type="hidden" name="list" value="{{.Current.Key}}">
+  <input type="text" name="name" required maxlength="50" aria-label="Name" placeholder="Name" autocomplete="off">
+  <button id="add" type="submit">{{if eq .Added "new"}}Added!{{else if eq .Added "exists"}}Exists!{{else}}Add{{end}}</button>
+</form>
+{{if .Entries}}
+<ul class="entries">
+{{range .Entries}}
+  <li><span>{{.Name}}</span><span class="count">{{.Transactions}} Trans.{{if .Repeating}} + {{.Repeating}} Rep.{{end}}</span></li>
+{{end}}
+</ul>
+{{else}}
+<p>No entries yet.</p>
+{{end}}
+{{template "pager" .}}
+{{if .Added}}
+<script>
+  // The flag is one-off: drop it from the URL so a reload doesn't show it again, and reset the button after 2 s.
+  var u = new URL(location.href)
+  u.searchParams.delete('added')
+  history.replaceState(null, '', u)
+  setTimeout(function () { document.getElementById('add').textContent = 'Add' }, 2000)
+</script>
+{{end}}
+{{template "nav" "categories"}}
+</body>
+</html>

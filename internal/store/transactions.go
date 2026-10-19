@@ -414,3 +414,58 @@ func (s *Store) DescriptionTaken(date, description, typ string, excludeID int64)
 		date, description, typ, excludeID).Scan(&n)
 	return n > 0, err
 }
+
+// NamedUsage is a list entry with the number of Transactions and Repeating
+// entries that use it, counted when it is read.
+type NamedUsage struct {
+	Named
+	Transactions, Repeating int
+}
+
+// CountNamed returns the number of entries in the list.
+func (s *Store) CountNamed(l List) (int, error) {
+	var n int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM " + l.table).Scan(&n)
+	return n, err
+}
+
+// ListNamedPage returns up to limit entries of the list from offset, ordered by
+// name ignoring case, each with how many Transactions and Repeating entries use it.
+func (s *Store) ListNamedPage(l List, limit, offset int) ([]NamedUsage, error) {
+	rows, err := s.db.Query(
+		`SELECT n.id, n.name,
+		        (SELECT COUNT(*) FROM transactions t WHERE t.`+l.column+` = n.id),
+		        (SELECT COUNT(*) FROM repeating r WHERE r.`+l.column+` = n.id)
+		 FROM `+l.table+` n ORDER BY n.name COLLATE NOCASE LIMIT ? OFFSET ?`, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []NamedUsage
+	for rows.Next() {
+		var u NamedUsage
+		if err := rows.Scan(&u.ID, &u.Name, &u.Transactions, &u.Repeating); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// AddNamed adds the name to the list unless the list has it already, ignoring
+// case. It returns the page (of PageSize entries, from 1) the entry sits on in
+// the list ordered by name, and whether it was created.
+func (s *Store) AddNamed(l List, name string) (page int, created bool, err error) {
+	name = strings.TrimSpace(name)
+	res, err := s.db.Exec("INSERT INTO "+l.table+" (name) VALUES (?) ON CONFLICT (name) DO NOTHING", name)
+	if err != nil {
+		return 0, false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, false, err
+	}
+	var before int
+	err = s.db.QueryRow("SELECT COUNT(*) FROM "+l.table+" WHERE name < ? COLLATE NOCASE", name).Scan(&before)
+	return before/PageSize + 1, n == 1, err
+}
