@@ -22,9 +22,12 @@
   .lists-default > :nth-child(3), .lists-levy > :nth-child(3) { grid-column: 2; grid-row: 1; }
   .lists-default > :nth-child(4), .lists-levy > :nth-child(4) { grid-column: 2; grid-row: 2; }
   #add-row { display: block; width: auto; margin: 1rem auto 0; padding: .3rem 1rem; }
-  input[type=month] { -webkit-appearance: none; appearance: none; min-width: 0; margin-top: 1rem; border: 1px solid #767676; border-radius: .25rem; background: #fff; }
+  .rep-row .remove, #add-row { color: #000; background: var(--field); border: 1px solid var(--line); border-radius: 999px; }
+  #add-row:disabled { color: #aaa; }
+  input[type=month] { min-width: 0; margin-top: 1rem; border-radius: .25rem; }
   [hidden] { display: none; }
 </style>
+{{template "field-style"}}
 {{template "nav-style"}}
 </head>
 <body>

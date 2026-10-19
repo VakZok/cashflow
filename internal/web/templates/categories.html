@@ -15,13 +15,17 @@
   ul.entries li { padding: .6rem 0; border-bottom: 1px solid #ddd; }
   ul.entries a.row { display: flex; justify-content: space-between; gap: .5rem; color: inherit; text-decoration: none; }
   .count { color: #666; white-space: nowrap; }
-  .rename { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
-  .rename > * { min-width: 0; }
-  .rename > .last { order: 1; }
-  a.button { display: flex; align-items: center; justify-content: center; box-sizing: border-box; height: 2.75rem; font-size: 1rem; color: inherit; background: #efefef; border-radius: .5rem; text-decoration: none; }
+  /* Name spans row 1; row 2 is Delete, Discard, Apply, as in the other inline edits. */
+  .rename { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+  .rename > input[name=name] { grid-column: 1 / -1; grid-row: 1; }
+  .rename > .delete { grid-column: 1; grid-row: 2; }
+  .rename > .discard { grid-column: 2; grid-row: 2; }
+  .rename > .apply { grid-column: 3; grid-row: 2; }
+  a.button { display: flex; align-items: center; justify-content: center; box-sizing: border-box; height: 2.75rem; font-size: 1rem; color: inherit; background: var(--field); border: 1px solid var(--line); border-radius: .5rem; text-decoration: none; }
 {{template "arm-style"}}
 {{template "pager-style"}}
 </style>
+{{template "field-style"}}
 {{template "nav-style"}}
 </head>
 <body>
@@ -45,14 +49,14 @@
     <form class="rename" method="post" action="/categories/{{.ID}}">
       <input type="hidden" name="list" value="{{$.Current.Key}}">
       {{/* Apply comes first in the markup so Enter in the name presses it, not Delete; CSS shows it last. */}}
-      <button id="apply" class="primary last" type="submit" data-arm data-label="Apply">{{if $.Taken}}Taken{{else}}Apply{{end}}</button>
+      <button id="apply" class="primary apply" type="submit" data-arm data-label="Apply">{{if $.Taken}}Taken{{else}}Apply{{end}}</button>
       {{if or .Transactions .Repeating}}
-      <button type="button" class="primary in-use" data-label="Delete">Delete</button>
+      <button type="button" class="primary delete in-use" data-label="Delete">Delete</button>
       {{else}}
-      <button class="primary" type="submit" data-arm formaction="/categories/{{.ID}}/delete" formnovalidate>Delete</button>
+      <button class="primary delete" type="submit" data-arm formaction="/categories/{{.ID}}/delete" formnovalidate>Delete</button>
       {{end}}
       <input type="text" name="name" required maxlength="50" aria-label="Name" value="{{$.EditName}}" autocomplete="off">
-      <a class="button" href="{{$.PageURL}}">Discard</a>
+      <a class="button discard" href="{{$.PageURL}}">Discard</a>
     </form>
   </li>
   {{else}}
@@ -76,25 +80,25 @@
 {{template "arm-script"}}
 {{if .EditID}}
 <script>
-  // An entry in use cannot be deleted: its Delete button only says "In Use" for 3 s, and sends nothing.
+  // An entry in use cannot be deleted: its Delete button only says "In Use" for 2 s, and sends nothing.
   var inUse = document.querySelector('button.in-use')
   if (inUse) inUse.addEventListener('click', function () {
     inUse.textContent = 'In Use'
     clearTimeout(inUse.timer)
-    inUse.timer = setTimeout(function () { inUse.textContent = inUse.dataset.label }, 3000)
+    inUse.timer = setTimeout(function () { inUse.textContent = inUse.dataset.label }, 2000)
   })
 </script>
 {{end}}
 {{if .Taken}}
 <script>
-  // The flag is one-off: drop it from the URL so a reload doesn't show it again, and reset the button after 3 s unless it was armed meanwhile.
+  // The flag is one-off: drop it from the URL so a reload doesn't show it again, and reset the button after 2 s unless it was armed meanwhile.
   var u = new URL(location.href)
   u.searchParams.delete('taken')
   history.replaceState(null, '', u)
   setTimeout(function () {
     var b = document.getElementById('apply')
     if (b && !b.classList.contains('armed')) b.textContent = 'Apply'
-  }, 3000)
+  }, 2000)
 </script>
 {{end}}
 {{template "nav" "categories"}}

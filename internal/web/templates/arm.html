@@ -3,7 +3,7 @@
 {{/* arm-script makes every button[data-arm] need a second tap. The button's resting label is its data-label, or its text when it has none. */}}
 {{define "arm-script"}}<script>
 // A data-arm button needs a second tap: the first one arms it ("Approve"),
-// which disarms itself after 3 seconds, on any other tap and on editing a field.
+// which disarms itself after 2 seconds, on any other tap and on editing a field.
 var armed = null, armTimer = null;
 function disarm() {
   if (!armed) return;
@@ -22,7 +22,7 @@ document.addEventListener('click', function (e) {
   if (!b.dataset.label) b.dataset.label = b.textContent;
   b.textContent = 'Approve';
   b.classList.add('armed');
-  armTimer = setTimeout(disarm, 3000);
+  armTimer = setTimeout(disarm, 2000);
 });
 document.addEventListener('input', disarm);
 document.addEventListener('change', disarm);

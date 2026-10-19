@@ -101,7 +101,7 @@ func TestRenameIntoAnotherEntrysNameIsRefusedAndKeepsTheRowOpen(t *testing.T) {
 	body := ta.follow(r).Body
 	row := openRow(body)
 	wantAll(t, row, `value="rENT"`, ">Taken</button>", `action="/categories/1"`)
-	wantAll(t, body, "<span>Rent</span>", "history.replaceState", "3000")
+	wantAll(t, body, "<span>Rent</span>", "history.replaceState", "2000")
 	// Both entries are unchanged.
 	closed := ta.get("/categories").Body
 	wantAll(t, closed, "<span>Food</span>", "<span>Rent</span>")
