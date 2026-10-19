@@ -444,16 +444,12 @@ func (a *App) addTransactions(w http.ResponseWriter, date string, rowCount int) 
 	case rowCount == 0:
 		d.Add.Label = "List is empty"
 	default:
-		booked, duplicates, err := a.store.BookRepeating(date)
-		switch {
-		case err != nil:
+		booked, skipped, err := a.store.BookRepeating(date)
+		if err != nil {
 			a.serverError(w, err)
 			return
-		case len(duplicates) > 0:
-			d.Add.Label = "Already exists"
-		default:
-			d.Add = listButton{Label: "Added " + transactionCount(booked) + " and saved List!", Flash: true}
 		}
+		d.Add = listButton{Label: addedText(booked, skipped), Flash: true}
 	}
 	var err error
 	if d.Rows, err = a.savedRows(); err != nil {
@@ -465,6 +461,26 @@ func (a *App) addTransactions(w http.ResponseWriter, date string, rowCount int) 
 		status = http.StatusUnprocessableEntity
 	}
 	a.renderRepeating(w, status, d)
+}
+
+// addedText is the Add Transactions success text for booked new and skipped
+// existing Transactions.
+func addedText(booked, skipped int) string {
+	switch {
+	case booked == 0:
+		return "All Transactions already exist. Saved List."
+	case skipped == 0:
+		return "Added " + transactionCount(booked) + " and saved List!"
+	}
+	return "Added " + transactionCount(booked) + ", skipped " + existingCount(skipped) + ", and saved List!"
+}
+
+// existingCount reads "1 existing one" or "n existing ones".
+func existingCount(n int) string {
+	if n == 1 {
+		return "1 existing one"
+	}
+	return strconv.Itoa(n) + " existing ones"
 }
 
 // transactionCount reads "1 Transaction" or "n Transactions".

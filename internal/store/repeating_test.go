@@ -154,9 +154,9 @@ func TestBookRepeatingCreatesOneIndependentTransactionPerRow(t *testing.T) {
 	saveRepeating(t, s,
 		repeatingEntry(t, s, store.TypeExpense, "Rent", 800),
 		repeatingEntry(t, s, store.TypeIncome, "Salary", 2000))
-	booked, dups, err := s.BookRepeating("2026-10-01")
-	if err != nil || booked != 2 || len(dups) != 0 {
-		t.Fatalf("booked %d dups %v err %v", booked, dups, err)
+	booked, skipped, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 2 || skipped != 0 {
+		t.Fatalf("booked %d skipped %d err %v", booked, skipped, err)
 	}
 	rows, _ := s.ListTransactions()
 	if len(rows) != 2 {
@@ -182,56 +182,55 @@ func TestBookRepeatingCreatesOneIndependentTransactionPerRow(t *testing.T) {
 	}
 }
 
-func TestBookRepeatingNamesEveryDuplicateAndCreatesNothing(t *testing.T) {
+func TestBookRepeatingSkipsDuplicatesAndBooksTheRest(t *testing.T) {
 	s, _ := open(t)
 	e := repeatingEntry(t, s, store.TypeExpense, "Rent", 800)
 	saveRepeating(t, s, e,
 		repeatingEntry(t, s, store.TypeIncome, "Salary", 2000),
 		repeatingEntry(t, s, store.TypeExpense, "Gym", 30))
-	for _, d := range []string{"rent", "Gym"} { // ignoring ASCII case
-		if _, err := s.AddTransaction(store.NewTransaction{Date: "2026-10-01", Amount: 1, Description: d,
-			Type: store.TypeExpense, CategoryID: e.CategoryID, SubcategoryID: e.SubcategoryID}); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := s.AddTransaction(store.NewTransaction{Date: "2026-10-01", Amount: 1, Description: "rent", // ignoring ASCII case
+		Type: store.TypeExpense, CategoryID: e.CategoryID, SubcategoryID: e.SubcategoryID}); err != nil {
+		t.Fatal(err)
 	}
-	booked, dups, err := s.BookRepeating("2026-10-01")
-	if err != nil || booked != 0 {
-		t.Fatalf("booked %d err %v", booked, err)
+	booked, skipped, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 2 || skipped != 1 {
+		t.Fatalf("booked %d skipped %d err %v", booked, skipped, err)
 	}
-	if len(dups) != 2 || dups[0] != "Rent" || dups[1] != "Gym" {
-		t.Fatalf("dups = %v", dups)
+	rows, _ := s.ListTransactions()
+	got := map[string]int64{}
+	for _, r := range rows {
+		got[r.Description] = r.Amount
 	}
-	if rows, _ := s.ListTransactions(); len(rows) != 2 {
-		t.Errorf("a Transaction was created: %+v", rows)
+	if len(rows) != 3 || got["rent"] != 1 || got["Salary"] != 2000 || got["Gym"] != 30 {
+		t.Errorf("rows %+v", rows)
 	}
 }
 
-func TestBookRepeatingRollsBackWhenAnInsertCollides(t *testing.T) {
+func TestBookRepeatingSkipsARowCollidingWithAnEarlierOne(t *testing.T) {
 	s, _ := open(t)
-	// Two rows with one description collide with each other, not with the
-	// existing Transactions, so only the unique constraint catches them.
+	// Save List rejects such a list; the store still books it without failing.
 	saveRepeating(t, s,
 		repeatingEntry(t, s, store.TypeIncome, "Salary", 2000),
 		repeatingEntry(t, s, store.TypeExpense, "Rent", 800),
 		repeatingEntry(t, s, store.TypeExpense, "rent", 5))
-	booked, dups, err := s.BookRepeating("2026-10-01")
-	if err != nil || booked != 0 || len(dups) != 1 || dups[0] != "rent" {
-		t.Fatalf("booked %d dups %v err %v", booked, dups, err)
-	}
-	if rows, _ := s.ListTransactions(); len(rows) != 0 {
-		t.Errorf("not atomic: %+v", rows)
+	booked, skipped, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 2 || skipped != 1 {
+		t.Fatalf("booked %d skipped %d err %v", booked, skipped, err)
 	}
 }
 
-func TestBookRepeatingTwiceForOneDateIsAllDuplicates(t *testing.T) {
+func TestBookRepeatingTwiceForOneDateSkipsEverything(t *testing.T) {
 	s, _ := open(t)
 	saveRepeating(t, s, repeatingEntry(t, s, store.TypeExpense, "Rent", 800))
 	if _, _, err := s.BookRepeating("2026-10-01"); err != nil {
 		t.Fatal(err)
 	}
-	booked, dups, err := s.BookRepeating("2026-10-01")
-	if err != nil || booked != 0 || len(dups) != 1 {
-		t.Fatalf("booked %d dups %v err %v", booked, dups, err)
+	booked, skipped, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 0 || skipped != 1 {
+		t.Fatalf("booked %d skipped %d err %v", booked, skipped, err)
+	}
+	if rows, _ := s.ListTransactions(); len(rows) != 1 {
+		t.Errorf("rows %+v", rows)
 	}
 	if booked, _, err := s.BookRepeating("2026-11-01"); err != nil || booked != 1 {
 		t.Fatalf("next month: booked %d err %v", booked, err)
@@ -311,9 +310,9 @@ func TestRepeatingBlocksDeletingItsLevyCategoryAndLevySubcategory(t *testing.T) 
 func TestBookRepeatingBooksLevyAndRebateWithTheirLevyLists(t *testing.T) {
 	s, _ := open(t)
 	saveRepeating(t, s, levyRepeatingEntry(t, s, store.TypeLevy, "Tax", 250), levyRepeatingEntry(t, s, store.TypeRebate, "Tax", 40))
-	booked, dups, err := s.BookRepeating("2026-10-01")
-	if err != nil || booked != 2 || len(dups) != 0 {
-		t.Fatalf("booked %d, dups %v, err %v", booked, dups, err)
+	booked, skipped, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 2 || skipped != 0 {
+		t.Fatalf("booked %d, skipped %d, err %v", booked, skipped, err)
 	}
 	rows, err := s.ListTransactions()
 	if err != nil || len(rows) != 2 {
@@ -333,13 +332,13 @@ func TestBookRepeatingRebateIsNotADuplicateOfIncomeButIsOfARebate(t *testing.T) 
 		t.Fatal(err)
 	}
 	saveRepeating(t, s, levyRepeatingEntry(t, s, store.TypeRebate, "refund", 40))
-	if booked, dups, err := s.BookRepeating("2026-10-01"); err != nil || booked != 1 || len(dups) != 0 {
-		t.Fatalf("booked %d, dups %v, err %v", booked, dups, err)
+	if booked, skipped, err := s.BookRepeating("2026-10-01"); err != nil || booked != 1 || skipped != 0 {
+		t.Fatalf("booked %d, skipped %d, err %v", booked, skipped, err)
 	}
 	// Booking again collides with the Rebate just booked.
-	booked, dups, err := s.BookRepeating("2026-10-01")
-	if err != nil || booked != 0 || len(dups) != 1 || dups[0] != "refund" {
-		t.Fatalf("booked %d, dups %v, err %v", booked, dups, err)
+	booked, skipped, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 0 || skipped != 1 {
+		t.Fatalf("booked %d, skipped %d, err %v", booked, skipped, err)
 	}
 }
 
@@ -396,9 +395,9 @@ func TestBookRepeatingBooksInvestmentAndDivestmentAgainstTheirHolding(t *testing
 	s, _ := open(t)
 	saveRepeating(t, s,
 		holdingRepeatingEntry(t, s, store.TypeInvestment, "ETF", 300), holdingRepeatingEntry(t, s, store.TypeDivestment, "Bonds", 100))
-	booked, dups, err := s.BookRepeating("2026-10-01")
-	if err != nil || booked != 2 || len(dups) != 0 {
-		t.Fatalf("booked %d, dups %v, err %v", booked, dups, err)
+	booked, skipped, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 2 || skipped != 0 {
+		t.Fatalf("booked %d, skipped %d, err %v", booked, skipped, err)
 	}
 	rows, err := s.ListTransactions()
 	if err != nil || len(rows) != 2 {
@@ -413,7 +412,7 @@ func TestBookRepeatingBooksInvestmentAndDivestmentAgainstTheirHolding(t *testing
 	}
 }
 
-func TestBookRepeatingHoldingCollidesWithAnyTypeOnTheSameDateAndNamesTheHolding(t *testing.T) {
+func TestBookRepeatingHoldingCollidesWithAnyTypeOnTheSameDate(t *testing.T) {
 	s, _ := open(t)
 	etf := holdingRepeatingEntry(t, s, store.TypeDivestment, "ETF", 40)
 	if _, err := s.AddTransaction(store.NewTransaction{Date: "2026-10-01", Amount: 40, Type: store.TypeDivestment, HoldingID: etf.HoldingID}); err != nil {
@@ -421,12 +420,12 @@ func TestBookRepeatingHoldingCollidesWithAnyTypeOnTheSameDateAndNamesTheHolding(
 	}
 	etf.Type = store.TypeInvestment
 	saveRepeating(t, s, repeatingEntry(t, s, store.TypeIncome, "Salary", 5), etf)
-	booked, dups, err := s.BookRepeating("2026-10-01")
-	if err != nil || booked != 0 || len(dups) != 1 || dups[0] != "ETF" {
-		t.Fatalf("booked %d, dups %v, err %v", booked, dups, err)
+	booked, skipped, err := s.BookRepeating("2026-10-01")
+	if err != nil || booked != 1 || skipped != 1 {
+		t.Fatalf("booked %d, skipped %d, err %v", booked, skipped, err)
 	}
-	if rows, _ := s.ListTransactions(); len(rows) != 1 {
-		t.Errorf("rows were booked despite the Duplicate: %v", rows)
+	if rows, _ := s.ListTransactions(); len(rows) != 2 {
+		t.Errorf("rows %v, want the Divestment and Salary", rows)
 	}
 	if booked, _, err := s.BookRepeating("2026-11-01"); err != nil || booked != 2 {
 		t.Fatalf("next month: booked %d err %v", booked, err)
