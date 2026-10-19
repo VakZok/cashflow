@@ -38,7 +38,7 @@ CREATE TABLE holdings (
 -- Every other field must be NULL.
 
 --
--- date:   strict YYYY-MM-DD, a real calendar day, 2000..2200. date() returns
+-- date:   strict YYYY-MM-DD, a real calendar day, 0001..9999. date() returns
 --         NULL (month 13) or a normalised date (2026-02-30) for impossible
 --         days; COALESCE matters because a NULL CHECK result counts as a pass.
 -- amount: whole euros, 1..100.000.000. typeof() rejects text such as '12,5',
@@ -48,7 +48,7 @@ CREATE TABLE transactions (
     date           TEXT    NOT NULL CHECK (
         date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
         AND COALESCE(date(date), '') = date
-        AND date BETWEEN '2000-01-01' AND '2200-12-31'),
+        AND date BETWEEN '0001-01-01' AND '9999-12-31'),
     amount         INTEGER NOT NULL CHECK (typeof(amount) = 'integer' AND amount BETWEEN 1 AND 100000000),
     description    TEXT    CHECK (description IS NULL OR length(trim(description)) BETWEEN 1 AND 100),
     type           TEXT    NOT NULL CHECK (type IN ('income', 'expense', 'levy', 'rebate', 'investment', 'divestment')),

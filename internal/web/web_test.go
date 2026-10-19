@@ -101,13 +101,13 @@ func TestAmountBoundsAreInclusive(t *testing.T) {
 
 func TestDateRangeIsInclusive(t *testing.T) {
 	ta := newTestApp(t)
-	for _, date := range []string{"2000-01-01", "2200-12-31"} {
+	for _, date := range []string{"0001-01-01", "9999-12-31"} {
 		r := ta.post("/transactions", expenseForm(date, "5", "Edge", "new", "Misc", "new", "Other"))
 		if r.Status != http.StatusSeeOther {
 			t.Errorf("date %s: status %d, want 303", date, r.Status)
 		}
 	}
-	for _, date := range []string{"1999-12-31", "2201-01-01", "0001-01-01", "9999-12-31", "2026-13-01", "2026-00-10", "2026-10-00", "2026-10-32", "2026-04-31", "2025-02-29"} {
+	for _, date := range []string{"0000-12-31", "10000-01-01", "2026-13-01", "2026-00-10", "2026-10-00", "2026-10-32", "2026-04-31", "2025-02-29"} {
 		r := ta.post("/transactions", expenseForm(date, "5", "Edge", "new", "Misc", "new", "Other"))
 		if r.Status != http.StatusUnprocessableEntity {
 			t.Errorf("date %s: status %d, want 422", date, r.Status)
@@ -381,12 +381,12 @@ func TestSharedValidationRunsForAllTypes(t *testing.T) {
 					t.Errorf("amount %s: status %d, want 303", amount, r.Status)
 				}
 			}
-			for _, date := range []string{"1999-12-31", "2201-01-01", "2026-13-01", "2026-02-30", "05/10/2026", ""} {
+			for _, date := range []string{"0000-12-31", "10000-01-01", "2026-13-01", "2026-02-30", "05/10/2026", ""} {
 				if r := ta.post("/transactions", validForm(typ, date, "5", "Label")); r.Status != http.StatusUnprocessableEntity {
 					t.Errorf("date %q: status %d, want 422", date, r.Status)
 				}
 			}
-			for _, date := range []string{"2000-01-01", "2200-12-31"} {
+			for _, date := range []string{"0001-01-01", "9999-12-31"} {
 				if r := ta.post("/transactions", validForm(typ, date, "5", "Label")); r.Status != http.StatusSeeOther {
 					t.Errorf("date %s: status %d, want 303", date, r.Status)
 				}

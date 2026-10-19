@@ -283,7 +283,7 @@ func validateDate(s string) string {
 		return "Date must be in the format YYYY-MM-DD."
 	}
 	if f := d.Format(dateLayout); f < store.MinDate || f > store.MaxDate {
-		return "Date must be between 2000 and 2200."
+		return "Date must be between 0001 and 9999."
 	}
 	return ""
 }

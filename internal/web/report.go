@@ -17,8 +17,8 @@ const (
 	monthLayout = "2006-01"
 	yearLayout  = "2006"
 
-	minYear = 2000
-	maxYear = 2200
+	minYear = 1
+	maxYear = 9999
 )
 
 // period is a calendar month or year (Start is its first day, UTC).
@@ -42,6 +42,15 @@ func (p period) end() time.Time {
 		return p.Start.AddDate(1, 0, 0)
 	}
 	return p.Start.AddDate(0, 1, 0)
+}
+
+// exclusiveEnd is the day after the period as YYYY-MM-DD. Past 9999 it is
+// 9999-12-32, which still sorts after every valid date as a string.
+func (p period) exclusiveEnd() string {
+	if e := p.end(); e.Year() <= maxYear {
+		return e.Format(dateLayout)
+	}
+	return "9999-12-32"
 }
 
 func (p period) shifted(n int) period {
@@ -242,7 +251,7 @@ func (a *App) report(w http.ResponseWriter, r *http.Request) {
 	p := parsePeriod(r.URL.Query(), now)
 
 	sel := parseChartSel(r.URL.Query())
-	from, to := p.Start.Format(dateLayout), p.end().Format(dateLayout)
+	from, to := p.Start.Format(dateLayout), p.exclusiveEnd()
 
 	income, expense, err := a.store.Totals(from, to)
 	if err != nil {

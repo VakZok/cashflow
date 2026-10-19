@@ -95,7 +95,7 @@ func TestReportInvalidParamsFallBackToCurrentMonth(t *testing.T) {
 	ta.seed("income", "2026-10-02", "100")
 	for _, q := range []string{
 		"", "?period=week&date=2026-10&amp;type=expense&amp;group=category", "?period=month&date=garbage", "?period=month&date=2026-13",
-		"?period=year&date=2026-10&amp;type=expense&amp;group=category", "?period=month&date=2026&amp;type=expense&amp;group=category", "?date=1999", "?period=year&date=99999", "?period=month",
+		"?period=year&date=2026-10&amp;type=expense&amp;group=category", "?period=month&date=2026&amp;type=expense&amp;group=category", "?date=1999", "?period=year&date=0000", "?period=month&date=0000-12", "?period=year&date=99999", "?period=month",
 	} {
 		wantAll(t, ta.mustReport("/report"+q), "+€100", "2026-10")
 	}
@@ -410,4 +410,15 @@ func TestReportControlsSubmitOnChangeWithoutButtons(t *testing.T) {
 		`<input type="hidden" name="group" value="subcategory">`,
 		`<input type="hidden" name="date" value="2026-03">`,
 	)
+}
+
+func TestReportAndFilterAcceptTheFullYearRange(t *testing.T) {
+	ta := newTestApp(t)
+	ta.seed("income", "0001-01-05", "100")
+	ta.seed("income", "9999-12-31", "200")
+	wantAll(t, ta.mustReport("/report?period=year&date=0001"), "Income €100")
+	wantAll(t, ta.mustReport("/report?period=month&date=9999-12"), "Income €200")
+	wantAll(t, ta.mustReport("/report"), `min="0001-01"`, `max="9999-12"`)
+	wantAll(t, ta.get("/transactions?year=0001").Body, "0001-01-05")
+	wantAll(t, ta.get("/transactions?year=9999").Body, "9999-12-31")
 }
