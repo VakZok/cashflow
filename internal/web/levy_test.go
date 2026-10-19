@@ -29,7 +29,7 @@ func TestAddLevyWithInlineLevyCategoriesShowsInList(t *testing.T) {
 	if r.Status != http.StatusSeeOther {
 		t.Fatalf("status %d, want 303\n%s", r.Status, r.Body)
 	}
-	body := ta.follow(r).Body
+	body := ta.get("/transactions").Body
 	wantAll(t, body, "Income tax", ">−250<", "Levy", "Tax", "Federal")
 }
 
@@ -83,7 +83,7 @@ func TestLevyRequiresDescriptionAndLevyCategories(t *testing.T) {
 	if r.Status != http.StatusUnprocessableEntity {
 		t.Fatalf("status %d, want 422", r.Status)
 	}
-	wantAll(t, r.Body, "Description is required.", "Levy Category is required.", "Levy Subcategory is required.")
+	wantAll(t, r.Body, "Missing fields", `id="description" class="invalid"`, `id="levy_category" class="invalid"`, `id="levy_subcategory" class="invalid"`)
 }
 
 func TestRejectedLevyCreatesNoLevyCategory(t *testing.T) {
@@ -98,7 +98,7 @@ func TestDuplicateLevyIsRejectedWithMessage(t *testing.T) {
 	ta := newTestApp(t)
 	ta.post("/transactions", levyForm("2026-10-01", "5", "Tax", "new", "T", "new", "S"))
 	r := ta.post("/transactions", levyForm("2026-10-01", "9", "tax", "new", "U", "new", "V"))
-	if r.Status != http.StatusUnprocessableEntity || !strings.Contains(r.Body, "already exists") {
+	if r.Status != http.StatusUnprocessableEntity || !strings.Contains(r.Body, "Already exists") {
 		t.Errorf("status %d, want 422 with duplicate message", r.Status)
 	}
 }

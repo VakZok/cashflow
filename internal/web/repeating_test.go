@@ -245,7 +245,7 @@ func TestRepeatingCreatesNoTransactionsAndAppearsInNoReport(t *testing.T) {
 	if after := ta.mustReport(path); after != before {
 		t.Errorf("report changed:\n%s", after)
 	}
-	if body := ta.get("/").Body; !strings.Contains(body, "No Transactions yet.") {
+	if body := ta.get("/transactions").Body; !strings.Contains(body, "No Transactions yet.") {
 		t.Errorf("a Transaction was created:\n%s", body)
 	}
 }
@@ -267,7 +267,7 @@ func TestSavingRejectsRowsWithTheSameTypeAndDescriptionIgnoringCase(t *testing.T
 			if n := rowCount(ta.get("/repeating").Body); n != 1 {
 				t.Errorf("%d rows saved, want the untouched blank list", n)
 			}
-			if strings.Contains(ta.get("/").Body, "Rent") {
+			if strings.Contains(ta.get("/transactions").Body, "Rent") {
 				t.Errorf("a Transaction was booked")
 			}
 		}

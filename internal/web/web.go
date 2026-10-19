@@ -96,6 +96,57 @@ type entryForm struct {
 	LevySubcategory    string
 	NewLevySubcategory string
 	Errors             []string
+
+	// The structured form of the problems, which the shared error treatment
+	// renders: the fields to highlight (by input name), the amount bubble and
+	// the message of the submit button.
+	Missing   map[string]bool
+	AmountBad bool
+	Problem   problem
+}
+
+// problem is what is wrong with a submitted form, as the submit button shows it.
+// A form with several problems shows the highest one.
+type problem int
+
+const (
+	noProblem        problem = iota
+	problemAmount            // shown by the amount's bubble, not by the button
+	problemDuplicate         // "Already exists"
+	problemInvalid           // "Invalid input": only a hand-crafted request gets here
+	problemMissing           // "Missing fields"
+)
+
+// ButtonMessage is the submit button's label while the form has a problem, "" if
+// the button keeps its normal label.
+func (f entryForm) ButtonMessage() string {
+	switch f.Problem {
+	case problemMissing:
+		return "Missing fields"
+	case problemInvalid:
+		return "Invalid input"
+	case problemDuplicate:
+		return "Already exists"
+	}
+	return ""
+}
+
+// Bad reports whether the input of that name is highlighted.
+func (f entryForm) Bad(field string) bool { return f.Missing[field] }
+
+// fail records a problem with its message, for the places that still list messages.
+func (f *entryForm) fail(p problem, msg string) {
+	f.Errors = append(f.Errors, msg)
+	f.Problem = max(f.Problem, p)
+}
+
+// missing records that the input of that name has nothing in it.
+func (f *entryForm) missing(field, msg string) {
+	if f.Missing == nil {
+		f.Missing = map[string]bool{}
+	}
+	f.Missing[field] = true
+	f.fail(problemMissing, msg)
 }
 
 // choice is the value of a select with an inline "new..." option, bound to
@@ -104,6 +155,22 @@ type choice struct {
 	list    store.List
 	value   string
 	newName string
+}
+
+// inputName is the name of the select of the list in the entry form; its
+// new-name input is "new_" and that.
+func (c choice) inputName() string {
+	switch c.list {
+	case store.LevyListSet.Category:
+		return "levy_category"
+	case store.LevyListSet.Subcategory:
+		return "levy_subcategory"
+	case store.DefaultListSet.Category:
+		return "category"
+	case store.DefaultListSet.Subcategory:
+		return "subcategory"
+	}
+	return "holding"
 }
 
 func (f entryForm) category(set store.ListSet) choice {
@@ -167,26 +234,16 @@ func newEditView(e *editing, lists *formLists, ret returnTo) *editView {
 }
 
 type indexData struct {
-	Add          fieldsData
-	Edit         *editView // the row being edited, nil if none
-	Transactions []store.TransactionRow
+	Add fieldsData
+	// Added makes the Add button show its success text for a moment.
+	Added bool
 }
 
+// addedQuery is what the redirect after a successful add carries, so the page it lands on shows the success text.
+const addedQuery = "added=1"
+
 func (a *App) index(w http.ResponseWriter, r *http.Request) {
-	add := a.defaultAddForm()
-	var edit *editing
-	if id, err := strconv.ParseInt(r.URL.Query().Get("edit"), 10, 64); err == nil {
-		t, err := a.store.GetTransaction(id)
-		switch {
-		case errors.Is(err, store.ErrNotFound):
-		case err != nil:
-			a.serverError(w, err)
-			return
-		default:
-			edit = &editing{ID: id, Form: formOf(t)}
-		}
-	}
-	a.renderIndex(w, http.StatusOK, add, edit)
+	a.renderIndex(w, http.StatusOK, a.defaultAddForm(), r.URL.Query().Get("added") == "1")
 }
 
 // defaultAddForm is the empty Add form: an Expense dated today.
@@ -215,21 +272,13 @@ func formOf(t store.NewTransaction) entryForm {
 	}
 }
 
-func (a *App) renderIndex(w http.ResponseWriter, status int, add entryForm, edit *editing) {
+func (a *App) renderIndex(w http.ResponseWriter, status int, add entryForm, added bool) {
 	lists, err := a.formLists()
 	if err != nil {
 		a.serverError(w, err)
 		return
 	}
-	d := indexData{Add: fieldsData{Form: withSpec(add), formLists: lists}}
-	if edit != nil {
-		d.Edit = newEditView(edit, lists, returnTo{})
-	}
-	if d.Transactions, err = a.store.ListTransactionsPage(store.Filter{}, store.PageSize, 0); err != nil {
-		a.serverError(w, err)
-		return
-	}
-	a.render(w, status, "index.html", d)
+	a.render(w, status, "index.html", indexData{Add: fieldsData{Form: withSpec(add), formLists: lists}, Added: added})
 }
 
 // formLists loads the choices of the entry form's selects.
@@ -308,19 +357,19 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(form.Errors) > 0 {
-		a.renderIndex(w, http.StatusUnprocessableEntity, form, nil)
+		a.renderIndex(w, http.StatusUnprocessableEntity, form, false)
 		return
 	}
 	if _, err = a.store.AddTransaction(nt); err != nil {
 		if errors.Is(err, store.ErrDuplicate) {
-			form.Errors = append(form.Errors, duplicateMessage(spec))
-			a.renderIndex(w, http.StatusUnprocessableEntity, form, nil)
+			form.fail(problemDuplicate, duplicateMessage(spec))
+			a.renderIndex(w, http.StatusUnprocessableEntity, form, false)
 			return
 		}
 		a.serverError(w, err)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/?"+addedQuery, http.StatusSeeOther)
 }
 
 // updateTransaction replaces the Transaction in the path with the submitted
@@ -348,7 +397,7 @@ func (a *App) updateTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(form.Errors) == 0 {
 		if err = a.store.UpdateTransaction(id, nt); errors.Is(err, store.ErrDuplicate) {
-			form.Errors = append(form.Errors, duplicateMessage(spec))
+			form.fail(problemDuplicate, duplicateMessage(spec))
 		} else if errors.Is(err, store.ErrNotFound) {
 			http.NotFound(w, r)
 			return
@@ -359,12 +408,15 @@ func (a *App) updateTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 	ret := parseReturn(r.PostFormValue("return"))
 	if len(form.Errors) > 0 {
-		edit := &editing{ID: id, Form: form}
-		if ret.Page > 0 {
-			a.renderTransactions(w, http.StatusUnprocessableEntity, ret.Page, ret.Filter, edit)
-		} else {
-			a.renderIndex(w, http.StatusUnprocessableEntity, a.defaultAddForm(), edit)
+		// The Add page has no rows to edit: an unrecognised return shows the row on
+		// the Transactions page, at the page it sits on.
+		if ret.Page == 0 {
+			if ret.Page, err = a.store.TransactionPage(id, ret.Filter.store()); err != nil {
+				a.serverError(w, err)
+				return
+			}
 		}
+		a.renderTransactions(w, http.StatusUnprocessableEntity, ret.Page, ret.Filter, &editing{ID: id, Form: form})
 		return
 	}
 	anchor := "#tx-" + strconv.FormatInt(id, 10)
@@ -463,14 +515,17 @@ func readForm(w http.ResponseWriter, r *http.Request) (entryForm, bool) {
 func (a *App) prepare(form *entryForm, excludeID int64) (store.NewTransaction, store.TypeSpec, error) {
 	spec, known := store.SpecFor(form.Type)
 	if !known {
-		form.Errors = append(form.Errors, "Type must be "+typeChoices()+".")
+		form.fail(problemInvalid, "Type must be "+typeChoices()+".")
 	}
-	if msg := validateDate(form.Date); msg != "" {
-		form.Errors = append(form.Errors, msg)
+	if form.Date == "" {
+		form.missing("date", "Date is required.")
+	} else if msg := validateDate(form.Date); msg != "" {
+		form.fail(problemInvalid, msg)
 	}
 	amount, ok := parseAmount(form.Amount)
 	if !ok {
-		form.Errors = append(form.Errors, errAmount)
+		form.AmountBad = true
+		form.fail(problemAmount, errAmount)
 	}
 	var nt store.NewTransaction
 	if known {
@@ -483,7 +538,7 @@ func (a *App) prepare(form *entryForm, excludeID int64) (store.NewTransaction, s
 				return nt, spec, err
 			}
 			if taken {
-				form.Errors = append(form.Errors, errDuplicate)
+				form.fail(problemDuplicate, errDuplicate)
 			}
 		}
 	}
@@ -528,22 +583,22 @@ func (a *App) validateFields(form *entryForm, spec store.TypeSpec) error {
 		set = *spec.Lists
 	}
 	if !spec.Description && form.Description != "" {
-		form.Errors = append(form.Errors, spec.Label+" takes no Description.")
+		form.fail(problemInvalid, spec.Label+" takes no Description.")
 	}
 	for _, other := range []store.ListSet{store.DefaultListSet, store.LevyListSet} {
 		if !spec.TakesLists(other) && form.submitted(other) {
-			form.Errors = append(form.Errors, spec.Label+" takes no "+other.Category.Label+" or "+other.Subcategory.Label+".")
+			form.fail(problemInvalid, spec.Label+" takes no "+other.Category.Label+" or "+other.Subcategory.Label+".")
 		}
 	}
 	if !spec.Holding && (form.Holding != "" || form.NewHolding != "") {
-		form.Errors = append(form.Errors, spec.Label+" takes no Holding.")
+		form.fail(problemInvalid, spec.Label+" takes no Holding.")
 	}
 
 	if spec.Description {
 		if form.Description == "" {
-			form.Errors = append(form.Errors, "Description is required.")
+			form.missing("description", "Description is required.")
 		} else if utf8.RuneCountInString(form.Description) > store.MaxDescriptionLen {
-			form.Errors = append(form.Errors, errDescriptionLen)
+			form.fail(problemInvalid, errDescriptionLen)
 		}
 	}
 	var required []choice
@@ -555,7 +610,7 @@ func (a *App) validateFields(form *entryForm, spec store.TypeSpec) error {
 	}
 	for _, c := range required {
 		if utf8.RuneCountInString(c.newName) > store.MaxNameLen {
-			form.Errors = append(form.Errors, c.list.Label+" name must be at most 50 characters.")
+			form.fail(problemInvalid, c.list.Label+" name must be at most 50 characters.")
 		}
 	}
 	for _, c := range required {
@@ -563,8 +618,14 @@ func (a *App) validateFields(form *entryForm, spec store.TypeSpec) error {
 		if err != nil {
 			return err
 		}
-		if !ok {
-			form.Errors = append(form.Errors, c.list.Label+" is required.")
+		switch {
+		case ok:
+		case c.value == "":
+			form.missing(c.inputName(), c.list.Label+" is required.")
+		case c.value == newOption && c.newName == "":
+			form.missing("new_"+c.inputName(), c.list.Label+" is required.")
+		default: // an id the UI never offers
+			form.fail(problemInvalid, c.list.Label+" is required.")
 		}
 	}
 	return nil

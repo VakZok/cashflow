@@ -263,7 +263,7 @@ func monthChoices(months []int) []monthChoice {
 // page, or a page of the Transactions page with its filter. It is a closed set
 // so the hidden form value can never redirect anywhere else.
 type returnTo struct {
-	Page   int // 0 is the add page, otherwise the page of the Transactions page
+	Page   int // 0 is the add page (and any unrecognised value), otherwise the page of the Transactions page
 	Filter filter
 }
 

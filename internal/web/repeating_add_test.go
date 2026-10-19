@@ -33,7 +33,7 @@ func TestAddTransactionsBooksOneTransactionPerRowAndStaysOnThePage(t *testing.T)
 	}
 	wantAll(t, r.Body, "2 Transactions added for 2026-09-15.", `value="Salary"`, `value="Rent"`, `value="2026-09"`)
 
-	home := ta.get("/").Body
+	home := ta.get("/transactions").Body
 	wantAll(t, home, "Salary", "Rent", "2026-09-15")
 	report := ta.mustReport("/report?period=month&date=2026-09")
 	wantAll(t, report, "2.000", "800")
@@ -83,7 +83,7 @@ func TestAddTransactionsTwiceForTheSameMonthReportsDuplicatesAndKeepsTheList(t *
 	wantAll(t, r.Body, "Already exists on 2026-10-01: Rent, Gym")
 
 	// Salary is not booked a second time, and the saved list is the one shown.
-	if n := strings.Count(ta.get("/").Body, "Salary"); n != 1 {
+	if n := strings.Count(ta.get("/transactions").Body, "Salary"); n != 1 {
 		t.Errorf("Salary on home %d times, want 1", n)
 	}
 	list := ta.get("/repeating").Body
@@ -100,7 +100,7 @@ func TestDuplicateListsEveryCollidingRowAndBooksNothing(t *testing.T) {
 		t.Fatalf("status %d", r.Status)
 	}
 	wantAll(t, r.Body, "Already exists on 2026-10-01: Rent", `value="Salary"`)
-	if strings.Contains(ta.get("/").Body, "Salary") {
+	if strings.Contains(ta.get("/transactions").Body, "Salary") {
 		t.Error("Salary was booked despite the Duplicate")
 	}
 }
@@ -122,7 +122,7 @@ func TestAddTransactionsRejectsRowsCollidingWithEachOtherBeforeSavingOrBooking(t
 		t.Fatalf("status %d\n%s", r.Status, r.Body)
 	}
 	wantAll(t, r.Body, "Duplicate rows in the list: Rent")
-	if body := ta.get("/").Body; !strings.Contains(body, "No Transactions yet.") {
+	if body := ta.get("/transactions").Body; !strings.Contains(body, "No Transactions yet.") {
 		t.Errorf("a Transaction was booked:\n%s", body)
 	}
 	if rowCount(ta.get("/repeating").Body) != 1 {
@@ -144,7 +144,7 @@ func TestAddTransactionsWithAnIncompleteListDoesNothing(t *testing.T) {
 	if strings.Contains(ta.get("/repeating").Body, "Fine") {
 		t.Error("the list was saved")
 	}
-	if body := ta.get("/").Body; !strings.Contains(body, "No Transactions yet.") {
+	if body := ta.get("/transactions").Body; !strings.Contains(body, "No Transactions yet.") {
 		t.Errorf("a Transaction was created:\n%s", body)
 	}
 }
@@ -163,7 +163,7 @@ func TestAddTransactionsWithAnInvalidDateBooksNothingButSavesTheList(t *testing.
 			t.Fatalf("date %q: status %d", date, r.Status)
 		}
 		wantAll(t, r.Body, want, `value="Rent"`)
-		if body := ta.get("/").Body; !strings.Contains(body, "No Transactions yet.") {
+		if body := ta.get("/transactions").Body; !strings.Contains(body, "No Transactions yet.") {
 			t.Errorf("date %q: a Transaction was created", date)
 		}
 		if rowCount(ta.get("/repeating").Body) != 1 || !strings.Contains(ta.get("/repeating").Body, `value="Rent"`) {
@@ -176,7 +176,7 @@ func TestBookedTransactionsAreUnaffectedByLaterListEdits(t *testing.T) {
 	ta := newTestApp(t)
 	ta.addTransactions("2026-10-01", repRow("expense", "800", "Rent"))
 	mustSave(t, ta, repeatingForm(repRow("expense", "900", "Flat")))
-	home := ta.get("/").Body
+	home := ta.get("/transactions").Body
 	wantAll(t, home, "Rent")
 	if strings.Contains(home, "Flat") {
 		t.Error("an edit reached a booked Transaction")
@@ -191,7 +191,7 @@ func TestSaveListStillCreatesNothing(t *testing.T) {
 	if r := ta.post("/repeating", f); r.Status != http.StatusSeeOther {
 		t.Fatalf("status %d", r.Status)
 	}
-	if body := ta.get("/").Body; !strings.Contains(body, "No Transactions yet.") {
+	if body := ta.get("/transactions").Body; !strings.Contains(body, "No Transactions yet.") {
 		t.Errorf("a Transaction was created:\n%s", body)
 	}
 }
@@ -207,7 +207,7 @@ func TestAddTransactionsBooksLevyAndRebateWithTheirLevyLists(t *testing.T) {
 	}
 	wantAll(t, r.Body, "3 Transactions added for 2026-09-15.")
 
-	home := ta.get("/").Body
+	home := ta.get("/transactions").Body
 	wantAll(t, home, "Income tax", ">−250<", "Tax refund", ">+40<", "Tax", "Federal")
 
 	// Levy and Rebate stay out of the Report, as for ordinary ones: only the Income is counted.
@@ -227,7 +227,7 @@ func TestAddTransactionsReportsLevyDuplicatesAndBooksNothing(t *testing.T) {
 		t.Fatalf("status %d, want 422\n%s", r.Status, r.Body)
 	}
 	wantAll(t, r.Body, "Already exists on 2026-10-01: Income tax")
-	if body := ta.get("/").Body; strings.Contains(body, "Salary") || strings.Contains(body, "Refund") {
+	if body := ta.get("/transactions").Body; strings.Contains(body, "Salary") || strings.Contains(body, "Refund") {
 		t.Errorf("rows were booked despite the Duplicate:\n%s", body)
 	}
 }
@@ -251,7 +251,7 @@ func TestAddTransactionsWithAnIncompleteLevyRowBooksNothing(t *testing.T) {
 		t.Fatalf("status %d, want 422", r.Status)
 	}
 	wantAll(t, r.Body, errIncomplete)
-	if strings.Contains(ta.get("/").Body, "Salary") {
+	if strings.Contains(ta.get("/transactions").Body, "Salary") {
 		t.Error("Salary was booked")
 	}
 }
@@ -264,7 +264,7 @@ func TestAddTransactionsBooksInvestmentAndDivestmentAgainstTheirHolding(t *testi
 		t.Fatalf("status %d\n%s", r.Status, r.Body)
 	}
 	wantAll(t, r.Body, "3 Transactions added for 2026-09-15.")
-	wantAll(t, ta.get("/").Body, "ETF World", ">+300<", "Bonds", ">−100<", "Investment", "Divestment")
+	wantAll(t, ta.get("/transactions").Body, "ETF World", ">+300<", "Bonds", ">−100<", "Investment", "Divestment")
 }
 
 func TestAddTransactionsReportsHoldingDuplicatesByHoldingNameWhateverTheType(t *testing.T) {
@@ -275,7 +275,7 @@ func TestAddTransactionsReportsHoldingDuplicatesByHoldingNameWhateverTheType(t *
 		t.Fatalf("status %d, want 422\n%s", r.Status, r.Body)
 	}
 	wantAll(t, r.Body, "Already exists on 2026-10-01: ETF")
-	if strings.Contains(ta.get("/").Body, "Salary") {
+	if strings.Contains(ta.get("/transactions").Body, "Salary") {
 		t.Error("Salary was booked despite the Duplicate")
 	}
 }
@@ -285,7 +285,7 @@ func TestAddTransactionsBooksNothingWhenOnlySomeHoldingRowsCollide(t *testing.T)
 	ta.post("/transactions", holdingForm("investment", "2026-10-01", "40", "new", "ETF"))
 	r := ta.addTransactions("2026-10-01", holdRow("investment", "5", "new", "Gold"), holdRow("divestment", "6", "1", ""))
 	wantAll(t, r.Body, "Already exists on 2026-10-01: ETF")
-	if body := ta.get("/").Body; strings.Contains(body, ">+5<") || strings.Contains(body, ">−6<") {
+	if body := ta.get("/transactions").Body; strings.Contains(body, ">+5<") || strings.Contains(body, ">−6<") {
 		t.Error("the Gold or the colliding row was booked")
 	}
 }
@@ -297,7 +297,7 @@ func TestAddTransactionsRejectsInvestmentAndDivestmentOfTheSameHolding(t *testin
 		t.Fatalf("status %d, want 422", r.Status)
 	}
 	wantAll(t, r.Body, "Duplicate rows in the list: ETF")
-	if strings.Contains(ta.get("/").Body, "ETF") || strings.Contains(ta.get("/repeating").Body, ">ETF</option>") {
+	if strings.Contains(ta.get("/transactions").Body, "ETF") || strings.Contains(ta.get("/repeating").Body, ">ETF</option>") {
 		t.Error("something was saved or booked")
 	}
 }

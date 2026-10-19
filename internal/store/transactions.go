@@ -132,8 +132,7 @@ func affectedOne(res sql.Result) error {
 	return nil
 }
 
-// PageSize is the number of Transactions on one page of the Transactions page
-// (and in the Newest Transactions).
+// PageSize is the number of Transactions on one page of the Transactions page.
 const PageSize = 5
 
 // Filter narrows the Transactions listed and counted; the zero Filter

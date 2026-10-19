@@ -87,29 +87,17 @@ func TestTransactionsPageWithOnePageGreysBothArrows(t *testing.T) {
 	wantAll(t, body, `<span class="arrow" aria-label="Newer">`, `<span class="arrow" aria-label="Older">`, "1 / 1")
 }
 
-func TestAddPageShowsOnlyTheFiveNewestTransactions(t *testing.T) {
+func TestAddPageHasNoTransactionList(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 7)
 
-	body := ta.get("/").Body
-	wantAll(t, body, "Newest transactions", "Item 07", "Item 06", "Item 05", "Item 04", "Item 03")
-	for _, old := range []string{"Item 02", "Item 01"} {
-		if strings.Contains(body, old) {
-			t.Errorf("add page shows %q, older than the 5 newest", old)
+	for _, path := range []string{"/", "/?added=1", "/?edit=1"} {
+		body := ta.get(path).Body
+		for _, gone := range []string{"Newest transactions", "Item 07", `class="transactions"`, `action="/transactions/`, `class="errors"`} {
+			if strings.Contains(body, gone) {
+				t.Errorf("%s shows %q", path, gone)
+			}
 		}
-	}
-	if strings.Index(body, "Item 07") > strings.Index(body, "Item 06") {
-		t.Error("add page is not newest first")
-	}
-}
-
-func TestAddPageOrdersSameDateByLatestEntered(t *testing.T) {
-	ta := newTestApp(t)
-	ta.post("/transactions", expenseForm("2026-09-01", "3", "First entered", "new", "Food", "new", "Cafe"))
-	ta.post("/transactions", expenseForm("2026-09-01", "3", "Last entered", "new", "Food", "new", "Cafe"))
-	body := ta.get("/").Body
-	if strings.Index(body, "Last entered") > strings.Index(body, "First entered") {
-		t.Error("same-date Transactions are not ordered last entered first")
 	}
 }
 
@@ -128,27 +116,16 @@ func TestBackDatedTransactionIsOnTheTransactionsPageNotTheAddPage(t *testing.T) 
 	}
 }
 
-func TestAddPageValidationErrorShowsOnlyTheNewestTransactions(t *testing.T) {
+func TestAddPageValidationErrorHasNoListAndNoErrorBox(t *testing.T) {
 	ta := newTestApp(t)
 	addTransactions(ta, 7)
 	r := ta.post("/transactions", expenseForm("2026-09-30", "0", "Bad", "new", "Food", "new", "Cafe"))
 	if r.Status != 422 {
 		t.Fatalf("status %d, want 422", r.Status)
 	}
-	wantAll(t, r.Body, "Item 07", "Item 03")
-	if strings.Contains(r.Body, "Item 02") {
-		t.Error("422 page shows more than the 5 newest Transactions")
-	}
-}
-
-func TestEditingARowOutsideTheNewestTransactionsDoesNotError(t *testing.T) {
-	ta := newTestApp(t)
-	addTransactions(ta, 7)
-	r := ta.get("/?edit=1")
-	if r.Status != 200 {
-		t.Fatalf("status %d, want 200", r.Status)
-	}
-	if strings.Contains(r.Body, `class="editing"`) || strings.Contains(r.Body, "Item 01") {
-		t.Error("edit form appears for a row outside the 5 shown")
+	for _, gone := range []string{"Item 07", `class="errors"`, `role="alert"><ul>`} {
+		if strings.Contains(r.Body, gone) {
+			t.Errorf("422 page shows %q", gone)
+		}
 	}
 }

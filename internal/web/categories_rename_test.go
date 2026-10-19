@@ -172,11 +172,9 @@ func TestAfterARenameTheUserLandsOnThePageWhereTheEntrySorts(t *testing.T) {
 func TestTheTransactionEditRowsButtonIsLabelledApply(t *testing.T) {
 	ta := newTestApp(t)
 	ta.post("/transactions", expenseForm("2026-10-02", "12", "Lunch", "new", "Food", "new", "Cafe"))
-	for _, path := range []string{"/transactions?edit=1", "/?edit=1"} {
-		row := editRow(ta.get(path).Body, "1")
-		wantAll(t, row, ">Apply</button>")
-		if strings.Contains(row, "Change") {
-			t.Errorf("%s still labels the button Change", path)
-		}
+	row := editRow(ta.get("/transactions?edit=1").Body, "1")
+	wantAll(t, row, ">Apply</button>")
+	if strings.Contains(row, "Change") {
+		t.Error("the edit row still labels the button Change")
 	}
 }
