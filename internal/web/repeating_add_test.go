@@ -208,7 +208,7 @@ func TestAddTransactionsBooksLevyAndRebateWithTheirLevyLists(t *testing.T) {
 	wantAll(t, r.Body, "3 Transactions added for 2026-09-15.")
 
 	home := ta.get("/").Body
-	wantAll(t, home, "Income tax", ">250<", "Tax refund", ">40<", "Tax", "Federal")
+	wantAll(t, home, "Income tax", ">−250<", "Tax refund", ">+40<", "Tax", "Federal")
 
 	// Levy and Rebate stay out of the Report, as for ordinary ones: only the Income is counted.
 	report := ta.mustReport("/report?period=month&date=2026-09")
@@ -264,7 +264,7 @@ func TestAddTransactionsBooksInvestmentAndDivestmentAgainstTheirHolding(t *testi
 		t.Fatalf("status %d\n%s", r.Status, r.Body)
 	}
 	wantAll(t, r.Body, "3 Transactions added for 2026-09-15.")
-	wantAll(t, ta.get("/").Body, "ETF World", ">300<", "Bonds", ">100<", "Investment", "Divestment")
+	wantAll(t, ta.get("/").Body, "ETF World", ">+300<", "Bonds", ">−100<", "Investment", "Divestment")
 }
 
 func TestAddTransactionsReportsHoldingDuplicatesByHoldingNameWhateverTheType(t *testing.T) {
@@ -285,7 +285,7 @@ func TestAddTransactionsBooksNothingWhenOnlySomeHoldingRowsCollide(t *testing.T)
 	ta.post("/transactions", holdingForm("investment", "2026-10-01", "40", "new", "ETF"))
 	r := ta.addTransactions("2026-10-01", holdRow("investment", "5", "new", "Gold"), holdRow("divestment", "6", "1", ""))
 	wantAll(t, r.Body, "Already exists on 2026-10-01: ETF")
-	if body := ta.get("/").Body; strings.Contains(body, ">5<") || strings.Contains(body, ">6<") {
+	if body := ta.get("/").Body; strings.Contains(body, ">+5<") || strings.Contains(body, ">−6<") {
 		t.Error("the Gold or the colliding row was booked")
 	}
 }

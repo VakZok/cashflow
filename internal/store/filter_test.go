@@ -84,6 +84,22 @@ func TestTransactionYearsAreTheYearsWithTransactionsNewestFirst(t *testing.T) {
 	}
 }
 
+func TestTransactionMonthsAreTheMonthsOfTheYearWithTransactionsJanuaryFirst(t *testing.T) {
+	s, _ := open(t)
+	for _, date := range []string{"2026-12-31", "2025-06-01", "2026-03-01", "2026-03-15", "2027-01-01"} {
+		if _, err := s.AddTransaction(expense(t, s, date, date)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ms, err := s.TransactionMonths(2026)
+	if err != nil || fmt.Sprint(ms) != "[3 12]" {
+		t.Errorf("months %v, err %v; want [3 12]", ms, err)
+	}
+	if ms, err := s.TransactionMonths(2024); err != nil || len(ms) != 0 {
+		t.Errorf("empty year: months %v, err %v", ms, err)
+	}
+}
+
 // typed records a Transaction of the Type described by its own Type and fields.
 func typed(t *testing.T, s *store.Store, day int, n store.NewTransaction) {
 	t.Helper()

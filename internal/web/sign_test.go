@@ -2,24 +2,23 @@ package web_test
 
 import "testing"
 
-func TestListAmountsAreColouredByTheSignOfTheirType(t *testing.T) {
+func TestListAmountsCarryTheSignOfTheirType(t *testing.T) {
 	cases := []struct {
-		typ, class, want string
+		typ, want string
 	}{
-		{"income", "net-positive", "1.234"},
-		{"rebate", "net-positive", "1.234"},
-		{"investment", "net-positive", "1.234"},
-		{"expense", "net-negative", "1.234"},
-		{"levy", "net-negative", "1.234"},
-		{"divestment", "net-negative", "1.234"},
+		{"income", "+1.234"},
+		{"rebate", "+1.234"},
+		{"investment", "+1.234"},
+		{"expense", "−1.234"},
+		{"levy", "−1.234"},
+		{"divestment", "−1.234"},
 	}
 	for _, c := range cases {
 		t.Run(c.typ, func(t *testing.T) {
 			ta := newTestApp(t)
 			ta.seedType(c.typ, "1234")
-			want := `<span class="amount ` + c.class + `">` + c.want + `</span>`
 			for _, path := range []string{"/", "/transactions"} {
-				wantAll(t, ta.get(path).Body, want)
+				wantAll(t, ta.get(path).Body, `<span class="amount">`+c.want+`</span>`)
 			}
 		})
 	}

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
 <title>Edit Categories</title>
+{{template "theme-style"}}
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
   input, select, button { width: 100%; box-sizing: border-box; padding: .6rem; font-size: 1rem; height: 2.75rem; }
@@ -34,7 +35,7 @@
 <form class="add" method="post" action="/categories">
   <input type="hidden" name="list" value="{{.Current.Key}}">
   <input type="text" name="name" required maxlength="50" aria-label="Name" placeholder="Name" autocomplete="off">
-  <button id="add" type="submit">{{if eq .Added "new"}}Added!{{else if eq .Added "exists"}}Exists!{{else}}Add{{end}}</button>
+  <button id="add" class="primary" type="submit">{{if eq .Added "new"}}Added!{{else if eq .Added "exists"}}Exists!{{else}}Add{{end}}</button>
 </form>
 {{if .Entries}}
 <ul class="entries">
@@ -44,11 +45,11 @@
     <form class="rename" method="post" action="/categories/{{.ID}}">
       <input type="hidden" name="list" value="{{$.Current.Key}}">
       {{/* Apply comes first in the markup so Enter in the name presses it, not Delete; CSS shows it last. */}}
-      <button id="apply" class="last" type="submit" data-arm data-label="Apply">{{if $.Taken}}Taken{{else}}Apply{{end}}</button>
+      <button id="apply" class="primary last" type="submit" data-arm data-label="Apply">{{if $.Taken}}Taken{{else}}Apply{{end}}</button>
       {{if or .Transactions .Repeating}}
-      <button type="button" class="in-use" data-label="Delete">Delete</button>
+      <button type="button" class="primary in-use" data-label="Delete">Delete</button>
       {{else}}
-      <button type="submit" data-arm formaction="/categories/{{.ID}}/delete" formnovalidate>Delete</button>
+      <button class="primary" type="submit" data-arm formaction="/categories/{{.ID}}/delete" formnovalidate>Delete</button>
       {{end}}
       <input type="text" name="name" required maxlength="50" aria-label="Name" value="{{$.EditName}}" autocomplete="off">
       <a class="button" href="{{$.PageURL}}">Discard</a>

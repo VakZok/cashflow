@@ -43,7 +43,7 @@ func TestAddExpenseShowsInList(t *testing.T) {
 		t.Fatalf("POST = %d -> %q, want 303 -> /", r.Status, r.Location)
 	}
 	body := ta.follow(r).Body
-	for _, want := range []string{"2026-10-01", ">1.234<", "Rent", "Housing", "Monthly"} {
+	for _, want := range []string{"2026-10-01", ">−1.234<", "Rent", "Housing", "Monthly"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("list missing %q in:\n%s", want, body)
 		}
@@ -231,7 +231,7 @@ func TestAmountFormatting(t *testing.T) {
 	amounts := map[string]string{"7": "7", "999": "999", "1000": "1.000", "1234": "1.234", "1234567": "1.234.567"}
 	for in, want := range amounts {
 		ta.post("/transactions", expenseForm("2026-10-05", in, "amt"+in, "new", "C", "new", "S"))
-		if body := ta.get("/").Body; !strings.Contains(body, ">"+want+"<") {
+		if body := ta.get("/").Body; !strings.Contains(body, ">−"+want+"<") {
 			t.Errorf("amount %s: want %s in its own element in list", in, want)
 		}
 	}
@@ -292,7 +292,7 @@ func TestAddIncomeShowsInListWithType(t *testing.T) {
 		t.Fatalf("POST = %d, want 303", r.Status)
 	}
 	body := ta.follow(r).Body
-	for _, want := range []string{"Salary", ">2.500<", "Work", "Employer", "Income"} {
+	for _, want := range []string{"Salary", ">+2.500<", "Work", "Employer", "Income"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("list missing %q in:\n%s", want, body)
 		}
@@ -404,7 +404,7 @@ func TestInvestmentAndDivestmentShowInListWithHolding(t *testing.T) {
 				t.Fatalf("POST = %d -> %q, want 303 -> /", r.Status, r.Location)
 			}
 			body := ta.follow(r).Body
-			if !strings.Contains(body, "<span>ETF World</span>") || !strings.Contains(body, ">1.500<") ||
+			if !strings.Contains(body, "<span>ETF World</span>") || !strings.Contains(body, "1.500</span>") ||
 				!strings.Contains(body, "2026-10-03 · "+label+"</span>") {
 				t.Errorf("list entry wrong in:\n%s", body)
 			}

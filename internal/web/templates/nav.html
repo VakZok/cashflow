@@ -1,8 +1,8 @@
 {{define "nav-style"}}<style>
   body { padding-bottom: calc(4.5rem + env(safe-area-inset-bottom)); }
-  .bottom-nav { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(0rem + env(safe-area-inset-bottom)); display: flex; gap: .25rem; padding: .25rem; background: #fff; border: 1px solid #ccc; border-radius: 999px; box-shadow: 0 2px 10px rgba(0, 0, 0, .15); }
+  .bottom-nav { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(0rem + env(safe-area-inset-bottom)); display: flex; gap: .25rem; padding: .25rem; background: var(--bg); border: 1px solid #ccc; border-radius: 999px; box-shadow: 0 2px 10px rgba(0, 0, 0, .15); }
   .bottom-nav a { display: flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border-radius: 50%; color: #444; }
-  .bottom-nav a[aria-current="page"] { background: #111; color: #fff; }
+  .bottom-nav a[aria-current="page"] { background: var(--accent); color: #fff; }
   .bottom-nav svg { width: 1.4rem; height: 1.4rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   @media (pointer: coarse) {
     body:has(input:is([type="text"], [type="search"], [type="number"]):focus, textarea:focus) .bottom-nav { display: none; }

@@ -3,16 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
-<title>Money Manager</title>
+<title>Add Transaction</title>
+{{template "theme-style"}}
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
 {{template "entry-style"}}
-{{template "sign-style"}}
 </style>
 {{template "nav-style"}}
 </head>
 <body>
-<h1>Money Manager</h1>
 
 {{define "entry-style"}}  input, select, button { width: 100%; box-sizing: border-box; padding: .6rem; font-size: 1rem; margin-top: .25rem; }
   button { margin-top: 1rem; }
@@ -96,14 +95,14 @@
 
 {{end}}
 
-<h2>Add Transaction</h2>
+<h1>Add Transaction</h1>
 {{with .Add.Form.Errors}}
 <div class="errors" role="alert"><ul>{{range .}}<li>{{.}}</li>{{end}}</ul></div>
 {{end}}
 <form method="post" action="/transactions">
   {{template "fields" .Add}}
 
-  <button type="submit">Add</button>
+  <button class="primary" type="submit">Add</button>
 </form>
 
 {{define "entry-script"}}<script>
@@ -129,9 +128,9 @@ function syncGroups(p) {
       {{template "fields" .Fields}}
       <div class="edit-actions">
         {{/* Apply comes first in the markup so Enter in a field presses it, not Delete; CSS shows it last. */}}
-        <button type="submit" data-arm>Apply</button>
+        <button class="primary" type="submit" data-arm>Apply</button>
         <a class="button" href="{{.Discard}}">Discard</a>
-        <button type="submit" data-arm formaction="/transactions/{{.ID}}/delete" formnovalidate>Delete</button>
+        <button class="primary" type="submit" data-arm formaction="/transactions/{{.ID}}/delete" formnovalidate>Delete</button>
       </div>
     </form>
 {{end}}

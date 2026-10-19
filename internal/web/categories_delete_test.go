@@ -16,7 +16,7 @@ func TestDeletingAnUnusedEntryRemovesItAndStaysOnThePage(t *testing.T) {
 	ta := newTestApp(t)
 	addEntries(ta, "category", 7)
 	row := openRow(ta.get("/categories?list=category&page=2&edit=7").Body)
-	if !regexp.MustCompile(`<button type="submit" data-arm formaction="/categories/7/delete" formnovalidate>Delete</button>`).MatchString(row) {
+	if !regexp.MustCompile(`<button class="primary" type="submit" data-arm formaction="/categories/7/delete" formnovalidate>Delete</button>`).MatchString(row) {
 		t.Errorf("Delete is not a double-tap submit button:\n%s", row)
 	}
 	r := deleteEntry(ta, "category", "6")

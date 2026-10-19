@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
 <title>Repeating · Money Manager</title>
+{{template "theme-style"}}
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
   input, select, button { width: 100%; box-sizing: border-box; padding: .6rem; font-size: 1rem; margin-top: .25rem; }
@@ -85,8 +86,8 @@
   <button type="button" id="add-row" aria-label="Add row" onclick="addRow()">+</button>
 
   <input id="date" type="month" name="date" aria-label="Month" value="{{if ge (len .Date) 7}}{{slice .Date 0 7}}{{end}}">
-  <button type="submit" name="action" value="save">Save List</button>
-  <button type="submit" name="action" value="add">Add Transactions</button>
+  <button class="primary" type="submit" name="action" value="save">Save List</button>
+  <button class="primary" type="submit" name="action" value="add">Add Transactions</button>
 </form>
 
 {{with .Errors}}
