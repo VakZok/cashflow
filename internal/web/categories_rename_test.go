@@ -31,7 +31,8 @@ func TestTappingAnEntryOpensItInlineWithTheRenameLayout(t *testing.T) {
 	row := openRow(body)
 	wantAll(t, row, `action="/categories/1"`, `name="list" value="category"`, `name="name"`, `value="Food"`, `required`, `maxlength="50"`,
 		"Delete", `href="/categories?list=category&amp;page=1"`, "Discard", "Apply")
-	order := []string{"Delete", `name="name"`, "Discard", "Apply"}
+	// Apply is first in the markup so Enter in the name presses it; CSS shows it last.
+	order := []string{"Apply", "Delete", `name="name"`, "Discard"}
 	for i := 1; i < len(order); i++ {
 		if strings.Index(row, order[i-1]) >= strings.Index(row, order[i]) {
 			t.Errorf("%q does not come before %q in the row:\n%s", order[i-1], order[i], row)
@@ -39,10 +40,6 @@ func TestTappingAnEntryOpensItInlineWithTheRenameLayout(t *testing.T) {
 	}
 	if !strings.Contains(row, `data-arm`) || !strings.Contains(body, "function disarm") {
 		t.Error("Apply is not a double-tap button")
-	}
-	// Delete does nothing yet: it never submits the form.
-	if !regexp.MustCompile(`<button type="button"[^>]*>Delete</button>`).MatchString(row) {
-		t.Errorf("Delete is not an inert button:\n%s", row)
 	}
 	if strings.Contains(body, `href="/categories?list=category&amp;page=1&amp;edit=1"`) || !strings.Contains(body, `edit=2"`) {
 		t.Error("only the other row should stay a closed link")

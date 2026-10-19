@@ -516,3 +516,31 @@ func (s *Store) NamedPage(l List, id int64) (int, error) {
 	}
 	return before/PageSize + 1, nil
 }
+
+// DeleteNamed removes the entry from the list unless a Transaction or
+// Repeating entry uses it, in which case it is refused with ErrEntryInUse and
+// stays. A missing entry is ErrEntryNotFound.
+func (s *Store) DeleteNamed(l List, id int64) error {
+	res, err := s.db.Exec(
+		"DELETE FROM "+l.table+" WHERE id = ?"+
+			" AND NOT EXISTS (SELECT 1 FROM transactions WHERE "+l.column+" = ?)"+
+			" AND NOT EXISTS (SELECT 1 FROM repeating WHERE "+l.column+" = ?)", id, id, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 1 {
+		return nil
+	}
+	exists, err := s.NamedExists(l, id)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrEntryNotFound
+	}
+	return ErrEntryInUse
+}

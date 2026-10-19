@@ -113,3 +113,6 @@ func translate(err error) error {
 	}
 	return err
 }
+
+// ErrEntryInUse means a Transaction or Repeating entry still uses the list entry.
+var ErrEntryInUse = errors.New("entry in use")
