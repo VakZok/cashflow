@@ -1,6 +1,6 @@
 # Transactions are unique per date and description, or per date and holding
 
-Two independent rules keep Transactions from being entered twice. A second entry is rejected as a duplicate, on create and on edit, and the user resolves it by editing the existing entry so its amount is the sum of both; there is no auto-merge. Both rules use the same duplicate error path, with wording that names what collided.
+Two independent rules keep Transactions from being entered twice. A second entry is rejected as a duplicate, on create and on edit, and the user resolves it by editing the existing entry so its amount is the sum of both; there is no auto-merge. Both rules use the same duplicate error path: the form's submit button reads "Already exists", whichever rule collided.
 
 **Income, Expense, Levy and Rebate** are unique per `(date, description, type)`, enforced by a unique index on `(date, description COLLATE NOCASE, type)`. Category and Subcategory (or Levy Category and Levy Subcategory) are not part of the key. The Type is part of the key so that a Rebate and the Income carrying its money can share a date and description. The side effect is that an Income and an Expense with the same date and description no longer collide; the original version of this ADR forbade that, and we accepted the loosening because it does not happen in practice. Matching ignores ASCII case, like Category, Subcategory and Holding names. Investments and Divestments have no description (NULL) and are exempt, because SQLite treats NULLs as distinct in a unique index.
 

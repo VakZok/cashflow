@@ -10,7 +10,7 @@ import (
 // applyButton is the label of the Apply button of an edit row.
 func applyButton(t *testing.T, row string) string {
 	t.Helper()
-	m := regexp.MustCompile(`<button class="primary" type="submit" data-arm data-label="Apply" data-resting="Apply">([^<]*)</button>`).FindStringSubmatch(row)
+	m := regexp.MustCompile(`<button class="primary" type="submit"[^>]* data-resting="Apply"[^>]*>([^<]*)</button>`).FindStringSubmatch(row)
 	if m == nil {
 		t.Fatalf("no Apply button in:\n%s", row)
 	}
@@ -32,6 +32,8 @@ func TestAClearedDescriptionIsHighlightedAndApplySaysMissingFieldsOnTheSameFilte
 	if b := applyButton(t, row); b != "Missing fields" {
 		t.Errorf("Apply reads %q, want Missing fields", b)
 	}
+	// Disarming after an "Approve" tap goes back to Apply, not to the message.
+	wantAll(t, row, `data-arm data-label="Apply"`)
 	// The row stays open in place, on the same filtered page.
 	wantAll(t, row, `action="/transactions/5#tx-5"`, `name="return" value="transactions:2?search=Item"`)
 	wantAll(t, r.Body, "2 / 3", `value="Item"`)
@@ -46,6 +48,20 @@ func TestAClearedDateAndAnUnnamedNewCategoryAreHighlighted(t *testing.T) {
 	row := editRow(r.Body, "1")
 	if got := strings.Join(highlighted(row), ","); got != "edit-date,edit-new_category" {
 		t.Errorf("highlighted %q, want edit-date and edit-new_category", got)
+	}
+	if b := applyButton(t, row); b != "Missing fields" {
+		t.Errorf("Apply reads %q", b)
+	}
+}
+
+func TestAnUnselectedSubcategoryIsHighlighted(t *testing.T) {
+	ta := newTestApp(t)
+	addTransactions(ta, 2)
+	f := changeForm(ta, "2026-09-01", "Item 01", "transactions:1")
+	f.Set("subcategory", "")
+	row := editRow(ta.post("/transactions/1", f).Body, "1")
+	if got := strings.Join(highlighted(row), ","); got != "edit-subcategory" {
+		t.Errorf("highlighted %q, want edit-subcategory", got)
 	}
 	if b := applyButton(t, row); b != "Missing fields" {
 		t.Errorf("Apply reads %q", b)
