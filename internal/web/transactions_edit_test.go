@@ -27,9 +27,9 @@ func TestClickingARowOnTheTransactionsPageOpensItsEditFormOnTheSamePage(t *testi
 	r := ta.get("/transactions?page=2&edit=5")
 	row := editRow(r.Body, "5")
 	wantAll(t, row, `action="/transactions/5#tx-5"`, `name="return" value="transactions:2"`, `value="Item 05"`,
-		`href="/transactions?page=2"`, "Discard", "Change", "Delete", `formaction="/transactions/5/delete"`)
-	if strings.Index(row, "Change") >= strings.Index(row, "Discard") || strings.Index(row, "Discard") >= strings.Index(row, "Delete") {
-		t.Errorf("buttons are not Change, Discard, Delete in the markup:\n%s", row)
+		`href="/transactions?page=2"`, "Discard", "Apply", "Delete", `formaction="/transactions/5/delete"`)
+	if strings.Index(row, "Apply") >= strings.Index(row, "Discard") || strings.Index(row, "Discard") >= strings.Index(row, "Delete") {
+		t.Errorf("buttons are not Apply, Discard, Delete in the markup:\n%s", row)
 	}
 	wantAll(t, r.Body, "2 / 3", "function syncGroups")
 	if other := editRow(r.Body, "6"); strings.Contains(other, "<form") {

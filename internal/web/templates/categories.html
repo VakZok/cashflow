@@ -11,8 +11,13 @@
   .add { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-top: .5rem; }
   .add > * { min-width: 0; }
   ul.entries { list-style: none; padding: 0; }
-  ul.entries li { display: flex; justify-content: space-between; gap: .5rem; padding: .6rem 0; border-bottom: 1px solid #ddd; }
+  ul.entries li { padding: .6rem 0; border-bottom: 1px solid #ddd; }
+  ul.entries a.row { display: flex; justify-content: space-between; gap: .5rem; color: inherit; text-decoration: none; }
   .count { color: #666; white-space: nowrap; }
+  .rename { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .rename > * { min-width: 0; }
+  a.button { display: flex; align-items: center; justify-content: center; box-sizing: border-box; height: 2.75rem; font-size: 1rem; color: inherit; background: #efefef; border-radius: .5rem; text-decoration: none; }
+{{template "arm-style"}}
 {{template "pager-style"}}
 </style>
 {{template "nav-style"}}
@@ -33,7 +38,20 @@
 {{if .Entries}}
 <ul class="entries">
 {{range .Entries}}
-  <li><span>{{.Name}}</span><span class="count">{{.Transactions}} Trans.{{if .Repeating}} + {{.Repeating}} Rep.{{end}}</span></li>
+  {{if eq .ID $.EditID}}
+  <li class="editing">
+    <form class="rename" method="post" action="/categories/{{.ID}}">
+      <input type="hidden" name="list" value="{{$.Current.Key}}">
+      {{/* Delete is wired up in a later ticket; as a plain button it never submits, so Enter in the name presses Apply. */}}
+      <button type="button">Delete</button>
+      <input type="text" name="name" required maxlength="50" aria-label="Name" value="{{$.EditName}}" autocomplete="off">
+      <a class="button" href="{{$.PageURL}}">Discard</a>
+      <button id="apply" type="submit" data-arm data-label="Apply">{{if $.Taken}}Taken{{else}}Apply{{end}}</button>
+    </form>
+  </li>
+  {{else}}
+  <li><a class="row" href="{{$.PageURL}}&amp;edit={{.ID}}"><span>{{.Name}}</span><span class="count">{{.Transactions}} Trans.{{if .Repeating}} + {{.Repeating}} Rep.{{end}}</span></a></li>
+  {{end}}
 {{end}}
 </ul>
 {{else}}
@@ -47,6 +65,19 @@
   u.searchParams.delete('added')
   history.replaceState(null, '', u)
   setTimeout(function () { document.getElementById('add').textContent = 'Add' }, 2000)
+</script>
+{{end}}
+{{template "arm-script"}}
+{{if .Taken}}
+<script>
+  // The flag is one-off: drop it from the URL so a reload doesn't show it again, and reset the button after 3 s unless it was armed meanwhile.
+  var u = new URL(location.href)
+  u.searchParams.delete('taken')
+  history.replaceState(null, '', u)
+  setTimeout(function () {
+    var b = document.getElementById('apply')
+    if (b && !b.classList.contains('armed')) b.textContent = 'Apply'
+  }, 3000)
 </script>
 {{end}}
 {{template "nav" "categories"}}
