@@ -1,7 +1,11 @@
-{{/* theme-style is the shared palette. Pages include it before their own style, so page rules such as button.armed win over it. */}}
+{{/* theme-style is the shared palette and the base of every page: the body box and the heading, so the heading and the first content start at the same height on every page. Pages include it before their own style, so page rules such as button.armed win over it. */}}
 {{define "theme-style"}}<style>
   :root { --bg: #f0eee6; --accent: #c15f3c; --field: #fff; --line: #ccc; }
-  body { background: var(--bg); }
+  /* Reserve the scrollbar's space on every page, so a page tall enough to scroll does not sit narrower than one that is not. */
+  html { scrollbar-gutter: stable; }
+  body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; background: var(--bg); }
+  /* One line on a phone: page headings are kept short enough to fit. */
+  h1 { font-size: 2rem; margin: .67em 0; }
   button.primary { background: var(--accent); color: #fff; border: 0; border-radius: .5rem; }
 </style>{{end}}
 
