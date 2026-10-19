@@ -2,6 +2,7 @@ package web
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
@@ -196,6 +197,9 @@ func (f filter) store() store.Filter {
 			to = from.AddDate(0, 1, 0)
 		}
 		sf.From, sf.To = from.Format(dateLayout), to.Format(dateLayout)
+		if to.Year() > maxYear {
+			sf.To = "9999-12-32" // sorts after every valid date; see period.exclusiveEnd
+		}
 	}
 	return sf
 }
@@ -204,7 +208,7 @@ func (f filter) store() store.Filter {
 func (f filter) query() string {
 	var parts []string
 	if f.Year != 0 {
-		parts = append(parts, "year="+strconv.Itoa(f.Year))
+		parts = append(parts, "year="+fmt.Sprintf("%04d", f.Year))
 	}
 	if f.Month != 0 {
 		parts = append(parts, "month="+strconv.Itoa(f.Month))

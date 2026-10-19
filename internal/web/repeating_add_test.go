@@ -152,11 +152,11 @@ func TestAddTransactionsWithAnIncompleteListDoesNothing(t *testing.T) {
 func TestAddTransactionsWithAnInvalidDateBooksNothingButSavesTheList(t *testing.T) {
 	ta := newTestApp(t)
 	for date, want := range map[string]string{
-		"":           "Date must be in the format YYYY-MM-DD.",
-		"01.10.2026": "Date must be in the format YYYY-MM-DD.",
-		"2026-02-30": "Date must be in the format YYYY-MM-DD.",
-		"1999-12-31": "Date must be between 2000 and 2200.",
-		"2201-01-01": "Date must be between 2000 and 2200.",
+		"":            "Date must be in the format YYYY-MM-DD.",
+		"01.10.2026":  "Date must be in the format YYYY-MM-DD.",
+		"2026-02-30":  "Date must be in the format YYYY-MM-DD.",
+		"0000-12-31":  "Date must be between 0001 and 9999.",
+		"10000-01-01": "Date must be in the format YYYY-MM-DD.",
 	} {
 		r := ta.addTransactions(date, repRow("expense", "8", "Rent"))
 		if r.Status != http.StatusUnprocessableEntity {

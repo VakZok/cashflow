@@ -107,7 +107,7 @@ func TestChangeRejectsWhatCreateRejectsAndKeepsTheRowInEditMode(t *testing.T) {
 	ta.post("/transactions", validForm("expense", "2026-10-02", "10", "Lunch"))
 	cases := map[string]func(f map[string][]string){
 		"amount":          func(f map[string][]string) { f["amount"] = []string{"0"} },
-		"date":            func(f map[string][]string) { f["date"] = []string{"1999-01-01"} },
+		"date":            func(f map[string][]string) { f["date"] = []string{"0000-12-31"} },
 		"description":     func(f map[string][]string) { f["description"] = []string{""} },
 		"holding on exp.": func(f map[string][]string) { f["holding"] = []string{"new"}; f["new_holding"] = []string{"X"} },
 	}

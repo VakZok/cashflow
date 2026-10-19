@@ -136,7 +136,7 @@ func TestRepeatingIsNotATransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, _ := s.ListTransactions()
-	income, expense, _ := s.Totals("2000-01-01", "2200-01-01")
+	income, expense, _ := s.Totals("0001-01-01", "9999-01-01")
 	if len(rows) != 0 || income != 0 || expense != 0 {
 		t.Errorf("rows %v income %d expense %d", rows, income, expense)
 	}

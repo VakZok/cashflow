@@ -228,7 +228,7 @@ func TestATamperedFilterInTheReturnValueNarrowsNothing(t *testing.T) {
 func TestInvalidYearOrMonthFallsBackToAll(t *testing.T) {
 	ta := newTestApp(t)
 	addDated(ta, "2025-06-01", "2026-06-01")
-	for _, q := range []string{"year=abc", "year=2030", "year=1999", "year=+2026", "year=2026x", "year=02026", "month=6"} {
+	for _, q := range []string{"year=abc", "year=0000", "year=10000", "year=+2026", "year=2026x", "year=02026", "month=6"} {
 		r := ta.get("/transactions?" + q)
 		if r.Status != 200 {
 			t.Errorf("%s: status %d", q, r.Status)

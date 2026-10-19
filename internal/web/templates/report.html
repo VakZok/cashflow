@@ -39,7 +39,7 @@
     <input type="hidden" name="type" value="{{.Chart.Type}}">
     <input type="hidden" name="group" value="{{.Chart.Group}}">
     {{if .PickerYear}}<input type="number" name="date" min="{{.PickerMin}}" max="{{.PickerMax}}" value="{{.Period.Value}}" aria-label="Year" onchange="this.form.submit()">
-    {{else}}<input type="month" name="date" min="{{.PickerMin}}-01" max="{{.PickerMax}}-12" value="{{.Period.Value}}" aria-label="Month" onchange="this.form.submit()">{{end}}
+    {{else}}<input type="month" name="date" min="{{printf "%04d" .PickerMin}}-01" max="{{.PickerMax}}-12" value="{{.Period.Value}}" aria-label="Month" onchange="this.form.submit()">{{end}}
   </form>
   {{if .Next}}<a href="{{.Next}}" aria-label="Next">›</a>{{end}}
 </nav>

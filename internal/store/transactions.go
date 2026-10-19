@@ -23,8 +23,8 @@ const (
 	MaxNameLen        = 50 // Category, Subcategory, Levy Category, Levy Subcategory and Holding, in characters
 	MaxDescriptionLen = 100
 
-	MinDate = "2000-01-01"
-	MaxDate = "2200-12-31"
+	MinDate = "0001-01-01"
+	MaxDate = "9999-12-31"
 )
 
 // Named is an entry of a flat named list (Category, Subcategory, Levy Category,
