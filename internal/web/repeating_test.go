@@ -4,12 +4,76 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 )
 
-const errIncomplete = "All fields must be filled in for every row."
+// listButton is the label of the Repeating page's button whose usual label is resting.
+func listButton(t *testing.T, body, resting string) string {
+	t.Helper()
+	m := regexp.MustCompile(`data-resting="` + resting + `"[^>]*>([^<]*)</button>`).FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("no %s button in:\n%s", resting, body)
+	}
+	return m[1]
+}
+
+func saveButton(t *testing.T, body string) string {
+	t.Helper()
+	return listButton(t, body, "Save List")
+}
+
+func addButtonText(t *testing.T, body string) string {
+	t.Helper()
+	return listButton(t, body, "Add Transactions")
+}
+
+// highlightedInputs lists the names of the Repeating page's inputs that carry the red highlight.
+func highlightedInputs(body string) string {
+	var names []string
+	for _, m := range regexp.MustCompile(`name="([^"]*)" class="invalid"|id="(date)" class="invalid"`).FindAllStringSubmatch(body, -1) {
+		names = append(names, m[1]+m[2])
+	}
+	return strings.Join(names, ",")
+}
+
+// markedRows lists the indexes of the rendered rows marked as duplicates.
+func markedRows(body string) []int {
+	var marked []int
+	for i, m := range regexp.MustCompile(`class="rep-row( duplicate)?"`).FindAllStringSubmatch(body, -1) {
+		if m[1] != "" {
+			marked = append(marked, i)
+		}
+	}
+	return marked
+}
+
+// wantRejected checks a rejected Save List or Add Transactions: status 422,
+// the pressed button's label, and the highlighted inputs and marked rows.
+func wantRejected(t *testing.T, r response, action, button, inputs string, marked ...int) {
+	t.Helper()
+	if r.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("status %d, want 422\n%s", r.Status, r.Body)
+	}
+	pressed, other := saveButton(t, r.Body), addButtonText(t, r.Body)
+	if action == "add" {
+		pressed, other = other, pressed
+	}
+	if pressed != button {
+		t.Errorf("button %q, want %q", pressed, button)
+	}
+	if other != "Save List" && other != "Add Transactions" {
+		t.Errorf("the other button reads %q", other)
+	}
+	if got := highlightedInputs(r.Body); got != inputs {
+		t.Errorf("highlighted %q, want %q", got, inputs)
+	}
+	if got := markedRows(r.Body); !slices.Equal(got, marked) {
+		t.Errorf("marked rows %v, want %v", got, marked)
+	}
+}
 
 // repeatingForm builds a Save List submission; each row is
 // {type, amount, description, category, newCategory, subcategory, newSubcategory}.
@@ -76,7 +140,9 @@ func TestSavedListIsGroupedIncomeThenExpenseInSavedOrder(t *testing.T) {
 		repRow("expense", "30", "Gym"),
 		repRow("income", "100", "Pension"),
 	)).Body
-	wantAll(t, body, "List saved")
+	if b := saveButton(t, body); b != "List saved!" || !strings.Contains(body, `data-resting="Save List" data-flash>`) {
+		t.Errorf("Save List button %q, want the List saved! success text", b)
+	}
 	order := []string{"Salary", "Pension", "Rent", "Gym"}
 	last := -1
 	for _, d := range order {
@@ -103,18 +169,17 @@ func TestSavedRowsPreselectTheirTypeCategoryAndSubcategory(t *testing.T) {
 func TestIncompleteRowBlocksSaveAndKeepsTypedValues(t *testing.T) {
 	ta := newTestApp(t)
 	for name, row := range map[string][7]string{
-		"amount":      {"income", "", "Salary", "new", "Newcat", "new", "Newsub"},
-		"description": {"income", "5", "", "new", "Newcat", "new", "Newsub"},
-		"category":    {"income", "5", "Salary", "", "", "new", "Newsub"},
-		"subcategory": {"income", "5", "Salary", "new", "Newcat", "", ""},
-		"new name":    {"income", "5", "Salary", "new", "", "new", "Newsub"},
+		"amount_1":                    {"income", "", "Salary", "new", "Newcat", "new", "Newsub"},
+		"description_1":               {"income", "5", "", "new", "Newcat", "new", "Newsub"},
+		"category_1":                  {"income", "5", "Salary", "", "", "new", "Newsub"},
+		"subcategory_1":               {"income", "5", "Salary", "new", "Newcat", "", ""},
+		"new_category_1":              {"income", "5", "Salary", "new", "", "new", "Newsub"},
+		"description_1,subcategory_1": {"income", "5", "", "new", "Newcat", "", ""},
 	} {
 		r := ta.saveList(repeatingForm(repRow("expense", "9", "Fine"), row))
-		if r.Status != http.StatusUnprocessableEntity {
-			t.Fatalf("%s: status %d, want 422", name, r.Status)
-		}
-		wantAll(t, r.Body, errIncomplete, `value="Fine"`, `value="9"`)
-		if name != "description" {
+		wantRejected(t, r, "save", "Missing fields", name)
+		wantAll(t, r.Body, `value="Fine"`, `value="9"`)
+		if !strings.HasPrefix(name, "description") {
 			wantAll(t, r.Body, `value="Salary"`)
 		}
 	}
@@ -127,12 +192,96 @@ func TestIncompleteRowBlocksSaveAndKeepsTypedValues(t *testing.T) {
 	}
 }
 
-func TestErrorBoxComesAfterTheSaveListButton(t *testing.T) {
+func TestTheRepeatingPageHasNoErrorOrNoticeBox(t *testing.T) {
 	ta := newTestApp(t)
-	body := ta.saveList(repeatingForm([7]string{"income", "", "x", "", "", "", ""})).Body
-	b, e := strings.Index(body, "Save List"), strings.Index(body, errIncomplete)
-	if b < 0 || e < b {
-		t.Errorf("button at %d, error at %d", b, e)
+	bodies := []string{
+		ta.saveList(repeatingForm([7]string{"income", "", "x", "", "", "", ""})).Body,
+		ta.saveList(repeatingForm(repRow("expense", "8", "Rent"), repRow("expense", "9", "Rent"))).Body,
+		mustSave(t, ta, repeatingForm(repRow("expense", "8", "Rent"))).Body,
+		ta.addTransactions("2026-10-01", repRow("expense", "8", "Rent")).Body,
+		ta.addTransactions("2026-10-01", repRow("expense", "8", "Rent")).Body,
+	}
+	for _, body := range bodies {
+		for _, old := range []string{`class="errors"`, `class="notice"`, "must be", "in the list:", "added for"} {
+			if strings.Contains(body, old) {
+				t.Errorf("page contains %q:\n%s", old, body)
+			}
+		}
+	}
+}
+
+func TestTheRepeatingPageIsTitledRepeatingTransactions(t *testing.T) {
+	ta := newTestApp(t)
+	wantAll(t, ta.get("/repeating").Body, "<title>Repeating Transactions</title>", "<h1>Repeating Transactions</h1>")
+}
+
+func TestSaveListKeepsTheScrollPosition(t *testing.T) {
+	ta := newTestApp(t)
+	wantAll(t, ta.get("/repeating").Body, `<form method="post" action="/repeating" data-keep-scroll>`)
+}
+
+func TestTwoRowsWithTheSameTypeAndDescriptionMarkOnlyTheSecond(t *testing.T) {
+	for _, action := range []string{"save", "add"} {
+		ta := newTestApp(t)
+		f := addForm("2026-10-01", repRow("expense", "800", "Rent"), repRow("expense", "900", "Rent"))
+		f.Set("action", action)
+		wantRejected(t, ta.saveList(f), action, "Duplicate rows", "", 1)
+	}
+}
+
+func TestEveryRowAfterTheFirstOfEachCollidingSetIsMarked(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.saveList(repeatingForm(repRow("expense", "1", "Rent"), repRow("expense", "2", "Gym"), repRow("income", "3", "Rent"),
+		repRow("expense", "4", "rent"), repRow("expense", "5", "GYM"), repRow("expense", "6", "Rent")))
+	wantRejected(t, r, "save", "Duplicate rows", "", 3, 4, 5)
+}
+
+func TestMissingFieldsAndDuplicatesAreShownTogether(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.saveList(repeatingForm(
+		[7]string{"expense", "5", "Gym", "new", "Cat", "", ""},
+		repRow("expense", "8", "Rent"), repRow("expense", "9", "Rent")))
+	wantRejected(t, r, "save", "Duplicate rows and missing fields", "subcategory_0", 2)
+	// A row missing what its rule compares collides with none.
+	r = ta.saveList(repeatingForm(repRow("expense", "8", ""), repRow("expense", "9", ""), holdRow("investment", "5", "", ""), holdRow("divestment", "6", "", "")))
+	wantRejected(t, r, "save", "Missing fields", "description_0,description_1,holding_2,holding_3")
+}
+
+func TestSavingAgainHighlightsWhatIsStillWrong(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.saveList(repeatingForm([7]string{"expense", "", "Gym", "new", "", "new", "Sub"}, repRow("expense", "8", "Rent"), repRow("expense", "9", "Rent")))
+	wantRejected(t, r, "save", "Duplicate rows and missing fields", "amount_0,new_category_0", 2)
+	// The amount is filled in and the duplicate removed; the new name is still missing.
+	r = ta.saveList(repeatingForm([7]string{"expense", "5", "Gym", "new", "", "new", "Sub"}, repRow("expense", "8", "Rent")))
+	wantRejected(t, r, "save", "Missing fields", "new_category_0")
+}
+
+func TestABlankRowIsNeitherHighlightedNorMarked(t *testing.T) {
+	ta := newTestApp(t)
+	blank := [7]string{"expense", "", "", "", "", "", ""}
+	r := ta.saveList(repeatingForm(blank, [7]string{"expense", "5", "", "new", "Cat", "new", "Sub"}, blank))
+	wantRejected(t, r, "save", "Missing fields", "description_1")
+}
+
+func TestAnInvalidAmountShowsTheBubbleOnItsRowOnly(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.saveList(repeatingForm(repRow("expense", "8", "Rent"), repRow("expense", "0", "Gym")))
+	wantRejected(t, r, "save", "Save List", "")
+	rows := strings.Split(r.Body, `class="rep-row"`)
+	if strings.Contains(rows[1], `class="bubble"`) || !strings.Contains(rows[2], `<span class="bubble" role="alert">1 to 100.000.000</span>`) {
+		t.Errorf("bubble not on the second row only:\n%s", r.Body)
+	}
+	if strings.Contains(ta.get("/repeating").Body, `class="bubble"`) {
+		t.Error("a fresh page shows the bubble")
+	}
+}
+
+func TestTheSuccessTextIsGoneOnTheNextLoad(t *testing.T) {
+	ta := newTestApp(t)
+	mustSave(t, ta, repeatingForm(repRow("expense", "8", "Rent")))
+	body := ta.get("/repeating").Body
+	if saveButton(t, body) != "Save List" || strings.Contains(body, " data-flash>") {
+		t.Errorf("reload shows a success text:\n%s", body)
 	}
 }
 
@@ -188,11 +337,7 @@ func TestRepeatingCapIsFifty(t *testing.T) {
 		t.Fatalf("%d rows, want 50", n)
 	}
 	rows = append(rows, repRow("expense", "1", "One too many"))
-	r := ta.saveList(repeatingForm(rows...))
-	if r.Status != http.StatusUnprocessableEntity {
-		t.Fatalf("51 rows: status %d, want 422", r.Status)
-	}
-	wantAll(t, r.Body, "at most 50 rows")
+	wantRejected(t, ta.saveList(repeatingForm(rows...)), "save", "Invalid input", "")
 	if strings.Contains(ta.get("/repeating").Body, "One too many") {
 		t.Error("the 51-row list was saved")
 	}
@@ -212,21 +357,20 @@ func TestRepeatingAppliesTheHomeFormLimits(t *testing.T) {
 	ta := newTestApp(t)
 	for _, amount := range []string{"0", "-5", "12,5", "1.5", "abc", "100000001"} {
 		r := ta.saveList(repeatingForm(repRow("income", amount, "x")))
-		if r.Status != http.StatusUnprocessableEntity {
-			t.Errorf("amount %q: status %d, want 422", amount, r.Status)
-		}
-		wantAll(t, r.Body, "Amount must be a whole number of euros between 1 and 100.000.000.")
+		wantRejected(t, r, "save", "Save List", "")
+		wantAll(t, r.Body, `<span class="bubble" role="alert">1 to 100.000.000</span>`)
 	}
 	mustSave(t, ta, repeatingForm(repRow("income", "100000000", "x")))
 
-	r := ta.saveList(repeatingForm(repRow("income", "5", strings.Repeat("d", 101))))
-	wantAll(t, r.Body, "Description must be at most 100 characters.")
-	r = ta.saveList(repeatingForm([7]string{"income", "5", "x", "new", strings.Repeat("n", 51), "new", "ok"}))
-	wantAll(t, r.Body, "Category name must be at most 50 characters.")
-	r = ta.saveList(repeatingForm([7]string{"income", "5", "x", "new", "ok", "new", strings.Repeat("n", 51)}))
-	wantAll(t, r.Body, "Subcategory name must be at most 50 characters.")
-	r = ta.saveList(repeatingForm([7]string{"income", "5", "x", "99", "", "99", ""}))
-	wantAll(t, r.Body, errIncomplete)
+	// Only a hand-crafted request gets past the inputs' maxlength or picks an id the selects never offer.
+	for _, row := range [][7]string{
+		repRow("income", "5", strings.Repeat("d", 101)),
+		{"income", "5", "x", "new", strings.Repeat("n", 51), "new", "ok"},
+		{"income", "5", "x", "new", "ok", "new", strings.Repeat("n", 51)},
+		{"income", "5", "x", "99", "", "99", ""},
+	} {
+		wantRejected(t, ta.saveList(repeatingForm(row)), "save", "Invalid input", "")
+	}
 }
 
 func TestRepeatingHostileInputIsEscaped(t *testing.T) {
@@ -257,13 +401,8 @@ func TestSavingRejectsRowsWithTheSameTypeAndDescriptionIgnoringCase(t *testing.T
 			f := addForm("2026-10-01", repRow(typ, "800", "Rent"), repRow(typ, "30", "Gym"), repRow(typ, "5", "rENT"), repRow(typ, "6", "gym"))
 			f.Set("action", action)
 			r := ta.saveList(f)
-			if r.Status != http.StatusUnprocessableEntity {
-				t.Fatalf("%s/%s: status %d, want 422\n%s", typ, action, r.Status, r.Body)
-			}
-			wantAll(t, r.Body, "Duplicate rows in the list: Rent, Gym", `value="rENT"`, `value="gym"`)
-			if strings.Index(r.Body, "Duplicate rows") < strings.Index(r.Body, "Add Transactions") {
-				t.Errorf("error is not below the Add Transactions button")
-			}
+			wantRejected(t, r, action, "Duplicate rows", "", 2, 3)
+			wantAll(t, r.Body, `value="rENT"`, `value="gym"`)
 			if n := rowCount(ta.get("/repeating").Body); n != 1 {
 				t.Errorf("%d rows saved, want the untouched blank list", n)
 			}
@@ -287,24 +426,25 @@ func TestInListDuplicateCreatesNoNewNames(t *testing.T) {
 	}
 }
 
-func TestCompletenessErrorTakesPrecedenceOverInListDuplicates(t *testing.T) {
+func TestAnIncompleteRowCanStillBeADuplicate(t *testing.T) {
 	ta := newTestApp(t)
-	r := ta.saveList(repeatingForm(repRow("expense", "8", "Rent"), repRow("expense", "9", "Rent"), repRow("expense", "", "Gym")))
-	wantAll(t, r.Body, errIncomplete)
-	if strings.Contains(r.Body, "Duplicate rows") {
-		t.Errorf("duplicate error shown with an incomplete row:\n%s", r.Body)
-	}
+	r := ta.saveList(repeatingForm(repRow("expense", "8", "Rent"), [7]string{"expense", "", "Rent", "", "", "new", "Sub"}))
+	wantRejected(t, r, "save", "Duplicate rows and missing fields", "amount_1,category_1", 1)
+}
+
+func TestMissingFieldsOutrankAHandCraftedProblemOnTheButton(t *testing.T) {
+	ta := newTestApp(t)
+	r := ta.saveList(repeatingForm(repRow("bogus", "5", "x"), repRow("expense", "", "Rent")))
+	wantRejected(t, r, "save", "Missing fields", "amount_1")
+	r = ta.saveList(repeatingForm(repRow("bogus", "5", "x"), repRow("expense", "8", "Rent"), repRow("expense", "9", "Rent")))
+	wantRejected(t, r, "save", "Invalid input", "", 2)
 }
 
 func TestRepeatingOffersEveryTypeAndRejectsUnknownOnes(t *testing.T) {
 	ta := newTestApp(t)
 	wantAll(t, ta.get("/repeating").Body, `>Income</option>`, `>Expense</option>`, `>Levy</option>`, `>Rebate</option>`,
 		`>Investment</option>`, `>Divestment</option>`)
-	r := ta.saveList(repeatingForm(repRow("bogus", "5", "x")))
-	if r.Status != http.StatusUnprocessableEntity {
-		t.Errorf("status %d, want 422", r.Status)
-	}
-	wantAll(t, r.Body, "Type must be Expense, Income, Levy, Rebate, Investment or Divestment.")
+	wantRejected(t, ta.saveList(repeatingForm(repRow("bogus", "5", "x"))), "save", "Invalid input", "")
 }
 
 // holdRow is an Investment or Divestment row picking or creating the Holding.
@@ -355,20 +495,20 @@ func TestSavedInvestmentAndDivestmentRowsComeAfterIncomeAndExpenseBeforeLevyAndR
 func TestIncompleteInvestmentAndDivestmentRowsBlockSaveAndBooking(t *testing.T) {
 	for _, typ := range []string{"investment", "divestment"} {
 		for _, action := range []string{"save", "add"} {
-			for _, row := range [][7]string{
-				holdRow(typ, "", "new", "ETF"),
-				holdRow(typ, "5", "", ""),
-				holdRow(typ, "5", "new", ""),
-				holdRow(typ, "5", "999", ""),
+			for _, c := range []struct {
+				row            [7]string
+				button, inputs string
+			}{
+				{holdRow(typ, "", "new", "ETF"), "Missing fields", "amount_0"},
+				{holdRow(typ, "5", "", ""), "Missing fields", "holding_0"},
+				{holdRow(typ, "5", "new", ""), "Missing fields", "new_holding_0"},
+				{holdRow(typ, "5", "999", ""), "Invalid input", ""},
 			} {
+				row := c.row
 				ta := newTestApp(t)
 				f := addForm("2026-10-01", row)
 				f.Set("action", action)
-				r := ta.saveList(f)
-				if r.Status != http.StatusUnprocessableEntity {
-					t.Fatalf("%s/%s %v: status %d, want 422", typ, action, row, r.Status)
-				}
-				wantAll(t, r.Body, errIncomplete)
+				wantRejected(t, ta.saveList(f), action, c.button, c.inputs)
 				if strings.Contains(ta.get("/").Body, "ETF") || strings.Contains(ta.get("/repeating").Body, ">ETF</option>") {
 					t.Errorf("%s/%s %v: something was saved or created", typ, action, row)
 				}
@@ -392,17 +532,14 @@ func TestInvestmentRowIgnoresADescriptionAndTheOtherListsFields(t *testing.T) {
 func TestHoldingNameLimitAppliesToInvestmentRows(t *testing.T) {
 	ta := newTestApp(t)
 	r := ta.saveList(repeatingForm(holdRow("divestment", "5", "new", strings.Repeat("n", 51))))
-	wantAll(t, r.Body, "Holding name must be at most 50 characters.")
+	wantRejected(t, r, "save", "Invalid input", "")
 }
 
 func TestSavingRejectsTwoRowsWithTheSameHoldingWhateverTheirType(t *testing.T) {
 	for _, types := range [][2]string{{"investment", "investment"}, {"divestment", "divestment"}, {"investment", "divestment"}} {
 		ta := newTestApp(t)
 		r := ta.saveList(repeatingForm(holdRow(types[0], "5", "new", "ETF"), holdRow(types[1], "6", "new", "etf")))
-		if r.Status != http.StatusUnprocessableEntity {
-			t.Fatalf("%v: status %d, want 422", types, r.Status)
-		}
-		wantAll(t, r.Body, "Duplicate rows in the list: ETF")
+		wantRejected(t, r, "save", "Duplicate rows", "", 1)
 		if strings.Contains(ta.get("/repeating").Body, ">ETF</option>") {
 			t.Errorf("%v: a Holding was created by a rejected save", types)
 		}
@@ -413,9 +550,9 @@ func TestSavingRejectsAnExistingHoldingPickedTwiceOrAlsoEnteredAsNew(t *testing.
 	ta := newTestApp(t)
 	mustSave(t, ta, repeatingForm(holdRow("investment", "5", "new", "ETF")))
 	r := ta.saveList(repeatingForm(holdRow("investment", "5", "1", ""), holdRow("divestment", "6", "1", "")))
-	wantAll(t, r.Body, "Duplicate rows in the list: ETF")
+	wantRejected(t, r, "save", "Duplicate rows", "", 1)
 	r = ta.saveList(repeatingForm(holdRow("investment", "5", "1", ""), holdRow("divestment", "6", "new", "Etf")))
-	wantAll(t, r.Body, "Duplicate rows in the list: ETF")
+	wantRejected(t, r, "save", "Duplicate rows", "", 1)
 }
 
 func TestSavingAcceptsDifferentHoldingsAndTheSameNameAsADescription(t *testing.T) {
@@ -457,21 +594,17 @@ func TestSavedLevyAndRebateRowsComeAfterTheOtherTypesLevyBeforeRebate(t *testing
 func TestIncompleteLevyAndRebateRowsBlockSaveAndBooking(t *testing.T) {
 	for _, typ := range []string{"levy", "rebate"} {
 		for _, action := range []string{"save", "add"} {
-			for _, row := range [][7]string{
-				{typ, "", "Tax", "new", "Tax", "new", "Sub"},
-				{typ, "5", "", "new", "Tax", "new", "Sub"},
-				{typ, "5", "Tax", "", "", "new", "Sub"},
-				{typ, "5", "Tax", "new", "Tax", "", ""},
-				{typ, "5", "Tax", "new", "", "new", "Sub"},
+			for row, input := range map[[7]string]string{
+				{typ, "", "Tax", "new", "Tax", "new", "Sub"}: "amount_0",
+				{typ, "5", "", "new", "Tax", "new", "Sub"}:   "description_0",
+				{typ, "5", "Tax", "", "", "new", "Sub"}:      "levy_category_0",
+				{typ, "5", "Tax", "new", "Tax", "", ""}:      "levy_subcategory_0",
+				{typ, "5", "Tax", "new", "", "new", "Sub"}:   "new_levy_category_0",
 			} {
 				ta := newTestApp(t)
 				f := addForm("2026-10-01", row)
 				f.Set("action", action)
-				r := ta.saveList(f)
-				if r.Status != http.StatusUnprocessableEntity {
-					t.Fatalf("%s/%s %v: status %d, want 422", typ, action, row, r.Status)
-				}
-				wantAll(t, r.Body, errIncomplete)
+				wantRejected(t, ta.saveList(f), action, "Missing fields", input)
 				if strings.Contains(ta.get("/").Body, "Tax") || strings.Contains(ta.get("/repeating").Body, ">Tax</option>") {
 					t.Errorf("%s/%s %v: something was saved or created", typ, action, row)
 				}
@@ -495,19 +628,16 @@ func TestLevyRowIgnoresTheDefaultListsAndUsesItsOwn(t *testing.T) {
 func TestLevyAndRebateRowsApplyTheListNameLimit(t *testing.T) {
 	ta := newTestApp(t)
 	r := ta.saveList(repeatingForm([7]string{"levy", "5", "x", "new", strings.Repeat("n", 51), "new", "ok"}))
-	wantAll(t, r.Body, "Levy Category name must be at most 50 characters.")
+	wantRejected(t, r, "save", "Invalid input", "")
 	r = ta.saveList(repeatingForm([7]string{"rebate", "5", "x", "new", "ok", "new", strings.Repeat("n", 51)}))
-	wantAll(t, r.Body, "Levy Subcategory name must be at most 50 characters.")
+	wantRejected(t, r, "save", "Invalid input", "")
 }
 
 func TestSavingRejectsTwoLevyOrTwoRebateRowsWithTheSameDescriptionButAllowsLevyAndRebate(t *testing.T) {
 	for _, typ := range []string{"levy", "rebate"} {
 		ta := newTestApp(t)
 		r := ta.saveList(repeatingForm(repRow(typ, "5", "Tax"), repRow(typ, "6", "tAX")))
-		if r.Status != http.StatusUnprocessableEntity {
-			t.Fatalf("%s: status %d, want 422", typ, r.Status)
-		}
-		wantAll(t, r.Body, "Duplicate rows in the list: Tax")
+		wantRejected(t, r, "save", "Duplicate rows", "", 1)
 		if strings.Contains(ta.get("/repeating").Body, ">Cat</option>") {
 			t.Errorf("%s: a Levy Category was created by a rejected save", typ)
 		}

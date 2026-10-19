@@ -314,21 +314,14 @@ func withSpec(form entryForm) entryForm {
 
 const dateLayout = "2006-01-02"
 
-const (
-	errAmount         = "Amount must be a whole number of euros between 1 and 100.000.000."
-	errDescriptionLen = "Description must be at most 100 characters."
-)
-
-// validateDate returns the error message for a date input, or "" if it is valid.
-func validateDate(s string) string {
+// validDate reports whether a date input is a date in YYYY-MM-DD between store.MinDate and store.MaxDate.
+func validDate(s string) bool {
 	d, err := time.Parse(dateLayout, s)
 	if err != nil {
-		return "Date must be in the format YYYY-MM-DD."
+		return false
 	}
-	if f := d.Format(dateLayout); f < store.MinDate || f > store.MaxDate {
-		return "Date must be between 0001 and 9999."
-	}
-	return ""
+	f := d.Format(dateLayout)
+	return f >= store.MinDate && f <= store.MaxDate
 }
 
 var wholeNumber = regexp.MustCompile(`^[0-9]+$`)
@@ -505,7 +498,7 @@ func (a *App) prepare(form *entryForm, excludeID int64) (store.NewTransaction, e
 	}
 	if form.Date == "" {
 		form.missing("date")
-	} else if validateDate(form.Date) != "" {
+	} else if !validDate(form.Date) {
 		form.fail(problemInvalid)
 	}
 	amount, ok := parseAmount(form.Amount)
