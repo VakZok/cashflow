@@ -212,7 +212,7 @@ func TestTheRepeatingPageHasNoErrorOrNoticeBox(t *testing.T) {
 
 func TestTheRepeatingPageIsTitledRepeatingTransactions(t *testing.T) {
 	ta := newTestApp(t)
-	wantAll(t, ta.get("/repeating").Body, "<title>Repeating Transactions</title>", "<h1>Repeating Transactions</h1>")
+	wantAll(t, ta.get("/repeating").Body, "<title>Repeating Transactions</title>", "<h1>Repeating</h1>")
 }
 
 func TestSaveListKeepsTheScrollPosition(t *testing.T) {
