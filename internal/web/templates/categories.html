@@ -35,9 +35,9 @@
     {{end}}
   </select>
 </form>
-<form class="add" method="post" action="/categories">
+<form class="add" method="post" action="/categories" data-carry="a_">
   <input type="hidden" name="list" value="{{.Current.Key}}">
-  <input type="text" name="name" required maxlength="50" aria-label="Name" placeholder="Name" autocomplete="off">
+  <input type="text" name="name" required maxlength="50" aria-label="Name" placeholder="Name" value="{{.AddName}}" autocomplete="off">
   <button id="add" class="primary" type="submit">{{if eq .Added "new"}}Added!{{else if eq .Added "exists"}}Exists!{{else}}Add{{end}}</button>
 </form>
 {{if .Entries}}
@@ -45,7 +45,7 @@
 {{range .Entries}}
   {{if eq .ID $.EditID}}
   <li class="editing">
-    <form class="rename" method="post" action="/categories/{{.ID}}">
+    <form class="rename" method="post" action="/categories/{{.ID}}" data-carry="e_">
       <input type="hidden" name="list" value="{{$.Current.Key}}">
       {{/* Apply comes first in the markup so Enter in the name presses it, not Delete; CSS shows it last. */}}
       <button id="apply" class="primary apply" type="submit" data-arm data-label="Apply">{{if $.Taken}}Taken{{else}}Apply{{end}}</button>

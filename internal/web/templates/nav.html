@@ -31,19 +31,22 @@
       oneOff.forEach(function (k) { q.delete(k) })
       return location.pathname + (q.toString() ? '?' + q : '')
     }
-    // A form marked data-carry has its input copied into the page's address when a nav icon is tapped.
-    // Its value prefixes the field names; without one the input is the whole address (the Add page),
-    // with one it is added to the address as it is (an open edit next to the filter).
+    // Forms marked data-carry have their input copied into the page's address when a nav icon is tapped.
+    // A form's value prefixes its field names; without one the input is the whole address (the Add page),
+    // with one it is added to the address as it is (an open edit next to the filter; the Edit Categories page has two).
     // Disabled fields (those of other Types) are not part of the form data; empty ones are left out.
     function carry() {
-      var form = document.querySelector('form[data-carry]'), page = current && current.dataset.page
-      if (!form || !page) return
-      var prefix = form.getAttribute('data-carry')
+      var forms = document.querySelectorAll('form[data-carry]'), page = current && current.dataset.page
+      if (!forms.length || !page) return
+      var prefixed = forms[0].getAttribute('data-carry') !== ''
       // An edit that failed to apply is shown at its POST target: there is no address to add to.
-      if (prefix && current.pathname !== location.pathname) return
-      var q = new URLSearchParams(prefix ? address().split('?')[1] : '')
-      Array.from(q.keys()).forEach(function (k) { if (prefix && k.indexOf(prefix) === 0) q.delete(k) })
-      new FormData(form).forEach(function (v, k) { if (v !== '' && k !== 'return') q.append(prefix + k, v) })
+      if (prefixed && current.pathname !== location.pathname) return
+      var q = new URLSearchParams(prefixed ? address().split('?')[1] : '')
+      forms.forEach(function (form) {
+        var prefix = form.getAttribute('data-carry')
+        Array.from(q.keys()).forEach(function (k) { if (prefix && k.indexOf(prefix) === 0) q.delete(k) })
+        new FormData(form).forEach(function (v, k) { if (v !== '' && k !== 'return' && k !== 'list') q.append(prefix + k, v) })
+      })
       leaving = true
       save(page, { u: current.pathname + '?' + q, y: scrollY })
     }

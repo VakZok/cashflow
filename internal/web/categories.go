@@ -57,6 +57,7 @@ type categoriesData struct {
 	EditID       int64  // the entry whose row is open, 0 for none
 	EditName     string // the text in the open row's name field
 	Taken        bool   // the open row's rename was refused: Apply shows "Taken"
+	AddName      string // the text in the add field
 }
 
 // categoriesURL is the page of the list on the Edit Categories page.
@@ -89,13 +90,16 @@ func (a *App) categories(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.PageURL = categoriesURL(c, page)
+	d.AddName = q.Get("a_name")
 	if editID, err := strconv.ParseInt(q.Get("edit"), 10, 64); err == nil {
 		for _, e := range d.Entries {
 			if e.ID != editID {
 				continue
 			}
 			d.EditID, d.EditName = e.ID, e.Name
-			if q.Has("name") {
+			if q.Has("e_name") {
+				d.EditName = q.Get("e_name")
+			} else if q.Has("name") {
 				d.EditName = q.Get("name")
 				d.Taken = q.Get("taken") == "1"
 			}
