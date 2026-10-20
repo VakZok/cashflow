@@ -67,15 +67,30 @@ func TestPagesThatKeepStateMarkTheirNavItem(t *testing.T) {
 	ta := newTestApp(t)
 	for _, path := range []string{"/", "/transactions", "/repeating", "/report", "/categories"} {
 		body := ta.get(path).Body
-		for _, want := range []string{`<a href="/transactions" data-page="transactions"`, `<a href="/report" data-page="report"`, `<a href="/categories" data-page="categories"`} {
+		for _, want := range []string{`<a href="/" data-page="add"`, `<a href="/transactions" data-page="transactions"`, `<a href="/report" data-page="report"`, `<a href="/categories" data-page="categories"`} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s is missing %q", path, want)
 			}
 		}
-		for _, none := range []string{`<a href="/" data-page`, `<a href="/repeating" data-page`} {
+		for _, none := range []string{`<a href="/repeating" data-page`} {
 			if strings.Contains(body, none) {
 				t.Errorf("%s keeps state for %q", path, none)
 			}
+		}
+	}
+}
+
+func TestOnlyTheAddFormIsCarriedAcrossPages(t *testing.T) {
+	ta := newTestApp(t)
+	if n := strings.Count(ta.get("/").Body, "data-keep-scroll data-carry>"); n != 1 {
+		t.Errorf("the Add page has %d carried forms, want 1", n)
+	}
+	if !strings.Contains(ta.get("/").Body, `data-page="add" aria-label="Add transaction"`) {
+		t.Error("the Add icon does not remember its page")
+	}
+	for _, path := range []string{"/transactions", "/repeating", "/report", "/categories"} {
+		if strings.Contains(ta.get(path).Body, "<form method=\"post\" action=\"/transactions\" data-keep-scroll data-carry>") {
+			t.Errorf("%s carries the Add form", path)
 		}
 	}
 }

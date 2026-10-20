@@ -165,5 +165,5 @@ func TestTheSharedErrorScriptAndStyleAreOnThePages(t *testing.T) {
 	for _, path := range []string{"/", "/transactions?edit=1"} {
 		wantAll(t, ta.get(path).Body, "function onEdit", "input.invalid:not([type=hidden])", ".bubble")
 	}
-	wantAll(t, ta.get("/").Body, `<form method="post" action="/transactions" data-keep-scroll>`)
+	wantAll(t, ta.get("/").Body, `<form method="post" action="/transactions" data-keep-scroll data-carry>`)
 }
