@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -230,59 +231,67 @@ func (a *App) renderRepeating(w http.ResponseWriter, status int, d repeatingData
 	a.render(w, status, "repeating.html", d)
 }
 
-// saveRepeating replaces the stored list with the submitted one. Fully blank
-// rows are dropped; if any other row is invalid nothing is saved or created.
-func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	date := a.defaultBookingDate()
-	if r.PostForm.Has("date") {
-		date = strings.TrimSpace(r.PostFormValue("date"))
+// readRepeating reads the list's rows and Month from form values, which
+// come from a submitted form or from a page address alike. Without a "date"
+// value the Month is the default booking date.
+func (a *App) readRepeating(v url.Values) (rows []repeatingRow, date string) {
+	date = a.defaultBookingDate()
+	if v.Has("date") {
+		date = strings.TrimSpace(v.Get("date"))
 		if len(date) == len("2006-01") {
 			date += "-01" // month picker: book on the 1st
 		}
 	}
-	var rows []repeatingRow
-	for _, n := range r.PostForm["row"] {
-		row := repeatingRow{
-			Type:           r.PostFormValue("type_" + n),
-			Amount:         strings.TrimSpace(r.PostFormValue("amount_" + n)),
-			Description:    strings.TrimSpace(r.PostFormValue("description_" + n)),
-			Category:       r.PostFormValue("category_" + n),
-			NewCategory:    strings.TrimSpace(r.PostFormValue("new_category_" + n)),
-			Subcategory:    r.PostFormValue("subcategory_" + n),
-			NewSubcategory: strings.TrimSpace(r.PostFormValue("new_subcategory_" + n)),
+	for _, n := range v["row"] {
+		rows = append(rows, repeatingRow{
+			Type:           v.Get("type_" + n),
+			Amount:         strings.TrimSpace(v.Get("amount_" + n)),
+			Description:    strings.TrimSpace(v.Get("description_" + n)),
+			Category:       v.Get("category_" + n),
+			NewCategory:    strings.TrimSpace(v.Get("new_category_" + n)),
+			Subcategory:    v.Get("subcategory_" + n),
+			NewSubcategory: strings.TrimSpace(v.Get("new_subcategory_" + n)),
 
-			LevyCategory:       r.PostFormValue("levy_category_" + n),
-			NewLevyCategory:    strings.TrimSpace(r.PostFormValue("new_levy_category_" + n)),
-			LevySubcategory:    r.PostFormValue("levy_subcategory_" + n),
-			NewLevySubcategory: strings.TrimSpace(r.PostFormValue("new_levy_subcategory_" + n)),
+			LevyCategory:       v.Get("levy_category_" + n),
+			NewLevyCategory:    strings.TrimSpace(v.Get("new_levy_category_" + n)),
+			LevySubcategory:    v.Get("levy_subcategory_" + n),
+			NewLevySubcategory: strings.TrimSpace(v.Get("new_levy_subcategory_" + n)),
 
-			Holding:    r.PostFormValue("holding_" + n),
-			NewHolding: strings.TrimSpace(r.PostFormValue("new_holding_" + n)),
-		}
-		rows = append(rows, row)
+			Holding:    v.Get("holding_" + n),
+			NewHolding: strings.TrimSpace(v.Get("new_holding_" + n)),
+		})
 	}
-	var filled []*repeatingRow
+	return rows, date
+}
+
+// checkedList is the outcome of checking a list: the filled rows (pointers
+// into the checked rows, which carry their marks) with the entry each would
+// be saved as, and the list's problems.
+type checkedList struct {
+	filled   []*repeatingRow
+	entries  []store.RepeatingEntry
+	problems listProblems
+}
+
+// checkRepeating checks the rows: it marks each row's problems and returns
+// the list's. Fully blank rows are skipped. It creates and saves nothing.
+func (a *App) checkRepeating(rows []repeatingRow) (checkedList, error) {
+	var c checkedList
 	for i := range rows {
 		if !rows[i].blank() {
-			filled = append(filled, &rows[i])
+			c.filled = append(c.filled, &rows[i])
 		}
 	}
-
-	var p listProblems
-	if len(filled) > store.MaxRepeating {
+	p := &c.problems
+	if len(c.filled) > store.MaxRepeating {
 		p.invalid = true
 	}
-	entries := make([]store.RepeatingEntry, 0, len(filled))
+	c.entries = make([]store.RepeatingEntry, 0, len(c.filled))
 	holdings, err := a.store.ListNamed(store.HoldingList)
 	if err != nil {
-		a.serverError(w, err)
-		return
+		return c, err
 	}
-	for _, row := range filled {
+	for _, row := range c.filled {
 		spec, ok := repeatingSpec(row.Type)
 		if !ok {
 			p.invalid = true
@@ -310,40 +319,61 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 		} else if utf8.RuneCountInString(row.Description) > store.MaxDescriptionLen {
 			p.invalid = true
 		}
-		for _, c := range row.choices(spec) {
-			if utf8.RuneCountInString(c.newName) > store.MaxNameLen {
+		for _, ch := range row.choices(spec) {
+			if utf8.RuneCountInString(ch.newName) > store.MaxNameLen {
 				p.invalid = true
 			}
-			ok, err := a.validChoice(c)
+			ok, err := a.validChoice(ch)
 			if err != nil {
-				a.serverError(w, err)
-				return
+				return c, err
 			}
 			switch {
 			case ok:
-			case c.value == "":
-				row.missing(c.inputName())
-			case c.value == newOption && c.newName == "":
-				row.missing("new_" + c.inputName())
+			case ch.value == "":
+				row.missing(ch.inputName())
+			case ch.value == newOption && ch.newName == "":
+				row.missing("new_" + ch.inputName())
 			default: // an id the UI never offers
 				p.invalid = true
 			}
 		}
 		p.missing = p.missing || len(row.Missing) > 0
-		entries = append(entries, store.RepeatingEntry{Type: row.Type, Amount: amount, Description: row.Description})
+		c.entries = append(c.entries, store.RepeatingEntry{Type: row.Type, Amount: amount, Description: row.Description})
 	}
-	p.duplicate = markInListDuplicates(filled)
-	if p.failed() {
+	p.duplicate = markInListDuplicates(c.filled)
+	return c, nil
+}
+
+// saveRepeating replaces the stored list with the submitted one. Fully blank
+// rows are dropped; if any other row is invalid nothing is saved or created.
+func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	rows, date := a.readRepeating(r.PostForm)
+	c, err := a.checkRepeating(rows)
+	if err != nil {
+		a.serverError(w, err)
+		return
+	}
+	if c.problems.failed() {
 		d := repeatingData{Rows: rows, Date: date}
 		if r.PostFormValue("action") == "add" {
-			d.Add = p.button()
+			d.Add = c.problems.button()
 		} else {
-			d.Save = p.button()
+			d.Save = c.problems.button()
 		}
 		a.renderRepeating(w, http.StatusUnprocessableEntity, d)
 		return
 	}
+	a.saveAndBookRepeating(w, r, date, c)
+}
 
+// saveAndBookRepeating saves a list that passed the check and, for Add
+// Transactions, books it.
+func (a *App) saveAndBookRepeating(w http.ResponseWriter, r *http.Request, date string, c checkedList) {
+	filled, entries := c.filled, c.entries
 	// Everything is valid: only now create inline "new..." entries.
 	for i, row := range filled {
 		if row.TakesHolding() {
