@@ -18,6 +18,10 @@ Branch protection is not enforced while the repo is private on the Free plan, so
 
 Storage tests use real SQLite (in-memory or a temp file), not mocks, as long as they stay fast.
 
+## Phone first
+
+The app is used mostly on a phone. Design every UI change for phone width first (390px, down to 320px) and check it there: headings on one line, no horizontal overflow, tap targets at least 2.75rem. Desktop only needs to keep working.
+
 ## Working location
 
 Stay inside the project folder. Never create directories, worktrees, or notes outside it. Git worktrees go in `.worktrees/` (excluded via `.git/info/exclude`), agent notes in `.worktrees/notes/`. Only use `unsandboxed` for git metadata writes, never to write outside the project.
