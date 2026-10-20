@@ -121,7 +121,7 @@ function syncGroups(p) {
 
 {{/* edit-row is the body of the <li> of the Transaction being edited: its form, with the hidden return-to value. */}}
 {{define "edit-row"}}
-    <form method="post" action="/transactions/{{.ID}}#tx-{{.ID}}">
+    <form method="post" action="/transactions/{{.ID}}#tx-{{.ID}}" data-carry="e_">
       <input type="hidden" name="return" value="{{.Return}}">
       {{template "fields" .Fields}}
       <div class="edit-actions">
