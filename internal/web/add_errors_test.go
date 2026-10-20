@@ -142,14 +142,14 @@ func TestMissingFieldsWinOverOtherProblemsOnTheButton(t *testing.T) {
 func TestASuccessfulAddRedirectsToAPageWhoseButtonShowsTheSuccessText(t *testing.T) {
 	ta := newTestApp(t)
 	r := ta.post("/transactions", expenseForm("2026-10-05", "5", "Lunch", "new", "Food", "new", "Cafe"))
-	if r.Status != http.StatusSeeOther || r.Location != "/?added=1" {
+	if r.Status != http.StatusSeeOther || !strings.HasPrefix(r.Location, "/?") || !strings.HasSuffix(r.Location, "&added=1") {
 		t.Fatalf("status %d, location %q", r.Status, r.Location)
 	}
 	page := ta.follow(r)
 	if b := addButton(t, page.Body); b != "Added successfully!" {
 		t.Errorf("button %q", b)
 	}
-	wantAll(t, page.Body, `data-flash`, `name="date" value="2026-10-05"`) // the form is reset
+	wantAll(t, page.Body, `data-flash`, `name="date" value="2026-10-05"`) // the date is kept
 	if strings.Contains(page.Body, `value="Lunch"`) {
 		t.Error("the form kept the added Transaction's values")
 	}

@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -242,7 +243,72 @@ type indexData struct {
 const addedQuery = "added=1"
 
 func (a *App) index(w http.ResponseWriter, r *http.Request) {
-	a.renderIndex(w, http.StatusOK, a.defaultAddForm(), r.URL.Query().Get("added") == "1")
+	q := r.URL.Query()
+	lists, err := a.formLists()
+	if err != nil {
+		a.serverError(w, err)
+		return
+	}
+	a.renderIndexWith(w, http.StatusOK, a.formFromQuery(q, lists), lists, q.Get("added") == "1")
+}
+
+// formFromQuery fills the Add form from the address, with the field names the
+// form submits. The values only fill the form: nothing is validated into a
+// problem. An unknown Type falls back to the default one, a choice that does
+// not exist (any more) to empty, and a missing date to today.
+func (a *App) formFromQuery(q url.Values, lists *formLists) entryForm {
+	f := a.defaultAddForm()
+	if _, known := store.SpecFor(q.Get("type")); known {
+		f.Type = q.Get("type")
+	}
+	if d := q.Get("date"); d != "" {
+		f.Date = d
+	}
+	f.Amount = q.Get("amount")
+	f.Description = q.Get("description")
+	// pick keeps a choice that exists in the list, or "new" with the name typed for it.
+	pick := func(name string, options []store.Named) (value, newName string) {
+		v := q.Get(name)
+		if v == newOption {
+			return v, q.Get("new_" + name)
+		}
+		for _, o := range options {
+			if strconv.FormatInt(o.ID, 10) == v {
+				return v, ""
+			}
+		}
+		return "", ""
+	}
+	f.Category, f.NewCategory = pick("category", lists.Categories)
+	f.Subcategory, f.NewSubcategory = pick("subcategory", lists.Subcategories)
+	f.LevyCategory, f.NewLevyCategory = pick("levy_category", lists.LevyCategories)
+	f.LevySubcategory, f.NewLevySubcategory = pick("levy_subcategory", lists.LevySubcategories)
+	f.Holding, f.NewHolding = pick("holding", lists.Holdings)
+	return f
+}
+
+// keptQuery is the address the Add page is redirected to after a successful
+// add: the success flag, and the date, Type and choices the next Transaction
+// is likely to reuse. A "new..." choice is carried as the entry the add created.
+func keptQuery(form entryForm, spec store.TypeSpec, nt store.NewTransaction) string {
+	q := url.Values{"date": {form.Date}, "type": {form.Type}}
+	id := func(name string, v int64) {
+		if v != 0 {
+			q.Set(name, strconv.FormatInt(v, 10))
+		}
+	}
+	if spec.TakesDefaultLists() {
+		id("category", nt.CategoryID)
+		id("subcategory", nt.SubcategoryID)
+	}
+	if spec.TakesLevyLists() {
+		id("levy_category", nt.LevyCategoryID)
+		id("levy_subcategory", nt.LevySubcategoryID)
+	}
+	if spec.Holding {
+		id("holding", nt.HoldingID)
+	}
+	return q.Encode() + "&" + addedQuery
 }
 
 // defaultAddForm is the empty Add form: an Expense dated today.
@@ -277,6 +343,10 @@ func (a *App) renderIndex(w http.ResponseWriter, status int, add entryForm, adde
 		a.serverError(w, err)
 		return
 	}
+	a.renderIndexWith(w, status, add, lists, added)
+}
+
+func (a *App) renderIndexWith(w http.ResponseWriter, status int, add entryForm, lists *formLists, added bool) {
 	a.render(w, status, "index.html", indexData{Add: fieldsData{Form: withSpec(add), formLists: lists}, Added: added})
 }
 
@@ -356,7 +426,8 @@ func (a *App) createTransaction(w http.ResponseWriter, r *http.Request) {
 		a.serverError(w, err)
 		return
 	}
-	http.Redirect(w, r, "/?"+addedQuery, http.StatusSeeOther)
+	spec, _ := store.SpecFor(form.Type)
+	http.Redirect(w, r, "/?"+keptQuery(form, spec, nt), http.StatusSeeOther)
 }
 
 // updateTransaction replaces the Transaction in the path with the submitted

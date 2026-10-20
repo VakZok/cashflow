@@ -39,8 +39,8 @@ func TestAddExpenseShowsInList(t *testing.T) {
 	ta := newTestApp(t)
 
 	r := ta.post("/transactions", expenseForm("2026-10-01", "1234", "Rent", "new", "Housing", "new", "Monthly"))
-	if r.Status != http.StatusSeeOther || r.Location != "/?added=1" {
-		t.Fatalf("POST = %d -> %q, want 303 -> /?added=1", r.Status, r.Location)
+	if r.Status != http.StatusSeeOther || !strings.HasPrefix(r.Location, "/?") || !strings.HasSuffix(r.Location, "&added=1") {
+		t.Fatalf("POST = %d -> %q, want 303 -> /?...&added=1", r.Status, r.Location)
 	}
 	body := ta.get("/transactions").Body
 	for _, want := range []string{"2026-10-01", ">−1.234<", "Rent", "Housing", "Monthly"} {
@@ -398,8 +398,8 @@ func TestInvestmentAndDivestmentShowInListWithHolding(t *testing.T) {
 		t.Run(typ, func(t *testing.T) {
 			ta := newTestApp(t)
 			r := ta.post("/transactions", holdingForm(typ, "2026-10-03", "1500", "new", "ETF World"))
-			if r.Status != http.StatusSeeOther || r.Location != "/?added=1" {
-				t.Fatalf("POST = %d -> %q, want 303 -> /?added=1", r.Status, r.Location)
+			if r.Status != http.StatusSeeOther || !strings.HasPrefix(r.Location, "/?") || !strings.HasSuffix(r.Location, "&added=1") {
+				t.Fatalf("POST = %d -> %q, want 303 -> /?...&added=1", r.Status, r.Location)
 			}
 			body := ta.get("/transactions").Body
 			if !strings.Contains(body, "<span>ETF World</span>") || !strings.Contains(body, "1.500</span>") ||
