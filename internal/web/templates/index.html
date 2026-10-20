@@ -6,7 +6,6 @@
 <title>Add Transaction</title>
 {{template "theme-style"}}
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 1rem; }
 {{template "entry-style"}}
 </style>
 {{template "field-style"}}
@@ -18,7 +17,8 @@
   button { margin-top: 1rem; }
 {{template "error-style"}}
   .tx-main { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .5rem; align-items: end; }
-  .tx-main > * { min-width: 0; height: 2.75rem; }
+  /* No top margin on the first row, so it starts right under the heading as on the other pages. */
+  .tx-main > * { min-width: 0; height: 2.75rem; margin-top: 0; }
   .tx-main input[type=date] { border-radius: .5rem; }
   .lists { display: grid; grid-template-columns: 1fr 1fr; column-gap: .5rem; }
   .lists > :nth-child(1) { grid-column: 1; grid-row: 1; }
