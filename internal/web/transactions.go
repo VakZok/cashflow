@@ -351,7 +351,13 @@ func (a *App) transactions(w http.ResponseWriter, r *http.Request) {
 			a.serverError(w, err)
 			return
 		default:
-			edit = &editing{ID: id, Form: formOf(t)}
+			lists, err := a.formLists()
+			if err != nil {
+				a.serverError(w, err)
+				return
+			}
+			form := editFromQuery(q, lists, formOf(t))
+			edit = &editing{ID: id, Form: form}
 		}
 	}
 	a.renderTransactions(w, http.StatusOK, page, parseFilter(q, a.now()), edit)

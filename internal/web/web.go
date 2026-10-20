@@ -249,15 +249,15 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 		a.serverError(w, err)
 		return
 	}
-	a.renderIndexWith(w, http.StatusOK, a.formFromQuery(q, lists), lists, q.Get("added") == "1")
+	a.renderIndexWith(w, http.StatusOK, formFromQuery(q, lists, a.defaultAddForm()), lists, q.Get("added") == "1")
 }
 
 // formFromQuery fills the Add form from the address, with the field names the
 // form submits. The values only fill the form: nothing is validated into a
-// problem. An unknown Type falls back to the default one, a choice that does
-// not exist (any more) to empty, and a missing date to today.
-func (a *App) formFromQuery(q url.Values, lists *formLists) entryForm {
-	f := a.defaultAddForm()
+// problem. An unknown Type falls back to the base form's, a choice that does
+// not exist (any more) to empty, and a missing date to the base form's.
+func formFromQuery(q url.Values, lists *formLists, base entryForm) entryForm {
+	f := base
 	if _, known := store.SpecFor(q.Get("type")); known {
 		f.Type = q.Get("type")
 	}
@@ -285,6 +285,25 @@ func (a *App) formFromQuery(q url.Values, lists *formLists) entryForm {
 	f.LevySubcategory, f.NewLevySubcategory = pick("levy_subcategory", lists.LevySubcategories)
 	f.Holding, f.NewHolding = pick("holding", lists.Holdings)
 	return f
+}
+
+// editParamPrefix starts the names of the edit form's fields in the address, so they do not mix with the filter's.
+const editParamPrefix = "e_"
+
+// editFromQuery is the form of an edit whose unapplied changes the address carries, with the
+// field names unprefixed; the stored form if it carries none. A carried form replaces the stored values
+// entirely: a field left out was emptied.
+func editFromQuery(q url.Values, lists *formLists, stored entryForm) entryForm {
+	if !q.Has(editParamPrefix + "type") {
+		return stored
+	}
+	carried := url.Values{}
+	for k, v := range q {
+		if name, ok := strings.CutPrefix(k, editParamPrefix); ok {
+			carried[name] = v
+		}
+	}
+	return formFromQuery(carried, lists, entryForm{Type: stored.Type, Date: stored.Date})
 }
 
 // keptQuery is the address the Add page is redirected to after a successful
