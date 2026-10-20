@@ -100,7 +100,7 @@
 {{end}}
 
 <h1>Add Transaction</h1>
-<form method="post" action="/transactions" data-keep-scroll>
+<form method="post" action="/transactions" data-keep-scroll data-carry>
   {{template "fields" .Add}}
 
   <button class="primary" type="submit" data-resting="Add"{{if .Added}} data-flash{{end}}>{{if .Added}}Added successfully!{{else}}{{or .Add.Form.ButtonMessage "Add"}}{{end}}</button>
