@@ -62,3 +62,20 @@ func TestNavHidesOnlyForTextFieldsAndFocusIsShortLived(t *testing.T) {
 		}
 	}
 }
+
+func TestPagesThatKeepStateMarkTheirNavItem(t *testing.T) {
+	ta := newTestApp(t)
+	for _, path := range []string{"/", "/transactions", "/repeating", "/report", "/categories"} {
+		body := ta.get(path).Body
+		for _, want := range []string{`<a href="/transactions" data-page="transactions"`, `<a href="/report" data-page="report"`, `<a href="/categories" data-page="categories"`} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s is missing %q", path, want)
+			}
+		}
+		for _, none := range []string{`<a href="/" data-page`, `<a href="/repeating" data-page`} {
+			if strings.Contains(body, none) {
+				t.Errorf("%s keeps state for %q", path, none)
+			}
+		}
+	}
+}

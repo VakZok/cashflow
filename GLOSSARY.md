@@ -9,7 +9,7 @@ A single manually entered record of money moving, with a date, a whole-euro amou
 _Avoid_: Entry, booking, payment
 
 **Repeating**:
-A saved Transaction without a date, kept in a user-maintained list so a Transaction that comes back often does not have to be retyped. It has a Type, an amount, and the same other fields as a Transaction of that Type, each set per entry. The list changes only when the user edits it, and only complete entries can be saved. Adding the list books one Transaction per entry on a single date chosen at that moment, skipping each entry that would be a Duplicate of an existing Transaction and booking the rest; the Transactions are independent copies, so later editing or removing an entry never changes Transactions already booked. A Repeating entry is not a Transaction and appears in no Report.
+A saved Transaction without a date, kept in a user-maintained list so a Transaction that comes back often does not have to be retyped. It has a Type, an amount, and the same other fields as a Transaction of that Type, each set per entry. The list changes only when the user edits it, and only complete entries can be saved. Unsaved changes to the list are Page state until the list is saved. Adding the list books one Transaction per entry on a single date chosen at that moment, skipping each entry that would be a Duplicate of an existing Transaction and booking the rest; the Transactions are independent copies, so later editing or removing an entry never changes Transactions already booked. A Repeating entry is not a Transaction and appears in no Report.
 _Avoid_: Recurring, template, standing order
 
 **Type**:
@@ -53,16 +53,20 @@ A calendar month or a calendar year that a Report covers, or that the Transactio
 _Avoid_: Range, timeframe
 
 **Report**:
-The page showing figures for one Period, covering Income and Expense. Its pie chart groups items with a small share of the total as Other when there are at least two; the table below the pie chart lists every item.
+The page showing figures for one Period, covering Income and Expense. Its pie chart groups items with a small share of the total as Other when there are at least two; the table below the pie chart lists every item. The chosen Period and chart choices are Page state.
 _Avoid_: Dashboard, summary
 
 **Transactions page**:
-The page listing all Transactions from the newest date to the oldest, a few at a time, with arrows to move to the newer or older ones. Transactions can be edited and deleted from it. It can be narrowed by a Period, a Type, the Type's Category-like groupings or Holding, and a Search; the narrowing applies together, shows all matching Transactions across the pages, and survives editing and deleting. By default nothing narrows it. A single action clears all narrowing at once.
+The page listing all Transactions from the newest date to the oldest, a few at a time, with arrows to move to the newer or older ones. Transactions can be edited and deleted from it. It can be narrowed by a Period, a Type, the Type's Category-like groupings or Holding, and a Search; the narrowing applies together, shows all matching Transactions across the pages, and survives editing and deleting. By default nothing narrows it. A single action clears all narrowing at once. The narrowing, the position in the list and an open edit with its unapplied changes are Page state.
 _Avoid_: History, log, journal
 
 **Edit Categories page**:
-The page where Categories, Subcategories, Levy Categories, Levy Subcategories and Holdings are added, renamed and deleted, one list at a time. Names are unique within a list, ignoring case; the same name may appear in different lists. Moving all Transactions from one entry to another is not offered: the user edits them one by one.
+The page where Categories, Subcategories, Levy Categories, Levy Subcategories and Holdings are added, renamed and deleted, one list at a time. Names are unique within a list, ignoring case; the same name may appear in different lists. Moving all Transactions from one entry to another is not offered: the user edits them one by one. The chosen list, the position in it, an open rename and any typed name are Page state.
 _Avoid_: Settings, Lists page, Adjust Categories
+
+**Page state**:
+What a page shows on top of the saved data: narrowing and other choices, typed but not yet submitted input, an open edit, and the problems a failed submit pointed out. It survives switching to another page and back, and is reset when the app is closed. It is never saved: only adding, applying, saving or deleting changes the saved data (Transactions, the Repeating list, Categories and the other lists), which survives closing the app.
+_Avoid_: Draft, session, saved state
 
 **Type filter**:
 Narrows the Transactions page to one Type. Once a Type is chosen, its groupings can be narrowed too: Category and Subcategory for Income and Expense, Levy Category and Levy Subcategory for Levy and Rebate, Holding for Investment and Divestment. Each is a single choice from all existing values, and when two are set both must match. Changing the Type keeps the groupings when the new Type uses the same lists, and drops them otherwise.
