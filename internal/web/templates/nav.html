@@ -12,11 +12,45 @@
 {{define "nav"}}<nav class="bottom-nav" aria-label="Main">
   <a href="/repeating" aria-label="Repeating"{{if eq . "repeating"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></a>
   <a href="/" aria-label="Add transaction"{{if eq . "add"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></a>
-  <a href="/transactions" aria-label="Transactions"{{if eq . "transactions"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg></a>
-  <a href="/report"aria-label="Report"{{if eq . "report"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"/><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/></svg></a>
-  <a href="/categories" aria-label="Edit Categories"{{if eq . "categories"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg></a>
+  <a href="/transactions" data-page="transactions" aria-label="Transactions"{{if eq . "transactions"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg></a>
+  <a href="/report" data-page="report" aria-label="Report"{{if eq . "report"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"/><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/></svg></a>
+  <a href="/categories" data-page="categories" aria-label="Edit Categories"{{if eq . "categories"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg></a>
 </nav>
 <script>
+  // Page state: a page with data-page comes back at the address and scroll position it was left at, kept for the browser session.
+  // Only a page's own address is recorded (a failed submit answers at its POST target), without the one-off flags.
+  // Storage that throws leaves the plain links.
+  (function () {
+    var oneOff = ['added', 'saved', 'taken', 'name'], leaving = false
+    function load(key) { try { return JSON.parse(sessionStorage.getItem('nav:' + key)) } catch (e) { return null } }
+    function save(key, value) {
+      try { if (value === null) sessionStorage.removeItem('nav:' + key); else sessionStorage.setItem('nav:' + key, JSON.stringify(value)) } catch (e) {}
+    }
+    function address() {
+      var q = new URLSearchParams(location.search)
+      oneOff.forEach(function (k) { q.delete(k) })
+      return location.pathname + (q.toString() ? '?' + q : '')
+    }
+    var current = document.querySelector('.bottom-nav a[data-page][aria-current]')
+    if (current && current.pathname === location.pathname) {
+      var page = current.dataset.page, saved = load(page), want = load('restore') === page
+      save('restore', null)
+      function scrollBack() { if (want && saved && saved.u === address()) scrollTo(0, saved.y) }
+      scrollBack()
+      // The chart settles its height after this script ran.
+      addEventListener('load', scrollBack)
+      function record() { if (!leaving) save(page, { u: address(), y: scrollY }) }
+      record()
+      addEventListener('pagehide', record)
+    }
+    document.querySelectorAll('.bottom-nav a[data-page]').forEach(function (a) {
+      var s = a === current ? null : load(a.dataset.page)
+      if (s && typeof s.u === 'string' && s.u.split('?')[0] === a.pathname) a.href = s.u
+      a.addEventListener('click', function () {
+        if (a === current) { leaving = true; save(a.dataset.page, null) } else save('restore', a.dataset.page)
+      })
+    })
+  })()
   document.addEventListener('change', function (e) {
     if (e.target.tagName === 'SELECT') e.target.blur();
   });
