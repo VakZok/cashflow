@@ -137,6 +137,27 @@ func (f entryForm) Bad(field string) bool { return f.Missing[field] }
 // failed reports whether the form has a problem.
 func (f entryForm) failed() bool { return f.Problem != noProblem }
 
+// Failed is failed for the templates, which mark the form so leaving the page carries the problems along.
+func (f entryForm) Failed() bool { return f.failed() }
+
+// failedParam is the address parameter that marks a page left while it showed
+// the result of a failed submit, naming the pressed button. The page then
+// re-checks its carried input instead of showing no problems.
+const failedParam = "failed"
+
+// recheck runs the submit's check on input carried in an address, when the
+// address carries the failed marker. Nothing is saved or created.
+func (a *App) recheck(q url.Values, form *entryForm, excludeID int64) error {
+	if !q.Has(failedParam) {
+		return nil
+	}
+	form.Date, form.Amount, form.Description = strings.TrimSpace(form.Date), strings.TrimSpace(form.Amount), strings.TrimSpace(form.Description)
+	form.NewCategory, form.NewSubcategory, form.NewHolding = strings.TrimSpace(form.NewCategory), strings.TrimSpace(form.NewSubcategory), strings.TrimSpace(form.NewHolding)
+	form.NewLevyCategory, form.NewLevySubcategory = strings.TrimSpace(form.NewLevyCategory), strings.TrimSpace(form.NewLevySubcategory)
+	_, _, err := a.checkEntry(form, excludeID)
+	return err
+}
+
 // fail records a problem.
 func (f *entryForm) fail(p problem) { f.Problem = max(f.Problem, p) }
 
@@ -222,6 +243,9 @@ type editView struct {
 	Fields  *fieldsData
 	Return  string
 	Discard string
+	// Address is the page with this edit open: where leaving the page carries
+	// an edit that failed to apply, which is shown at its POST target.
+	Address string
 }
 
 func newEditView(e *editing, lists *formLists, ret returnTo) *editView {
@@ -230,6 +254,7 @@ func newEditView(e *editing, lists *formLists, ret returnTo) *editView {
 		Fields:  &fieldsData{P: "edit-", Form: withSpec(e.Form), formLists: lists},
 		Return:  ret.String(),
 		Discard: ret.URL(),
+		Address: ret.URL() + "&edit=" + strconv.FormatInt(e.ID, 10),
 	}
 }
 
@@ -249,7 +274,12 @@ func (a *App) index(w http.ResponseWriter, r *http.Request) {
 		a.serverError(w, err)
 		return
 	}
-	a.renderIndexWith(w, http.StatusOK, formFromQuery(q, lists, a.defaultAddForm()), lists, q.Get("added") == "1")
+	form := formFromQuery(q, lists, a.defaultAddForm())
+	if err := a.recheck(q, &form, 0); err != nil {
+		a.serverError(w, err)
+		return
+	}
+	a.renderIndexWith(w, http.StatusOK, form, lists, q.Get("added") == "1")
 }
 
 // formFromQuery fills the Add form from the address, with the field names the
@@ -582,42 +612,14 @@ func readForm(w http.ResponseWriter, r *http.Request) (entryForm, bool) {
 // excludeID is the Transaction being edited (0 on create): it is never a
 // Duplicate of itself.
 func (a *App) prepare(form *entryForm, excludeID int64) (store.NewTransaction, error) {
-	spec, known := store.SpecFor(form.Type)
-	if !known {
-		form.fail(problemInvalid)
-	}
-	if form.Date == "" {
-		form.missing("date")
-	} else if !validDate(form.Date) {
-		form.fail(problemInvalid)
-	}
-	amount, ok := parseAmount(form.Amount)
-	if !ok {
-		form.AmountBad = true
-		form.fail(problemAmount)
-	}
+	spec, amount, err := a.checkEntry(form, excludeID)
 	var nt store.NewTransaction
-	if known {
-		if err := a.validateFields(form, spec); err != nil {
-			return nt, err
-		}
-		if !form.failed() && spec.Description {
-			taken, err := a.store.DescriptionTaken(form.Date, form.Description, form.Type, excludeID)
-			if err != nil {
-				return nt, err
-			}
-			if taken {
-				form.fail(problemDuplicate)
-			}
-		}
-	}
-	if form.failed() {
-		return nt, nil
+	if err != nil || form.failed() {
+		return nt, err
 	}
 
 	// Everything is valid: only now create inline "new..." entries.
 	nt = store.NewTransaction{Date: form.Date, Amount: amount, Type: form.Type}
-	var err error
 	if spec.Description {
 		nt.Description = form.Description
 	}
@@ -642,6 +644,41 @@ func (a *App) prepare(form *entryForm, excludeID int64) (store.NewTransaction, e
 		}
 	}
 	return nt, nil
+}
+
+// checkEntry validates the form and records its problems on it, with the Type's
+// spec and the amount it read. It creates and saves nothing, so a page can
+// re-check carried input. excludeID is as for prepare.
+func (a *App) checkEntry(form *entryForm, excludeID int64) (store.TypeSpec, int64, error) {
+	spec, known := store.SpecFor(form.Type)
+	if !known {
+		form.fail(problemInvalid)
+	}
+	if form.Date == "" {
+		form.missing("date")
+	} else if !validDate(form.Date) {
+		form.fail(problemInvalid)
+	}
+	amount, ok := parseAmount(form.Amount)
+	if !ok {
+		form.AmountBad = true
+		form.fail(problemAmount)
+	}
+	if known {
+		if err := a.validateFields(form, spec); err != nil {
+			return spec, amount, err
+		}
+		if !form.failed() && spec.Description {
+			taken, err := a.store.DescriptionTaken(form.Date, form.Description, form.Type, excludeID)
+			if err != nil {
+				return spec, amount, err
+			}
+			if taken {
+				form.fail(problemDuplicate)
+			}
+		}
+	}
+	return spec, amount, nil
 }
 
 // validateFields records a problem for every field the Type does not take but

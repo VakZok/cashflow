@@ -110,6 +110,9 @@ type repeatingData struct {
 	DateMissing       bool // the month picker is highlighted
 	// Save and Add are the Save List and Add Transactions buttons.
 	Save, Add listButton
+	// Pressed is the button ("save" or "add") whose submit failed, "" if the
+	// page shows no failed submit; leaving the page carries it along.
+	Pressed string
 }
 
 // listButton is a submit button of the Repeating form while it shows a
@@ -198,6 +201,16 @@ func (a *App) repeating(w http.ResponseWriter, r *http.Request) {
 			a.serverError(w, err)
 			return
 		}
+		if pressed := q.Get(failedParam); pressed == "save" || pressed == "add" {
+			// A Month cleared before the failed Add Transactions is left out of the address.
+			if pressed == "add" && !q.Has("date") {
+				d.Date = ""
+			}
+			if err := a.recheckRepeating(&d, pressed); err != nil {
+				a.serverError(w, err)
+				return
+			}
+		}
 	} else {
 		rows, err := a.savedRows()
 		if err != nil {
@@ -210,6 +223,47 @@ func (a *App) repeating(w http.ResponseWriter, r *http.Request) {
 		d.Save = listButton{Label: "List saved!", Flash: true}
 	}
 	a.renderRepeating(w, http.StatusOK, d)
+}
+
+// recheckRepeating runs the check of the pressed button's submit on the rows
+// carried in the address and shows its result on d. It saves, creates and
+// books nothing.
+func (a *App) recheckRepeating(d *repeatingData, pressed string) error {
+	c, err := a.checkRepeating(d.Rows)
+	if err != nil {
+		return err
+	}
+	var button listButton
+	switch {
+	case c.problems.failed():
+		button = c.problems.button()
+	case pressed == "add":
+		button.Label, d.DateMissing = checkBooking(d.Date, len(c.filled))
+	}
+	if !c.problems.failed() && button.Label == "" {
+		return nil
+	}
+	d.Pressed = pressed
+	if pressed == "add" {
+		d.Add = button
+	} else {
+		d.Save = button
+	}
+	return nil
+}
+
+// checkBooking is what is wrong with booking a list of rowCount rows on date, as Add
+// Transactions shows it on its button ("" if nothing); dateMissing says the Month is empty.
+func checkBooking(date string, rowCount int) (label string, dateMissing bool) {
+	switch {
+	case date == "":
+		return "Missing fields", true
+	case !validDate(date):
+		return "Invalid input", false
+	case rowCount == 0:
+		return "List is empty", false
+	}
+	return "", false
 }
 
 // dropStaleChoices makes carried rows fit what exists now: a Type that is
@@ -407,8 +461,9 @@ func (a *App) saveRepeating(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if c.problems.failed() {
-		d := repeatingData{Rows: rows, Date: date}
+		d := repeatingData{Rows: rows, Date: date, Pressed: "save"}
 		if r.PostFormValue("action") == "add" {
+			d.Pressed = "add"
 			d.Add = c.problems.button()
 		} else {
 			d.Save = c.problems.button()
@@ -515,14 +570,8 @@ func asciiLower(s string) string {
 // The result is shown on the Add Transactions button.
 func (a *App) addTransactions(w http.ResponseWriter, date string, rowCount int) {
 	d := repeatingData{Date: date}
-	switch {
-	case date == "":
-		d.DateMissing, d.Add.Label = true, "Missing fields"
-	case !validDate(date):
-		d.Add.Label = "Invalid input"
-	case rowCount == 0:
-		d.Add.Label = "List is empty"
-	default:
+	d.Add.Label, d.DateMissing = checkBooking(date, rowCount)
+	if d.Add.Label == "" {
 		booked, skipped, err := a.store.BookRepeating(date)
 		if err != nil {
 			a.serverError(w, err)
@@ -538,6 +587,7 @@ func (a *App) addTransactions(w http.ResponseWriter, date string, rowCount int) 
 	status := http.StatusOK
 	if !d.Add.Flash {
 		status = http.StatusUnprocessableEntity
+		d.Pressed = "add"
 	}
 	a.renderRepeating(w, status, d)
 }

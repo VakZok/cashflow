@@ -116,3 +116,29 @@ func TestDeleteNamedRemovesUnusedRefusesUsedAndReportsMissing(t *testing.T) {
 		t.Errorf("names = %v, want the used entry to stay", got)
 	}
 }
+
+func TestNameTakenSaysWhetherAnotherEntryHasTheNameAndChangesNothing(t *testing.T) {
+	s, _ := open(t)
+	food := idOf(t, s, store.CategoryList, "Food")
+	rent := idOf(t, s, store.CategoryList, "Rent")
+	idOf(t, s, store.SubcategoryList, "Cafe")
+	for _, c := range []struct {
+		list store.List
+		id   int64
+		name string
+		want bool
+	}{
+		{store.CategoryList, rent, " food ", true},   // another entry, ignoring case and spaces
+		{store.CategoryList, food, "FOOD", false},    // an entry is not taken by itself
+		{store.CategoryList, rent, "Home", false},    // free
+		{store.SubcategoryList, rent, "Food", false}, // only the same list counts
+	} {
+		got, err := s.NameTaken(c.list, c.id, c.name)
+		if err != nil || got != c.want {
+			t.Errorf("NameTaken(%d, %q) = %v, %v; want %v", c.id, c.name, got, err, c.want)
+		}
+	}
+	if got := names(t, s, store.CategoryList); fmt.Sprint(got) != "[Food Rent]" {
+		t.Errorf("the check changed the list: %v", got)
+	}
+}

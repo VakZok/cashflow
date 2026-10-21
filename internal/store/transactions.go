@@ -520,6 +520,16 @@ func (s *Store) RenameNamed(l List, id int64, name string) error {
 	return ErrNameTaken
 }
 
+// NameTaken reports whether another entry of the list has the name, by the same
+// rule RenameNamed refuses it by. It changes nothing.
+func (s *Store) NameTaken(l List, id int64, name string) (bool, error) {
+	var taken bool
+	err := s.db.QueryRow(
+		"SELECT EXISTS (SELECT 1 FROM "+l.table+" WHERE name = ? AND id != ?)",
+		strings.TrimSpace(name), id).Scan(&taken)
+	return taken, err
+}
+
 // NamedPage returns the page (of PageSize entries, from 1) the entry sits on in
 // the list ordered by name, or ErrEntryNotFound.
 func (s *Store) NamedPage(l List, id int64) (int, error) {
