@@ -10,7 +10,7 @@
 </style>{{end}}
 
 {{define "nav"}}<nav class="bottom-nav" aria-label="Main">
-  <a href="/repeating" aria-label="Repeating"{{if eq . "repeating"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></a>
+  <a href="/repeating" data-page="repeating" aria-label="Repeating"{{if eq . "repeating"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></a>
   <a href="/" data-page="add" aria-label="Add transaction"{{if eq . "add"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></a>
   <a href="/transactions" data-page="transactions" aria-label="Transactions"{{if eq . "transactions"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg></a>
   <a href="/report" data-page="report" aria-label="Report"{{if eq . "report"}} aria-current="page"{{end}}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"/><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/></svg></a>
