@@ -1,20 +1,32 @@
-# Money Manager
+# Cashflow
 
-Personal finance manager; purposefully simple
+Personal finance manager. Purposefully simple
 
 ## Features
 
-- less features (you read that right)
-- integer only tracking (who needs cents anyways)
-- each transaction has a main and a subcategory for more granular tracking
-- track how much you invest and divest
+- Track your income, expense, levy, rebate, investment, and divestment
+	- Income: The net that actually hit your bank account. Income = Earnings - Levy
+	- Expense: Anything you paid.
+	- Levy: Taxes and social duty payments deducted from your earnings.
+	- Rebate: Levy you got back (e.g. refunded taxes).
+	- Investment: How much you invested where.
+	- Divestment: How much you withdrew from an investment
+- Add, edit, or remove existing transactions or categories
+- Save repeating monthly transactions and add with one click
+- Generate monthly or yearly reports
 
-## Divestments are built different (always two "transactions")
+## Example: Divestments
 
-Given 100€ invested:
+Given 100€ investemt:
 
-- sold with gain of 20€ -> 100€ divestment, 20€ income
+- sold with gain of 20€ -> 100€ divestment, 15€ income, 15€ levy
 - sold with loss of 20€ -> 100€ divestment, 20€ expense
+
+## Toolchain and CI
+
+The Go version is pinned in `go.mod` (see ADR 0005). CI (`.github/workflows/ci.yml`) runs on pushes to `main` and `integration/**`, on pull requests, and weekly (Mondays 06:00 UTC) so new vulnerability advisories surface without code changes. Separate jobs: style (golangci-lint), tests (-race), security (govulncheck), deps (`go mod tidy` must leave `go.mod`/`go.sum` unchanged, then `go mod verify`) and a Pi build, which runs last. If the weekly run fails, CI opens a `needs-triage` issue (or comments on the open one). Build for the Raspberry Pi 4 (Pi OS 64-bit):
+
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o moneymanager ./cmd/moneymanager
 
 ## Run (compiled binary)
 
@@ -30,19 +42,6 @@ Dummy data for trying out the Report (refuses a non-empty database):
 go run ./cmd/seed -db money_manager.db -months 3
 ```
 
-
-## Project structure
-
-- `cmd/moneymanager` – entry point
-- `internal/store` – SQLite access and versioned migrations (`migrations/NNNN_name.sql`, applied in order at startup, version kept in `PRAGMA user_version`)
-- `internal/web` – routes, handlers, `html/template` templates (`templates/`)
-
 ## Known limitations
 
 - Search only ignores case for ASCII letters: "a" matches "A", but "ä" does not match "Ä".
-
-## Toolchain and CI
-
-The Go version is pinned in `go.mod` (see ADR 0005). CI (`.github/workflows/ci.yml`) runs on pushes to `main` and `integration/**`, on pull requests, and weekly (Mondays 06:00 UTC) so new vulnerability advisories surface without code changes. Separate jobs: style (golangci-lint), tests (-race), security (govulncheck), deps (`go mod tidy` must leave `go.mod`/`go.sum` unchanged, then `go mod verify`) and a Pi build, which runs last. If the weekly run fails, CI opens a `needs-triage` issue (or comments on the open one). Build for the Raspberry Pi 4 (Pi OS 64-bit):
-
-    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o moneymanager ./cmd/moneymanager
