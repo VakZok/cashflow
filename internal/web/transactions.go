@@ -357,6 +357,10 @@ func (a *App) transactions(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			form := editFromQuery(q, lists, formOf(t))
+			if err := a.recheck(q, &form, id); err != nil {
+				a.serverError(w, err)
+				return
+			}
 			edit = &editing{ID: id, Form: form}
 		}
 	}

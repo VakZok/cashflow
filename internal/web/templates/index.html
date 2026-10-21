@@ -100,7 +100,7 @@
 {{end}}
 
 <h1>Add Transaction</h1>
-<form method="post" action="/transactions" data-keep-scroll data-carry>
+<form method="post" action="/transactions" data-keep-scroll data-carry{{if .Add.Form.Failed}} data-failed="add"{{end}}>
   {{template "fields" .Add}}
 
   <button class="primary" type="submit" data-resting="Add"{{if .Added}} data-flash{{end}}>{{if .Added}}Added successfully!{{else}}{{or .Add.Form.ButtonMessage "Add"}}{{end}}</button>
@@ -121,7 +121,7 @@ function syncGroups(p) {
 
 {{/* edit-row is the body of the <li> of the Transaction being edited: its form, with the hidden return-to value. */}}
 {{define "edit-row"}}
-    <form method="post" action="/transactions/{{.ID}}#tx-{{.ID}}" data-carry="e_">
+    <form method="post" action="/transactions/{{.ID}}#tx-{{.ID}}" data-carry="e_"{{if .Fields.Form.Failed}} data-address="{{.Address}}" data-failed="apply"{{end}}>
       <input type="hidden" name="return" value="{{.Return}}">
       {{template "fields" .Fields}}
       <div class="edit-actions">

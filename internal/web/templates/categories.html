@@ -45,7 +45,7 @@
 {{range .Entries}}
   {{if eq .ID $.EditID}}
   <li class="editing">
-    <form class="rename" method="post" action="/categories/{{.ID}}" data-carry="e_">
+    <form class="rename" method="post" action="/categories/{{.ID}}" data-carry="e_"{{if $.Taken}} data-failed="rename"{{end}}>
       <input type="hidden" name="list" value="{{$.Current.Key}}">
       {{/* Apply comes first in the markup so Enter in the name presses it, not Delete; CSS shows it last. */}}
       <button id="apply" class="primary apply" type="submit" data-arm data-label="Apply">{{if $.Taken}}Taken{{else}}Apply{{end}}</button>

@@ -99,6 +99,12 @@ func (a *App) categories(w http.ResponseWriter, r *http.Request) {
 			d.EditID, d.EditName = e.ID, e.Name
 			if q.Has("e_name") {
 				d.EditName = q.Get("e_name")
+				if q.Has(failedParam) {
+					if d.Taken, err = a.store.NameTaken(c.List, e.ID, d.EditName); err != nil {
+						a.serverError(w, err)
+						return
+					}
+				}
 			} else if q.Has("name") {
 				d.EditName = q.Get("name")
 				d.Taken = q.Get("taken") == "1"
