@@ -184,17 +184,66 @@ func (a *App) savedRows() ([]repeatingRow, error) {
 	return rows, nil
 }
 
+// repeating shows the rows carried in the address (the page state of a
+// list left unsaved) or, without any, the saved list.
 func (a *App) repeating(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.savedRows()
-	if err != nil {
-		a.serverError(w, err)
-		return
+	q := r.URL.Query()
+	var d repeatingData
+	if q.Has("row") {
+		d.Rows, d.Date = a.readRepeating(q)
+		if len(d.Rows) > store.MaxRepeating {
+			d.Rows = d.Rows[:store.MaxRepeating]
+		}
+		if err := a.dropStaleChoices(d.Rows); err != nil {
+			a.serverError(w, err)
+			return
+		}
+	} else {
+		rows, err := a.savedRows()
+		if err != nil {
+			a.serverError(w, err)
+			return
+		}
+		d = repeatingData{Rows: rows, Date: a.defaultBookingDate()}
 	}
-	d := repeatingData{Rows: rows, Date: a.defaultBookingDate()}
-	if r.URL.Query().Get("saved") == "1" {
+	if q.Get("saved") == "1" {
 		d.Save = listButton{Label: "List saved!", Flash: true}
 	}
 	a.renderRepeating(w, http.StatusOK, d)
+}
+
+// dropStaleChoices makes carried rows fit what exists now: a Type that is
+// unknown becomes Expense, and a picked Category, Subcategory, Levy
+// Category, Levy Subcategory or Holding that was deleted meanwhile becomes empty.
+func (a *App) dropStaleChoices(rows []repeatingRow) error {
+	exists := map[store.List]map[string]bool{}
+	for _, l := range []store.List{store.DefaultListSet.Category, store.DefaultListSet.Subcategory, store.LevyListSet.Category, store.LevyListSet.Subcategory, store.HoldingList} {
+		named, err := a.store.ListNamed(l)
+		if err != nil {
+			return err
+		}
+		exists[l] = map[string]bool{newOption: true}
+		for _, n := range named {
+			exists[l][strconv.FormatInt(n.ID, 10)] = true
+		}
+	}
+	keep := func(l store.List, v *string) {
+		if !exists[l][*v] {
+			*v = ""
+		}
+	}
+	for i := range rows {
+		r := &rows[i]
+		if _, ok := repeatingSpec(r.Type); !ok {
+			r.Type = store.TypeExpense
+		}
+		keep(store.DefaultListSet.Category, &r.Category)
+		keep(store.DefaultListSet.Subcategory, &r.Subcategory)
+		keep(store.LevyListSet.Category, &r.LevyCategory)
+		keep(store.LevyListSet.Subcategory, &r.LevySubcategory)
+		keep(store.HoldingList, &r.Holding)
+	}
+	return nil
 }
 
 // renderRepeating renders the Repeating page with d's rows, date and buttons;

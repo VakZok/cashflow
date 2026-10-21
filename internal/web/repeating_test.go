@@ -217,7 +217,7 @@ func TestTheRepeatingPageIsTitledRepeatingTransactions(t *testing.T) {
 
 func TestSaveListKeepsTheScrollPosition(t *testing.T) {
 	ta := newTestApp(t)
-	wantAll(t, ta.get("/repeating").Body, `<form method="post" action="/repeating" data-keep-scroll>`)
+	wantAll(t, ta.get("/repeating").Body, `<form method="post" action="/repeating" data-keep-scroll data-carry>`)
 }
 
 func TestTwoRowsWithTheSameTypeAndDescriptionMarkOnlyTheSecond(t *testing.T) {
