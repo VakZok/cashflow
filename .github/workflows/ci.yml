@@ -56,9 +56,16 @@ jobs:
         run: git diff --exit-code go.mod go.sum
       - run: go mod verify
 
+  shell:
+    name: shell (shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: shellcheck deploy/*.sh
+
   report-failure:
     name: report (weekly failure issue)
-    needs: [style, test, security, build, deps]
+    needs: [style, test, security, build, deps, shell]
     if: ${{ always() && github.event_name == 'schedule' && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:

@@ -1,0 +1,13 @@
+[Unit]
+Description=Cashflow nightly database backup to the NAS
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Must be the user the app runs as, so it can read the database (and its WAL).
+User=moneymanager
+EnvironmentFile=/etc/moneymanager/backup.env
+ExecStart=/usr/local/bin/moneymanager-backup
+NoNewPrivileges=true
+PrivateTmp=true
