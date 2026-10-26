@@ -90,7 +90,7 @@ Logs: `journalctl -u moneymanager`.
 
 ## Nightly backup to the NAS
 
-Every night at 03:00 a systemd timer runs `deploy/moneymanager-backup.sh` outside the app. It takes a consistent copy of the database with SQLite's online backup, checks it with `PRAGMA integrity_check` (anything but `ok` fails the run and nothing is sent), keeps it on the host as `finances_YYYY_MM_DD.db` (a second run the same day replaces that day's file) and pushes the whole local folder to the NAS with rsync over SSH, without `--delete`. Every copy is kept, on the host and on the NAS. Nights missed while the NAS was off arrive with the next successful run; a run missed while the host was off happens at the next boot. If the NAS is unreachable the run fails after a short SSH timeout, which is expected. As its very last step, a fully successful run pings [healthchecks.io](https://healthchecks.io) with a body-less HTTPS GET; when the pings stop for about a day (timer off, SSH key changed, NAS gone, host dead), healthchecks.io alerts your phone. A failed run sends no ping, and a failed ping only logs a warning.
+Every night at 03:00 a systemd timer runs `deploy/moneymanager-backup.sh` outside the app. It takes a consistent copy of the database with SQLite's online backup, checks it with `PRAGMA integrity_check` (anything but `ok` fails the run and nothing is sent), keeps it on the host as `finances_YYYY_MM_DD.db` (a second run the same day replaces that day's file) and pushes the whole local folder to the NAS with rsync over SSH, without `--delete`. Every copy is kept, on the host and on the NAS. Nights missed while the NAS was off arrive with the next successful run; a run missed while the host was off happens at the next boot. If the NAS is unreachable the run fails after a short SSH timeout, which is expected. As its very last step, a fully successful run pings [healthchecks.io](https://healthchecks.io) with a body-less GET; when the pings stop for about a day (timer off, SSH key changed, NAS gone, host dead), healthchecks.io alerts your phone. A failed run sends no ping, and a failed ping only logs a warning.
 
 Out of scope: everything from the NAS onward (snapshots, encryption at rest, the encrypted offsite copy) is configured on the NAS, not in this project. Restore is handled by the existing restore pipeline.
 
@@ -140,7 +140,7 @@ The commands below assume the app runs as user `moneymanager` with its database 
    - Under Integrations, add a channel that reaches your phone (the healthchecks.io mobile app, ntfy, Pushover, Telegram, Signal or email) and enable it for the check.
    - Copy the check's ping URL (`https://hc-ping.com/<uuid>`) into `PING_URL` in `/etc/moneymanager/backup.env`. Keep it only there: whoever has it can send fake "all good" pings.
 
-   The ping carries no data; healthchecks.io only sees the home's public IP, the ping times and the check's name. To switch to a self-hosted Healthchecks later, change only `PING_URL`. A night with the NAS off triggers an alert; the check recovers on the next successful run.
+   The ping carries no data; healthchecks.io only sees the home's public IP, the ping times and the check's name. To switch to a self-hosted Healthchecks later, change only `PING_URL` (`http://` works too). A night with the NAS off triggers an alert; the check recovers on the next successful run.
 
 6. Install the script and units, then enable the timer:
 

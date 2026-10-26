@@ -22,24 +22,16 @@ set -euo pipefail
 : "${PING_URL:?PING_URL must be set}"
 SSH_CONNECT_TIMEOUT="${SSH_CONNECT_TIMEOUT:-10}"
 
+die() {
+	echo "$*" >&2
+	exit 1
+}
+
 # sqlite3 would silently create an empty database at a wrong path.
-if [[ ! -f "$DB_PATH" ]]; then
-	echo "database not found: $DB_PATH" >&2
-	exit 1
-fi
-if [[ ! -d "$BACKUP_DIR" ]]; then
-	echo "backup folder not found: $BACKUP_DIR" >&2
-	exit 1
-fi
-if [[ "$PING_URL" != https://* ]]; then
-	echo "PING_URL must start with https://" >&2
-	exit 1
-fi
+[[ -f "$DB_PATH" ]] || die "database not found: $DB_PATH"
+[[ -d "$BACKUP_DIR" ]] || die "backup folder not found: $BACKUP_DIR"
 # The path goes into an SQL string literal below.
-if [[ "$BACKUP_DIR" == *"'"* ]]; then
-	echo "BACKUP_DIR must not contain a single quote" >&2
-	exit 1
-fi
+[[ "$BACKUP_DIR" != *"'"* ]] || die "BACKUP_DIR must not contain a single quote"
 
 final="$BACKUP_DIR/finances_$(date +%Y_%m_%d).db"
 
@@ -61,7 +53,9 @@ chmod 600 "$tmp"
 mv -f -- "$tmp" "$final"
 echo "copy written: $final"
 
-ssh_cmd="ssh -i $SSH_KEY -o BatchMode=yes -o ConnectTimeout=$SSH_CONNECT_TIMEOUT -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
+# rsync splits -e on spaces and honours only quotes (no backslashes), so the key
+# path goes in single quotes, with an embedded ' doubled as rsync expects.
+ssh_cmd="ssh -i '${SSH_KEY//\'/\'\'}' -o BatchMode=yes -o ConnectTimeout=$SSH_CONNECT_TIMEOUT -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
 
 # No --delete: files on the NAS are never removed by the host.
 rsync -rt --timeout=120 --exclude='.*' -e "$ssh_cmd" \
