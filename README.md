@@ -102,18 +102,19 @@ The commands below assume the app runs as user `moneymanager` with its database 
 
 2. On the TrueNAS, create a dataset for the backups (e.g. `tank/cashflow-backup`) and a dedicated user (e.g. `cashflow-backup`) that owns it and has no other shares or permissions. Enable SSH for that user.
 
-3. On the host, create a dedicated key pair for the service user (no passphrase):
+3. On the host, create the config folder and a dedicated key pair for the service user (no passphrase). The folder belongs to root and is only readable by the `moneymanager` group, so the service can read its config but not change it; only the private key belongs to the service user, because ssh needs it readable by that user alone:
 
-       sudo install -d -m 700 -o moneymanager -g moneymanager /etc/moneymanager
-       sudo -u moneymanager ssh-keygen -t ed25519 -N '' -C cashflow-backup -f /etc/moneymanager/backup_ed25519
+       sudo install -d -m 750 -o root -g moneymanager /etc/moneymanager
+       sudo ssh-keygen -t ed25519 -N '' -C cashflow-backup -f /etc/moneymanager/backup_ed25519
+       sudo chown moneymanager:moneymanager /etc/moneymanager/backup_ed25519
 
    Add the public key (`/etc/moneymanager/backup_ed25519.pub`) to the NAS user's authorized keys, restricted so it can only rsync into the dataset:
 
        command="rrsync -wo /mnt/tank/cashflow-backup",restrict ssh-ed25519 AAAA... cashflow-backup
 
-   `-wo` makes the key write-only. Then connect once as the service user to accept the NAS host key (rrsync rejects the session, that is fine):
+   `-wo` makes the key write-only. Then connect once to accept the NAS host key into the system-wide, root-owned known hosts file, which the service reads (the service user has no home folder, and the service cannot see `/home`). Check the fingerprint against the NAS before you type `yes`; rrsync rejects the session, that is fine:
 
-       sudo -u moneymanager ssh -i /etc/moneymanager/backup_ed25519 cashflow-backup@truenas.local
+       sudo ssh -o UserKnownHostsFile=/etc/ssh/ssh_known_hosts -i /etc/moneymanager/backup_ed25519 cashflow-backup@truenas.local
 
 4. Create the local backup folder and the env file:
 
@@ -121,7 +122,7 @@ The commands below assume the app runs as user `moneymanager` with its database 
        sudo install -m 640 -o root -g moneymanager deploy/backup.env.example /etc/moneymanager/backup.env
        sudoedit /etc/moneymanager/backup.env
 
-   The real env file stays on the host and is never committed. `PING_URL` is required (see the next step); without it the run fails at the start.
+   The env file is `root:moneymanager` with mode 640: the service reads it, only root can change it. The real env file stays on the host and is never committed. `PING_URL` is required (see the next step); without it the run fails at the start.
 
 5. Create the check on healthchecks.io:
 
