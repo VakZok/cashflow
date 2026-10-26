@@ -4,7 +4,13 @@
 *.db-wal
 *.db-shm
 *.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 *.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
 
 # Env files and secrets (only *.example files are committed)
 .env
