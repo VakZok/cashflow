@@ -1,3 +1,3 @@
-# Self-hosted on a Raspberry Pi behind Tailscale, no app login
+# Self-hosted on a Linux host behind Tailscale, no app login
 
 The app runs on a Linux host on the user's own hardware (a Raspberry Pi, or a VM on a home server; never a rented cloud VM) with a SQLite database, reachable only over Tailscale; Tailscale membership is the only access control, so the app has no login. We chose this over browser-only storage (data trapped on one device) and cloud backends (hosting cost, third-party custody of financial data). iCloud sync of the live database was rejected because syncing SQLite files corrupts them. Consequence: the database must be backed up off the host (a nightly, integrity-checked copy pushed over SSH to the user's NAS; everything after the NAS is the NAS's concern, not this project's), and the app must never be exposed publicly.
