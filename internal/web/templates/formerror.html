@@ -6,7 +6,7 @@
   .bubble::after { content: ""; position: absolute; top: 100%; right: 1rem; border: .35rem solid transparent; border-top-color: #333; }
 {{end}}
 
-{{/* error-script clears a field's highlight and the amount bubble when the field is edited, puts back the submit button's label on any edit of its form, ends a success text after 2 seconds, and keeps the scroll position across the submit of a form marked data-keep-scroll. A submit button names its label in data-resting and marks a success text with data-flash. */}}
+{{/* error-script clears a field's highlight and the amount bubble when the field is edited, puts back the submit button's label on any edit of its form, ends a success text after 3 seconds, and keeps the scroll position across the submit of a form marked data-keep-scroll. A submit button names its label in data-resting and marks a success text with data-flash. */}}
 {{define "error-script"}}<script>
 document.addEventListener('input', onEdit);
 document.addEventListener('change', onEdit);
@@ -28,7 +28,7 @@ function restoreButtons(form) {
   form.querySelectorAll('button[data-resting]').forEach(function (b) { b.textContent = b.dataset.resting; });
 }
 document.querySelectorAll('button[data-flash]').forEach(function (b) {
-  setTimeout(function () { b.textContent = b.dataset.resting; }, 2000);
+  setTimeout(function () { b.textContent = b.dataset.resting; }, 3000);
   history.replaceState(null, '', location.pathname); // a reload does not show the success text again
 });
 document.addEventListener('submit', function (e) {

@@ -16,7 +16,7 @@
   .rep-row:first-child { padding-top: 0; }
   .rep-main { display: grid; grid-template-columns: auto 1fr 1fr; gap: .5rem; align-items: end; }
   .rep-main > * { margin-top: 0; }
-  .rep-row .remove { width: auto; margin-top: 0; padding: .6rem 1rem; }
+  .rep-row .remove { width: auto; margin-top: 0; }
   .lists-default, .lists-levy { display: grid; grid-template-columns: 1fr 1fr; column-gap: .5rem; }
   .lists-holding:has(input:not([hidden])) { display: grid; grid-template-columns: 1fr 1fr; column-gap: .5rem; }
   .lists-default[hidden], .lists-levy[hidden] { display: none; }
@@ -24,8 +24,8 @@
   .lists-default > :nth-child(2), .lists-levy > :nth-child(2) { grid-column: 1; grid-row: 2; }
   .lists-default > :nth-child(3), .lists-levy > :nth-child(3) { grid-column: 2; grid-row: 1; }
   .lists-default > :nth-child(4), .lists-levy > :nth-child(4) { grid-column: 2; grid-row: 2; }
-  #add-row { display: block; width: auto; margin: 1rem auto 0; padding: .3rem 1rem; }
-  .rep-row .remove, #add-row { color: #000; background: var(--field); border: 1px solid var(--line); border-radius: 999px; }
+  #add-row { display: block; width: auto; margin: 1rem auto 0; }
+  .rep-row .remove, #add-row { padding: .6rem 1rem; color: #000; background: var(--field); border: 1px solid var(--line); border-radius: 999px; }
   #add-row:disabled { color: #aaa; }
   input[type=month] { min-width: 0; margin-top: 1rem; border-radius: .25rem; }
   [hidden] { display: none; }

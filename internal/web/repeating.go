@@ -597,7 +597,7 @@ func (a *App) addTransactions(w http.ResponseWriter, date string, rowCount int) 
 func addedText(booked, skipped int) string {
 	switch {
 	case booked == 0:
-		return "All Transactions already exist. Saved List."
+		return "Transactions already added. Skipping and saving List."
 	case skipped == 0:
 		return "Added " + transactionCount(booked) + " and saved List!"
 	}

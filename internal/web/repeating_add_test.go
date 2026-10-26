@@ -87,7 +87,7 @@ func TestAddTransactionsTwiceForTheSameMonthSkipsEverythingAndSavesTheList(t *te
 	ta.addTransactions("2026-10-01", rows...)
 	// The second press drops Salary from the list; Rent and Gym exist.
 	r := ta.addTransactions("2026-10-01", rows[:2]...)
-	wantAdded(t, r, "All Transactions already exist. Saved List.")
+	wantAdded(t, r, "Transactions already added. Skipping and saving List.")
 
 	home := ta.get("/transactions").Body
 	for _, d := range []string{"Salary", "Rent", "Gym"} {
@@ -306,7 +306,7 @@ func TestAddTransactionsRejectsInvestmentAndDivestmentOfTheSameHolding(t *testin
 func TestAddTransactionsTwiceWithAPickedHoldingFindsTheDuplicate(t *testing.T) {
 	ta := newTestApp(t)
 	ta.addTransactions("2026-10-01", holdRow("investment", "5", "new", "ETF"))
-	wantAdded(t, ta.addTransactions("2026-10-01", holdRow("investment", "5", "1", "")), "All Transactions already exist. Saved List.")
+	wantAdded(t, ta.addTransactions("2026-10-01", holdRow("investment", "5", "1", "")), "Transactions already added. Skipping and saving List.")
 }
 
 func TestMonthPickerHasAnAccessibleNameButNoVisibleLabel(t *testing.T) {
