@@ -94,7 +94,7 @@ Every night at 03:00 a systemd timer runs `deploy/moneymanager-backup.sh` outsid
 
 Out of scope: everything from the NAS onward (snapshots, encryption at rest, the encrypted offsite copy) is configured on the NAS, not in this project. Restore is handled by the existing restore pipeline.
 
-The commands below assume the app runs as user `moneymanager` with its database at `/var/lib/moneymanager/money_manager.db`; adjust the env file and the service's `User=` if yours differ.
+The commands below assume the app runs as user `moneymanager` with its database at `/var/lib/moneymanager/money_manager.db`; adjust the env file and the service's `User=`, `Group=` and `ReadWritePaths=` if yours differ. The backup service is hardened like the app's: it can only write the backup folder and the database folder.
 
 1. Install the SQLite command-line tool, rsync and curl on the host:
 
