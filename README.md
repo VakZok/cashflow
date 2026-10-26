@@ -90,16 +90,16 @@ Logs: `journalctl -u moneymanager`.
 
 ## Nightly backup to the NAS
 
-Every night at 03:00 a systemd timer runs `deploy/moneymanager-backup.sh` outside the app. It takes a consistent copy of the database with SQLite's online backup, checks it with `PRAGMA integrity_check` (anything but `ok` fails the run and nothing is sent), keeps it on the host as `finances_YYYY_MM_DD.db` (a second run the same day replaces that day's file) and pushes the whole local folder to the NAS with rsync over SSH, without `--delete`. Every copy is kept, on the host and on the NAS. Nights missed while the NAS was off arrive with the next successful run; a run missed while the host was off happens at the next boot. If the NAS is unreachable the run fails after a short SSH timeout, which is expected.
+Every night at 03:00 a systemd timer runs `deploy/moneymanager-backup.sh` outside the app. It takes a consistent copy of the database with SQLite's online backup, checks it with `PRAGMA integrity_check` (anything but `ok` fails the run and nothing is sent), keeps it on the host as `finances_YYYY_MM_DD.db` (a second run the same day replaces that day's file) and pushes the whole local folder to the NAS with rsync over SSH, without `--delete`. Every copy is kept, on the host and on the NAS. Nights missed while the NAS was off arrive with the next successful run; a run missed while the host was off happens at the next boot. If the NAS is unreachable the run fails after a short SSH timeout, which is expected. As its very last step, a fully successful run pings [healthchecks.io](https://healthchecks.io) with a body-less HTTPS GET; when the pings stop for about a day (timer off, SSH key changed, NAS gone, host dead), healthchecks.io alerts your phone. A failed run sends no ping, and a failed ping only logs a warning.
 
 Out of scope: everything from the NAS onward (snapshots, encryption at rest, the encrypted offsite copy) is configured on the NAS, not in this project. Restore is handled by the existing restore pipeline.
 
 The commands below assume the app runs as user `moneymanager` with its database at `/var/lib/moneymanager/money_manager.db`; adjust the env file and the service's `User=` if yours differ.
 
-1. Install the SQLite command-line tool and rsync on the host:
+1. Install the SQLite command-line tool, rsync and curl on the host:
 
    ```sh
-   sudo apt install sqlite3 rsync
+   sudo apt install sqlite3 rsync curl
    ```
 
 2. On the TrueNAS, create a dataset for the backups (e.g. `tank/cashflow-backup`) and a dedicated user (e.g. `cashflow-backup`) that owns it and has no other shares or permissions. Enable SSH for that user.
@@ -131,9 +131,18 @@ The commands below assume the app runs as user `moneymanager` with its database 
    sudoedit /etc/moneymanager/backup.env
    ```
 
-   The real env file stays on the host and is never committed.
+   The real env file stays on the host and is never committed. `PING_URL` is required (see the next step); without it the run fails at the start.
 
-5. Install the script and units, then enable the timer:
+5. Create the check on healthchecks.io:
+
+   - Sign up at [healthchecks.io](https://healthchecks.io) and add a check with a neutral name such as `nightly-job`, never one that says what the host does.
+   - Set the period to 1 day and the grace time to about 1 day.
+   - Under Integrations, add a channel that reaches your phone (the healthchecks.io mobile app, ntfy, Pushover, Telegram, Signal or email) and enable it for the check.
+   - Copy the check's ping URL (`https://hc-ping.com/<uuid>`) into `PING_URL` in `/etc/moneymanager/backup.env`. Keep it only there: whoever has it can send fake "all good" pings.
+
+   The ping carries no data; healthchecks.io only sees the home's public IP, the ping times and the check's name. To switch to a self-hosted Healthchecks later, change only `PING_URL`. A night with the NAS off triggers an alert; the check recovers on the next successful run.
+
+6. Install the script and units, then enable the timer:
 
    ```sh
    sudo install -m 755 deploy/moneymanager-backup.sh /usr/local/bin/moneymanager-backup
@@ -142,7 +151,7 @@ The commands below assume the app runs as user `moneymanager` with its database 
    sudo systemctl enable --now moneymanager-backup.timer
    ```
 
-6. Run it once by hand and check the result:
+7. Run it once by hand and check the result:
 
    ```sh
    sudo systemctl start moneymanager-backup.service
@@ -151,6 +160,8 @@ The commands below assume the app runs as user `moneymanager` with its database 
    ```
 
    Then check the catch-up: shut the NAS down, run it (it fails, the day's copy stays on the host), start the NAS, run it again and see the copy arrive.
+
+   Check the alert path: after the run, the check on healthchecks.io shows the ping arrive. Then stop the timer (`sudo systemctl stop moneymanager-backup.timer`), wait out period plus grace, see the alert on your phone, and start the timer again.
 
 ## Known limitations
 
