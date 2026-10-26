@@ -98,38 +98,28 @@ The commands below assume the app runs as user `moneymanager` with its database 
 
 1. Install the SQLite command-line tool, rsync and curl on the host:
 
-   ```sh
-   sudo apt install sqlite3 rsync curl
-   ```
+       sudo apt install sqlite3 rsync curl
 
 2. On the TrueNAS, create a dataset for the backups (e.g. `tank/cashflow-backup`) and a dedicated user (e.g. `cashflow-backup`) that owns it and has no other shares or permissions. Enable SSH for that user.
 
 3. On the host, create a dedicated key pair for the service user (no passphrase):
 
-   ```sh
-   sudo install -d -m 700 -o moneymanager -g moneymanager /etc/moneymanager
-   sudo -u moneymanager ssh-keygen -t ed25519 -N '' -C cashflow-backup -f /etc/moneymanager/backup_ed25519
-   ```
+       sudo install -d -m 700 -o moneymanager -g moneymanager /etc/moneymanager
+       sudo -u moneymanager ssh-keygen -t ed25519 -N '' -C cashflow-backup -f /etc/moneymanager/backup_ed25519
 
    Add the public key (`/etc/moneymanager/backup_ed25519.pub`) to the NAS user's authorized keys, restricted so it can only rsync into the dataset:
 
-   ```
-   command="rrsync -wo /mnt/tank/cashflow-backup",restrict ssh-ed25519 AAAA... cashflow-backup
-   ```
+       command="rrsync -wo /mnt/tank/cashflow-backup",restrict ssh-ed25519 AAAA... cashflow-backup
 
    `-wo` makes the key write-only. Then connect once as the service user to accept the NAS host key (rrsync rejects the session, that is fine):
 
-   ```sh
-   sudo -u moneymanager ssh -i /etc/moneymanager/backup_ed25519 cashflow-backup@truenas.local
-   ```
+       sudo -u moneymanager ssh -i /etc/moneymanager/backup_ed25519 cashflow-backup@truenas.local
 
 4. Create the local backup folder and the env file:
 
-   ```sh
-   sudo install -d -m 700 -o moneymanager -g moneymanager /var/backups/moneymanager
-   sudo install -m 640 -o root -g moneymanager deploy/backup.env.example /etc/moneymanager/backup.env
-   sudoedit /etc/moneymanager/backup.env
-   ```
+       sudo install -d -m 700 -o moneymanager -g moneymanager /var/backups/moneymanager
+       sudo install -m 640 -o root -g moneymanager deploy/backup.env.example /etc/moneymanager/backup.env
+       sudoedit /etc/moneymanager/backup.env
 
    The real env file stays on the host and is never committed. `PING_URL` is required (see the next step); without it the run fails at the start.
 
@@ -144,20 +134,16 @@ The commands below assume the app runs as user `moneymanager` with its database 
 
 6. Install the script and units, then enable the timer:
 
-   ```sh
-   sudo install -m 755 deploy/moneymanager-backup.sh /usr/local/bin/moneymanager-backup
-   sudo install -m 644 deploy/moneymanager-backup.service deploy/moneymanager-backup.timer /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now moneymanager-backup.timer
-   ```
+       sudo install -m 755 deploy/moneymanager-backup.sh /usr/local/bin/moneymanager-backup
+       sudo install -m 644 deploy/moneymanager-backup.service deploy/moneymanager-backup.timer /etc/systemd/system/
+       sudo systemctl daemon-reload
+       sudo systemctl enable --now moneymanager-backup.timer
 
 7. Run it once by hand and check the result:
 
-   ```sh
-   sudo systemctl start moneymanager-backup.service
-   journalctl -u moneymanager-backup.service -n 20
-   systemctl list-timers moneymanager-backup.timer
-   ```
+       sudo systemctl start moneymanager-backup.service
+       journalctl -u moneymanager-backup.service -n 20
+       systemctl list-timers moneymanager-backup.timer
 
    Then check the catch-up: shut the NAS down, run it (it fails, the day's copy stays on the host), start the NAS, run it again and see the copy arrive.
 
