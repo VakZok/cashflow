@@ -12,21 +12,21 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 	_ "modernc.org/sqlite"
 )
 
 type row struct {
-	rowid                    int64
+	rowid                     int64
 	date, desc, cat, sub, typ string
-	amount                   int64
+	amount                    int64
 }
 
 var types = map[string]string{"Einnahme": store.TypeIncome, "Ausgabe": store.TypeExpense}
 
 func main() {
 	from := flag.String("from", "finances.db", "old database to read")
-	out := flag.String("db", "money_manager.db", "new database to create; must not exist")
+	out := flag.String("db", "new_finances.db", "new database to create; must not exist")
 	flag.Parse()
 
 	if _, err := os.Stat(*out); err == nil {
