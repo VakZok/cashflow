@@ -1,9 +1,16 @@
-// Command import converts an old finances.db into a new Money Manager database.
-// Every row is checked first; if any row is rejected, nothing is written.
+// Command import converts an old finances.db into a new Cashflow database.
+//
+// It is a one-time migration the creator needed to bring their existing
+// records over, not part of the app. The old file is only read. Every row is
+// checked against the app's rules first; if any row is rejected, the problems
+// are listed and nothing is written.
+//
+//	go run ./cmd/import -from finances.db -db new_finances.db
 package main
 
 import (
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -16,65 +23,83 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// types maps the old type column to the app's Types.
+var types = map[string]string{"Einnahme": store.TypeIncome, "Ausgabe": store.TypeExpense}
+
 type row struct {
 	rowid                     int64
 	date, desc, cat, sub, typ string
 	amount                    int64
 }
 
-var types = map[string]string{"Einnahme": store.TypeIncome, "Ausgabe": store.TypeExpense}
-
 func main() {
 	from := flag.String("from", "finances.db", "old database to read")
-	out := flag.String("db", "new_finances.db", "new database to create; must not exist")
+	to := flag.String("db", "new_finances.db", "new database to create; must not exist")
 	flag.Parse()
 
-	if _, err := os.Stat(*out); err == nil {
-		log.Fatalf("%s already exists; refusing to overwrite", *out)
+	problems, err := run(*from, *to)
+	for _, p := range problems {
+		fmt.Println(p)
 	}
-
-	rows, problems := load(*from)
+	if err != nil {
+		log.Fatal(err)
+	}
 	if len(problems) > 0 {
-		for _, p := range problems {
-			fmt.Println(p)
-		}
 		log.Fatalf("%d problem(s); nothing written", len(problems))
 	}
+	fmt.Printf("imported into %s\n", *to)
+}
 
-	tmp := *out + ".tmp"
+// run converts the old database at from into a new database at to. If any
+// row breaks a rule, it returns one problem per broken rule and writes
+// nothing.
+func run(from, to string) (problems []string, err error) {
+	if _, err := os.Stat(to); err == nil {
+		return nil, fmt.Errorf("%s already exists; refusing to overwrite", to)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+
+	rows, problems, err := load(from)
+	if err != nil || len(problems) > 0 {
+		return problems, err
+	}
+
+	// Build next to the target and rename at the end, so a failure halfway
+	// never leaves a partial database at to.
+	tmp := to + ".tmp"
 	_ = os.Remove(tmp)
 	if err := write(tmp, rows); err != nil {
 		_ = os.Remove(tmp)
-		log.Fatal(err)
+		return nil, err
 	}
-	if err := os.Rename(tmp, *out); err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("imported %d transactions into %s\n", len(rows), *out)
+	return nil, os.Rename(tmp, to)
 }
 
-func load(path string) ([]row, []string) {
+func load(path string) (out []row, problems []string, err error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, nil, err
+	}
 	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
 	if err != nil {
-		log.Fatal(err)
+		return nil, nil, err
 	}
 	defer func() { _ = db.Close() }()
 
-	rs, err := db.Query(`SELECT rowid, date, description, value, main_category, subcategory, type FROM transactions ORDER BY rowid`)
+	rs, err := db.Query(`SELECT rowid, date, description, value, main_category, subcategory, type
+		FROM transactions ORDER BY rowid`)
 	if err != nil {
-		log.Fatal(err)
+		return nil, nil, err
 	}
 	defer func() { _ = rs.Close() }()
 
-	var out []row
-	var problems []string
 	seen := map[string]int64{}
 	for rs.Next() {
 		var id int64
 		var date, desc, cat, sub, typ sql.NullString
 		var value any
 		if err := rs.Scan(&id, &date, &desc, &value, &cat, &sub, &typ); err != nil {
-			log.Fatal(err)
+			return nil, nil, err
 		}
 		r := row{rowid: id, date: strings.TrimSpace(date.String), desc: strings.TrimSpace(desc.String),
 			cat: strings.TrimSpace(cat.String), sub: strings.TrimSpace(sub.String)}
@@ -106,18 +131,17 @@ func load(path string) ([]row, []string) {
 		}
 
 		// The app's Duplicate rule: date, description ignoring ASCII case, Type (ADR 0006).
-		key := r.date + "\x00" + asciiLower(r.desc) + "\x00" + r.typ
-		if first, ok := seen[key]; ok && r.typ != "" {
-			bad("duplicate of row %d", first)
-		} else {
-			seen[key] = id
+		if r.typ != "" {
+			key := r.date + "\x00" + asciiLower(r.desc) + "\x00" + r.typ
+			if first, ok := seen[key]; ok {
+				bad("duplicate of row %d", first)
+			} else {
+				seen[key] = id
+			}
 		}
 		out = append(out, r)
 	}
-	if err := rs.Err(); err != nil {
-		log.Fatal(err)
-	}
-	return out, problems
+	return out, problems, rs.Err()
 }
 
 func write(path string, rows []row) error {
@@ -143,6 +167,7 @@ func write(path string, rows []row) error {
 	return nil
 }
 
+// asciiLower lowercases A-Z only, matching SQLite's NOCASE.
 func asciiLower(s string) string {
 	b := []byte(s)
 	for i, c := range b {

@@ -39,6 +39,12 @@ Dummy data for trying out the Report (refuses a non-empty database):
 go run ./cmd/seed -db test.db -months 3
 ```
 
+`cmd/import` is a one-time migration of an older `finances.db` (Einnahme/Ausgabe rows) into a new database, not part of the app. It writes nothing if any row breaks the app's rules and lists each problem instead:
+
+```zsh
+go run ./cmd/import -from finances.db -db new_finances.db
+```
+
 ## Deployment
 
 **Never expose the app publicly**; it has no login. It listens on `127.0.0.1` only; how you reach it is up to you.
