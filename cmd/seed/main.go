@@ -40,7 +40,7 @@ var expenses = []row{
 }
 
 func main() {
-	dbPath := flag.String("db", "money_manager.db", "path to the SQLite database file")
+	dbPath := flag.String("db", "test.db", "path to the SQLite database file")
 	months := flag.Int("months", 3, "number of months back (including the current one) to fill")
 	flag.Parse()
 
