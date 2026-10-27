@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 )
 
 func expense(t *testing.T, s *store.Store, date, desc string) store.NewTransaction {

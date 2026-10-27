@@ -1,0 +1,13 @@
+# systemd user timer for the Cashflow backup. Install: see "Nightly backup" in
+# README.md.
+
+[Unit]
+Description=Run the Cashflow database backup nightly at 03:00
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+# A run missed while the machine was off happens at the next boot.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -28,7 +28,7 @@ id_ed25519*
 /.gocache/
 
 # Binaries
-/moneymanager
+/cashflow
 /bin/
 *.exe
 *.test

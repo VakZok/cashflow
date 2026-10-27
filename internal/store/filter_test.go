@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 )
 
 // descriptions are the rows' descriptions, in order.

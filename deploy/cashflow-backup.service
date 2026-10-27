@@ -1,0 +1,10 @@
+# systemd user unit for the Cashflow backup. Install: see "Nightly backup" in
+# README.md. Replace /path/to/cashflow with the path of your clone.
+
+[Unit]
+Description=Cashflow database backup
+
+[Service]
+Type=oneshot
+EnvironmentFile=/path/to/cashflow/backup.env
+ExecStart=/path/to/cashflow/deploy/cashflow-backup.sh

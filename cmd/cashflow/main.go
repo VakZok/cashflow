@@ -1,4 +1,4 @@
-// Command moneymanager runs the Money Manager web server.
+// Command cashflow runs the Cashflow web server.
 package main
 
 import (
@@ -6,12 +6,12 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/VakZok/money_manager_app/internal/web"
+	"github.com/VakZok/Cashflow/internal/web"
 )
 
 func main() {
-	addr := flag.String("addr", "0.0.0.0:47613", "address to listen on")
-	dbPath := flag.String("db", "money_manager.db", "path to the SQLite database file")
+	addr := flag.String("addr", "127.0.0.1:47613", "address to listen on")
+	dbPath := flag.String("db", "test.db", "path to the SQLite database file")
 	flag.Parse()
 
 	app, err := web.New(web.Config{DBPath: *dbPath})

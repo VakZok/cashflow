@@ -5,7 +5,7 @@ import (
 	"html/template"
 	"strconv"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 )
 
 // typeLabel is the display name of a stored Transaction type.

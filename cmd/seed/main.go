@@ -1,4 +1,4 @@
-// Command seed fills a Money Manager database with dummy data for trying out the Report.
+// Command seed fills a Cashflow database with dummy data for trying out the Report.
 package main
 
 import (
@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 )
 
 type row struct {
@@ -40,7 +40,7 @@ var expenses = []row{
 }
 
 func main() {
-	dbPath := flag.String("db", "money_manager.db", "path to the SQLite database file")
+	dbPath := flag.String("db", "test.db", "path to the SQLite database file")
 	months := flag.Int("months", 3, "number of months back (including the current one) to fill")
 	flag.Parse()
 

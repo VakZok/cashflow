@@ -1,0 +1,18 @@
+# systemd user unit for the Cashflow app. Install: see "Deployment" in README.md.
+# Replace /path/to/cashflow with the path of your clone.
+#
+# The app listens on localhost only. Never expose it publicly; how you reach
+# it is up to you.
+
+[Unit]
+Description=Cashflow personal finance app
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/cashflow
+ExecStart=/path/to/cashflow/cashflow -db /path/to/cashflow/finances.db
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
