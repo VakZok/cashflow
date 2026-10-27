@@ -1,4 +1,4 @@
-# Money Manager
+# Cashflow
 
 A personal, single-user tracker of money the user has actually moved. It only knows what the user manually enters; there are no live prices or bank feeds.
 
@@ -18,7 +18,7 @@ _Avoid_: Kind
 
 **Sign**:
 Whether a Type adds to what the user keeps (positive: Income, Rebate, Investment) or takes away from it (negative: Expense, Levy, Divestment). Investment is positive because invested money is still the user's; Divestment is negative because it takes money back out.
-_Avoid_: Cashflow, incoming/outgoing, direction
+_Avoid_: cashflow (the app's name), incoming/outgoing, direction
 
 **Income**:
 Money actually received to spend or invest, after any Levy was taken off (salary as paid out, gifts, investment profit).
