@@ -22,12 +22,6 @@ Given 100€ investemt:
 - sold with gain of 20€ -> 100€ divestment, 15€ income, 15€ levy
 - sold with loss of 20€ -> 100€ divestment, 20€ expense
 
-## Toolchain and CI
-
-The Go version is pinned in `go.mod` (see ADR 0005). CI (`.github/workflows/ci.yml`) runs on pushes to `main` and `integration/**`, on pull requests, and weekly (Mondays 06:00 UTC) so new vulnerability advisories surface without code changes. Separate jobs: style (golangci-lint), tests (-race), security (govulncheck), deps (`go mod tidy` must leave `go.mod`/`go.sum` unchanged, then `go mod verify`), shell (shellcheck on `deploy/*.sh`) and a Pi build, which runs last. If the weekly run fails, CI opens a `needs-triage` issue (or comments on the open one). Build for the Raspberry Pi 4 (Pi OS 64-bit):
-
-    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o moneymanager ./cmd/moneymanager
-
 ## Run (compiled binary)
 
 ```zsh
@@ -42,21 +36,17 @@ Dummy data for trying out the Report (refuses a non-empty database):
 go run ./cmd/seed -db money_manager.db -months 3
 ```
 
-## Deployment (Linux host)
+## Deployment
 
-The app runs on a Linux host on your own hardware: a Raspberry Pi or a VM on a home server, never a rented cloud VM (ADR 0003). Both use systemd, so the steps are the same.
+**Never expose the app publicly**; it has no login. by default, the app listens on `127.0.0.1`.
 
-**Never expose the app publicly.** It has no login; Tailscale membership is the only access control. Do not open or forward its port on your router or firewall, and do not use `tailscale funnel`. The app listens on `127.0.0.1` only and is reached over your tailnet via `tailscale serve`.
-
-1. **Build** on your machine. For a Raspberry Pi 4/5 (64-bit Pi OS), the same command CI runs:
+1. **Build** on your machine. For a Raspberry Pi 4/5 (64-bit Pi OS):
 
        CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o moneymanager ./cmd/moneymanager
 
-   For an x86-64 VM use `GOARCH=amd64` instead.
+   For x86-64 use `GOARCH=amd64` instead.
 
-2. **Install Tailscale** on the host and join it to your tailnet (`curl -fsSL https://tailscale.com/install.sh | sh`, then `sudo tailscale up`). In the Tailscale admin console, enable MagicDNS and HTTPS certificates.
-
-3. **Create a service user** on the host:
+2. **Create a service user** on the host:
 
        sudo useradd --system --no-create-home --shell /usr/sbin/nologin moneymanager
 
@@ -75,12 +65,6 @@ The app runs on a Linux host on your own hardware: a Raspberry Pi or a VM on a h
 
    The database lives at `/var/lib/moneymanager/money_manager.db` (set by `-db` in the unit); it is created and migrated on first start.
 
-6. **Make it reachable over Tailscale** (persists across reboots):
-
-       sudo tailscale serve --bg 47613
-
-   Open `https://<host>.<tailnet>.ts.net` on a device in your tailnet. `tailscale serve status` shows what is served.
-
 **Updating** (no continuous deployment, ADR 0005): build as in step 1, copy the binary over, then:
 
     sudo install -m 0755 moneymanager /usr/local/bin/moneymanager
@@ -92,7 +76,7 @@ Logs: `journalctl -u moneymanager`.
 
 Every night at 03:00 a systemd timer runs `deploy/moneymanager-backup.sh` outside the app. It takes a consistent copy of the database with SQLite's online backup, checks it with `PRAGMA integrity_check` (anything but `ok` fails the run and nothing is sent), keeps it on the host as `finances_YYYY_MM_DD.db` (a second run the same day replaces that day's file) and pushes the whole local folder to the NAS with rsync over SSH, without `--delete`. Every copy is kept, on the host and on the NAS. Nights missed while the NAS was off arrive with the next successful run; a run missed while the host was off happens at the next boot. If the NAS is unreachable the run fails after a short SSH timeout, which is expected. As its very last step, a fully successful run pings [healthchecks.io](https://healthchecks.io) with a body-less GET; when the pings stop for about a day (timer off, SSH key changed, NAS gone, host dead), healthchecks.io alerts your phone. A failed run sends no ping, and a failed ping only logs a warning.
 
-Out of scope: everything from the NAS onward (snapshots, encryption at rest, the encrypted offsite copy) is configured on the NAS, not in this project. Restore is handled by the existing restore pipeline.
+Out of scope: everything from the NAS onward (snapshots, encryption at rest, restoration).
 
 The commands below assume the app runs as user `moneymanager` with its database at `/var/lib/moneymanager/money_manager.db`; adjust the env file and the service's `User=`, `Group=` and `ReadWritePaths=` if yours differ. The backup service is hardened like the app's: it can only write the backup folder and the database folder.
 
