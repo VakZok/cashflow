@@ -1,26 +1,24 @@
 #!/usr/bin/env bash
-# Nightly backup of the Cashflow database to the NAS (issue #135, ADR 0003).
+# Nightly backup of the Cashflow database. Install: see "Nightly backup" in
+# README.md.
 #
 # 1. Take a consistent copy of the live database with SQLite's online backup.
 # 2. Check the copy with PRAGMA integrity_check; anything but "ok" fails the run.
-# 3. Move it into place as finances_YYYY_MM_DD.db (a same-day rerun replaces it).
-# 4. Push the whole local folder to the NAS with rsync over SSH, never deleting.
-# 5. Ping the healthchecks URL (issue #136). Only a fully successful run gets
-#    here; when the pings stop, healthchecks.io alerts. A failed ping only warns.
+# 3. Move it into place as finances_YYYY_MM_DD.db in BACKUP_DIR (created if
+#    missing; a same-day rerun replaces that day's file).
+# 4. If RCLONE_DEST is set, rclone copy the backup folder there. Copy, never
+#    sync: nothing is deleted on the remote.
+# 5. Ping PING_URL. Only a fully successful run gets here; when the pings stop,
+#    healthchecks.io alerts. A failed ping only warns.
 #
-# All host-specific values come from the environment (the systemd service loads
-# them from an env file, see backup.env.example). Any failure stops the run with
-# a non-zero exit.
+# All values come from the environment (the systemd unit loads them from an env
+# file, see backup.env.example). Any failure stops the run with a non-zero exit.
 set -euo pipefail
 
 : "${DB_PATH:?DB_PATH must be set}"
 : "${BACKUP_DIR:?BACKUP_DIR must be set}"
-: "${NAS_HOST:?NAS_HOST must be set}"
-: "${NAS_USER:?NAS_USER must be set}"
-: "${NAS_PATH:?NAS_PATH must be set}"
-: "${SSH_KEY:?SSH_KEY must be set}"
 : "${PING_URL:?PING_URL must be set}"
-SSH_CONNECT_TIMEOUT="${SSH_CONNECT_TIMEOUT:-10}"
+RCLONE_DEST="${RCLONE_DEST:-}"
 
 die() {
 	echo "$*" >&2
@@ -29,9 +27,9 @@ die() {
 
 # sqlite3 would silently create an empty database at a wrong path.
 [[ -f "$DB_PATH" ]] || die "database not found: $DB_PATH"
-[[ -d "$BACKUP_DIR" ]] || die "backup folder not found: $BACKUP_DIR"
 # The path goes into an SQL string literal below.
 [[ "$BACKUP_DIR" != *"'"* ]] || die "BACKUP_DIR must not contain a single quote"
+mkdir -p -- "$BACKUP_DIR"
 
 final="$BACKUP_DIR/finances_$(date +%Y_%m_%d).db"
 
@@ -44,7 +42,7 @@ sqlite3 -bail -readonly "$DB_PATH" ".backup '$tmp'"
 
 check="$(sqlite3 -bail -readonly "$tmp" 'PRAGMA integrity_check;')"
 if [[ "$check" != "ok" ]]; then
-	echo "integrity check failed on the copy, nothing pushed:" >&2
+	echo "integrity check failed on the copy, nothing kept or pushed:" >&2
 	echo "$check" >&2
 	exit 1
 fi
@@ -53,17 +51,14 @@ chmod 600 "$tmp"
 mv -f -- "$tmp" "$final"
 echo "copy written: $final"
 
-# rsync splits -e on spaces and honours only quotes (no backslashes), so the key
-# path goes in single quotes, with an embedded ' doubled as rsync expects.
-ssh_cmd="ssh -i '${SSH_KEY//\'/\'\'}' -o BatchMode=yes -o ConnectTimeout=$SSH_CONNECT_TIMEOUT -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
+if [[ -n "$RCLONE_DEST" ]]; then
+	# copy, not sync: files on the remote are never deleted.
+	rclone copy --exclude '.*' "$BACKUP_DIR" "$RCLONE_DEST"
+	echo "copied $BACKUP_DIR to $RCLONE_DEST"
+fi
 
-# No --delete: files on the NAS are never removed by the host.
-rsync -rt --timeout=120 --exclude='.*' -e "$ssh_cmd" \
-	"$BACKUP_DIR/" "$NAS_USER@$NAS_HOST:$NAS_PATH/"
-echo "pushed $BACKUP_DIR to $NAS_HOST"
-
-# Dead man's switch: a body-less GET, so no data leaves the host. A failed ping
-# must not fail a good backup; the missing ping makes healthchecks.io alert.
+# Dead man's switch: a body-less GET, so no data leaves the machine. A failed
+# ping must not fail a good backup; the missing ping makes healthchecks.io alert.
 if curl -fsS -o /dev/null -m 10 --retry 3 "$PING_URL"; then
 	echo "pinged healthchecks"
 else

@@ -1,25 +1,12 @@
+# systemd user unit for the Cashflow backup. Install: see "Nightly backup" in
+# README.md. Replace /path/to/cashflow with the path of your clone.
+
 [Unit]
-Description=Cashflow nightly database backup to the NAS
+Description=Cashflow database backup
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=oneshot
-# Must be the user the app runs as, so it can read the database (and its journal).
-User=cashflow
-Group=cashflow
-EnvironmentFile=/etc/cashflow/backup.env
-ExecStart=/usr/local/bin/cashflow-backup
-
-# Hardening, as for the app. The whole file system is read-only, so the SSH key
-# in /etc/cashflow and the host key in /etc/ssh/ssh_known_hosts stay
-# readable. Writable: the local backup folder (keep in sync with BACKUP_DIR in
-# the env file) and the database folder, which SQLite needs to recover a hot
-# journal left by a crashed app. The network stays available for rsync and the
-# healthchecks ping.
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-PrivateTmp=true
-PrivateDevices=true
-ReadWritePaths=/var/backups/cashflow /var/lib/cashflow
+EnvironmentFile=/path/to/cashflow/backup.env
+ExecStart=/path/to/cashflow/deploy/cashflow-backup.sh
