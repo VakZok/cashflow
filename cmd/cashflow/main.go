@@ -1,4 +1,4 @@
-// Command moneymanager runs the Money Manager web server.
+// Command cashflow runs the Cashflow web server.
 package main
 
 import (
@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/VakZok/money_manager_app/internal/web"
+	"github.com/VakZok/Cashflow/internal/web"
 )
 
 func main() {

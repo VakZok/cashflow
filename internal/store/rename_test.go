@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 )
 
 func idOf(t *testing.T, s *store.Store, l store.List, name string) int64 {

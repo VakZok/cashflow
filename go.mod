@@ -1,4 +1,4 @@
-module github.com/VakZok/money_manager_app
+module github.com/VakZok/Cashflow
 
 go 1.26.5
 

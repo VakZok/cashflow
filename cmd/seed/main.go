@@ -1,4 +1,4 @@
-// Command seed fills a Money Manager database with dummy data for trying out the Report.
+// Command seed fills a Cashflow database with dummy data for trying out the Report.
 package main
 
 import (
@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 )
 
 type row struct {

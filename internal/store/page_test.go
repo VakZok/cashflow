@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 )
 
 func TestTransactionPageIsWhereTheTransactionSitsInTheOrdering(t *testing.T) {
