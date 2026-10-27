@@ -11,7 +11,7 @@ import (
 
 func main() {
 	addr := flag.String("addr", "0.0.0.0:47613", "address to listen on")
-	dbPath := flag.String("db", "money_manager.db", "path to the SQLite database file")
+	dbPath := flag.String("db", "test.db", "path to the SQLite database file")
 	flag.Parse()
 
 	app, err := web.New(web.Config{DBPath: *dbPath})

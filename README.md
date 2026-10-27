@@ -1,6 +1,6 @@
 # Cashflow
 
-Personal finance manager. Purposefully simple
+Personal finance manager. Purposefully simple.
 
 ## Features
 
@@ -17,7 +17,7 @@ Personal finance manager. Purposefully simple
 
 ## Example: Divestments
 
-Given 100€ investemt:
+Given 100€ investment:
 
 - sold with gain of 20€ -> 100€ divestment, 15€ income, 15€ levy
 - sold with loss of 20€ -> 100€ divestment, 20€ expense
@@ -25,7 +25,7 @@ Given 100€ investemt:
 ## Run (compiled binary)
 
 ```zsh
-./moneymanager -addr 127.0.0.1:47613 -db money_manager.db
+./moneymanager -addr 127.0.0.1:47613 -db test.db
 ```
 
 The SQLite database is created and migrated on startup.
@@ -33,12 +33,12 @@ The SQLite database is created and migrated on startup.
 Dummy data for trying out the Report (refuses a non-empty database):
 
 ```zsh
-go run ./cmd/seed -db money_manager.db -months 3
+go run ./cmd/seed -db test.db -months 3
 ```
 
 ## Deployment
 
-**Never expose the app publicly**; it has no login. by default, the app listens on `127.0.0.1`.
+**Never expose the app publicly**; it has no login. By default, the app listens on `127.0.0.1`.
 
 1. **Build** on your machine. For a Raspberry Pi 4/5 (64-bit Pi OS):
 
