@@ -22,11 +22,14 @@ Given 100€ investment:
 - sold with gain of 20€ -> 100€ divestment, 15€ income, 15€ levy
 - sold with loss of 20€ -> 100€ divestment, 20€ expense
 
-## Run (compiled binary)
+## Run
 
 ```zsh
-./cashflow -addr 127.0.0.1:47613 -db test.db
+go build -o cashflow ./cmd/cashflow
+./cashflow -db test.db
 ```
+
+It serves on http://127.0.0.1:47613.
 
 The SQLite database is created and migrated on startup.
 
@@ -74,7 +77,7 @@ Logs: `journalctl --user -u cashflow`.
 
 ## Nightly backup
 
-Every night at 03:00 a user timer runs `deploy/cashflow-backup.sh`. It takes a consistent copy of the database, checks it with `PRAGMA integrity_check`, keeps it as `/path/to/cashflow/backups/finances_YYYY_MM_DD.db`, optionally copies the backups folder to an rclone remote you configured yourself (nothing is ever deleted there), and pings [healthchecks.io](https://healthchecks.io) only after a fully successful run.
+Every night at 03:00 (or at next boot, if the machine was off then) a user timer runs `deploy/cashflow-backup.sh`. It takes a consistent copy of the database, checks it with `PRAGMA integrity_check`, keeps it as `/path/to/cashflow/backups/finances_YYYY_MM_DD.db`, optionally copies the backups folder to an rclone remote you configured yourself (nothing is ever deleted there), and pings [healthchecks.io](https://healthchecks.io) only after a fully successful run.
 
 1. **Install the tools**:
 

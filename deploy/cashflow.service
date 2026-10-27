@@ -10,7 +10,7 @@ Description=Cashflow personal finance app
 [Service]
 Type=simple
 WorkingDirectory=/path/to/cashflow
-ExecStart=/path/to/cashflow/cashflow -addr 127.0.0.1:47613 -db /path/to/cashflow/finances.db
+ExecStart=/path/to/cashflow/cashflow -db /path/to/cashflow/finances.db
 Restart=on-failure
 RestartSec=5
 

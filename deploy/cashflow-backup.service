@@ -3,8 +3,6 @@
 
 [Unit]
 Description=Cashflow database backup
-Wants=network-online.target
-After=network-online.target
 
 [Service]
 Type=oneshot
