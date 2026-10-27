@@ -11,13 +11,13 @@ After=network-online.target
 
 [Service]
 Type=simple
-User=moneymanager
-Group=moneymanager
-# Creates /var/lib/moneymanager owned by the moneymanager user.
-StateDirectory=moneymanager
+User=cashflow
+Group=cashflow
+# Creates /var/lib/cashflow owned by the cashflow user.
+StateDirectory=cashflow
 StateDirectoryMode=0700
-WorkingDirectory=/var/lib/moneymanager
-ExecStart=/usr/local/bin/moneymanager -addr 127.0.0.1:47613 -db /var/lib/moneymanager/money_manager.db
+WorkingDirectory=/var/lib/cashflow
+ExecStart=/usr/local/bin/cashflow -addr 127.0.0.1:47613 -db /var/lib/cashflow/money_manager.db
 Restart=on-failure
 RestartSec=5
 

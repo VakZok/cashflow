@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 )
 
 // maxNameLen is the longest name of a list entry, in characters.

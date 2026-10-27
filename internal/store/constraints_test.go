@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 )
 
 // open returns a Store on a fresh database file plus a raw connection to the

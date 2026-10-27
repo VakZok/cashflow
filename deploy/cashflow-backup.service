@@ -6,13 +6,13 @@ After=network-online.target
 [Service]
 Type=oneshot
 # Must be the user the app runs as, so it can read the database (and its journal).
-User=moneymanager
-Group=moneymanager
-EnvironmentFile=/etc/moneymanager/backup.env
-ExecStart=/usr/local/bin/moneymanager-backup
+User=cashflow
+Group=cashflow
+EnvironmentFile=/etc/cashflow/backup.env
+ExecStart=/usr/local/bin/cashflow-backup
 
 # Hardening, as for the app. The whole file system is read-only, so the SSH key
-# in /etc/moneymanager and the host key in /etc/ssh/ssh_known_hosts stay
+# in /etc/cashflow and the host key in /etc/ssh/ssh_known_hosts stay
 # readable. Writable: the local backup folder (keep in sync with BACKUP_DIR in
 # the env file) and the database folder, which SQLite needs to recover a hot
 # journal left by a crashed app. The network stays available for rsync and the
@@ -22,4 +22,4 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true
-ReadWritePaths=/var/backups/moneymanager /var/lib/moneymanager
+ReadWritePaths=/var/backups/cashflow /var/lib/cashflow

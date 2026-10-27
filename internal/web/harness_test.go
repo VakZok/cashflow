@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/VakZok/money_manager_app/internal/web"
+	"github.com/VakZok/Cashflow/internal/web"
 )
 
 // fixedNow is the app's clock in tests.

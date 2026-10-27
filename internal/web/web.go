@@ -15,7 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 )
 
 //go:embed templates/*.html
@@ -31,7 +31,7 @@ type Config struct {
 	Now func() time.Time
 }
 
-// App is the Money Manager web application.
+// App is the Cashflow web application.
 type App struct {
 	store *store.Store
 	tmpl  *template.Template

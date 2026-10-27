@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/VakZok/money_manager_app/internal/store"
+	"github.com/VakZok/Cashflow/internal/store"
 )
 
 func repeatingEntry(t *testing.T, s *store.Store, typ, desc string, amount int64) store.RepeatingEntry {
