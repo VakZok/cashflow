@@ -38,39 +38,39 @@ go run ./cmd/seed -db test.db -months 3
 
 ## Deployment
 
-**Never expose the app publicly**; it has no login. By default, the app listens on `127.0.0.1`.
+**Never expose the app publicly**; it has no login. It listens on `127.0.0.1` only; how you reach it is up to you.
 
-1. **Build** on your machine. For a Raspberry Pi 4/5 (64-bit Pi OS):
+The app runs as your own user from your clone; if you want isolation, set up a dedicated service user yourself. Replace `/path/to/cashflow` below and in `deploy/cashflow.service` with the path of your clone.
 
-       CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o cashflow ./cmd/cashflow
+1. **Install Go** 1.26.5 or newer (the version in `go.mod`).
 
-   For x86-64 use `GOARCH=amd64` instead.
+2. **Build** in the clone:
 
-2. **Create a service user** on the host:
+       cd /path/to/cashflow
+       go build -o cashflow ./cmd/cashflow
 
-       sudo useradd --system --no-create-home --shell /usr/sbin/nologin cashflow
+3. **Install the user unit**:
 
-4. **Copy the binary and the unit** to the host and install them:
+       mkdir -p ~/.config/systemd/user
+       cp /path/to/cashflow/deploy/cashflow.service ~/.config/systemd/user/
 
-       scp cashflow deploy/cashflow.service <host>:
-       ssh <host>
-       sudo install -m 0755 cashflow /usr/local/bin/cashflow
-       sudo install -m 0644 cashflow.service /etc/systemd/system/cashflow.service
+4. **Start the app** and enable it at boot. systemd restarts it on failure:
 
-5. **Start the app** and enable it on boot. systemd restarts it on failure:
+       systemctl --user daemon-reload
+       systemctl --user enable --now cashflow
+       sudo loginctl enable-linger "$USER"
+       systemctl --user status cashflow
 
-       sudo systemctl daemon-reload
-       sudo systemctl enable --now cashflow
-       systemctl status cashflow
+   The database is `/path/to/cashflow/finances.db`; it is created and migrated on first start.
 
-   The database lives at `/var/lib/cashflow/money_manager.db` (set by `-db` in the unit); it is created and migrated on first start.
+Logs: `journalctl --user -u cashflow`.
 
-**Updating** (no continuous deployment, ADR 0005): build as in step 1, copy the binary over, then:
+**Updating**:
 
-    sudo install -m 0755 cashflow /usr/local/bin/cashflow
-    sudo systemctl restart cashflow
-
-Logs: `journalctl -u cashflow`.
+    cd /path/to/cashflow
+    git pull
+    go build -o cashflow ./cmd/cashflow
+    systemctl --user restart cashflow
 
 ## Nightly backup to the NAS
 

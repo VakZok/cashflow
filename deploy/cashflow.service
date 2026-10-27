@@ -1,32 +1,18 @@
-# systemd unit for the Cashflow app on a Linux host (Raspberry Pi or home VM).
-# Install: see "Deployment" in README.md.
+# systemd user unit for the Cashflow app. Install: see "Deployment" in README.md.
+# Replace /path/to/cashflow with the path of your clone.
 #
-# The app listens on localhost only. It is reached over Tailscale via
-# `tailscale serve`, never exposed publicly (ADR 0003).
+# The app listens on localhost only. Never expose it publicly; how you reach
+# it is up to you.
 
 [Unit]
 Description=Cashflow personal finance app
-Wants=network-online.target
-After=network-online.target
 
 [Service]
 Type=simple
-User=cashflow
-Group=cashflow
-# Creates /var/lib/cashflow owned by the cashflow user.
-StateDirectory=cashflow
-StateDirectoryMode=0700
-WorkingDirectory=/var/lib/cashflow
-ExecStart=/usr/local/bin/cashflow -addr 127.0.0.1:47613 -db /var/lib/cashflow/money_manager.db
+WorkingDirectory=/path/to/cashflow
+ExecStart=/path/to/cashflow/cashflow -addr 127.0.0.1:47613 -db /path/to/cashflow/finances.db
 Restart=on-failure
 RestartSec=5
 
-# Hardening: the app only needs to write its state directory.
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-PrivateTmp=true
-PrivateDevices=true
-
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
