@@ -184,6 +184,36 @@ func TestEveryProblemIsListedInOneRun(t *testing.T) {
 	}
 }
 
+// The driver turns values of a column declared DATE into time.Time; the
+// import must still see the stored YYYY-MM-DD text.
+func TestDateColumnDeclaredAsDate(t *testing.T) {
+	from := filepath.Join(t.TempDir(), "finances.db")
+	db, err := sql.Open("sqlite", from)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE transactions (date DATE, description TEXT, value INTEGER,
+		main_category TEXT, subcategory TEXT, type TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO transactions VALUES ('2024-03-01', 'Gehalt', 3200, 'Arbeit', 'Lohn', 'Einnahme')`); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+	to := newPath(t)
+
+	if problems, err := run(from, to); err != nil || len(problems) > 0 {
+		t.Fatalf("run: %v %q", err, problems)
+	}
+	rows, err := openNew(t, to).ListTransactions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Date != "2024-03-01" {
+		t.Errorf("rows = %+v, want one dated 2024-03-01", rows)
+	}
+}
+
 func TestExistingTargetIsRefused(t *testing.T) {
 	from := old(t, []any{"2024-03-01", "Gehalt", 3200, "Arbeit", "Lohn", "Einnahme"})
 	to := newPath(t)

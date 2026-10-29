@@ -86,7 +86,9 @@ func load(path string) (out []row, problems []string, err error) {
 	}
 	defer func() { _ = db.Close() }()
 
-	rs, err := db.Query(`SELECT rowid, date, description, value, main_category, subcategory, type
+	// CAST keeps the stored text: the driver turns a column declared DATE into
+	// time.Time, which would scan as RFC 3339.
+	rs, err := db.Query(`SELECT rowid, CAST(date AS TEXT), description, value, main_category, subcategory, type
 		FROM transactions ORDER BY rowid`)
 	if err != nil {
 		return nil, nil, err
