@@ -2,24 +2,24 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 )
 
-// postFrom POSTs a form as a browser would, sending the given Sec-Fetch-Site.
-func (ta *testApp) postFrom(site, path string, form url.Values) response {
-	ta.t.Helper()
-	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Sec-Fetch-Site", site)
-	return ta.do(req)
+// newCategory is the form that adds a category with the given name.
+func newCategory(name string) url.Values {
+	return url.Values{"list": {"category"}, "name": {name}}
+}
+
+// fetchSite is the request header a browser sends for a request from site.
+func fetchSite(site string) http.Header {
+	return http.Header{"Sec-Fetch-Site": {site}}
 }
 
 func TestACrossSiteWriteIsRejectedAndChangesNothing(t *testing.T) {
 	ta := newTestApp(t)
-	r := ta.postFrom("cross-site", "/categories", url.Values{"list": {"category"}, "name": {"Forged"}})
+	r := ta.postWithHeader("/categories", newCategory("Forged"), fetchSite("cross-site"))
 	if r.Status != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", r.Status)
 	}
@@ -34,8 +34,8 @@ func TestNoResponseCanBeFramed(t *testing.T) {
 		"page":                ta.get("/transactions"),
 		"static file":         ta.get("/static/chart.umd.js"),
 		"not found":           ta.get("/nope"),
-		"write":               ta.post("/categories", url.Values{"list": {"category"}, "name": {"Groceries"}}),
-		"rejected cross-site": ta.postFrom("cross-site", "/categories", url.Values{"list": {"category"}, "name": {"Forged"}}),
+		"write":               ta.post("/categories", newCategory("Groceries")),
+		"rejected cross-site": ta.postWithHeader("/categories", newCategory("Forged"), fetchSite("cross-site")),
 	}
 	for name, r := range responses {
 		if got := r.Header.Get("Content-Security-Policy"); got != "frame-ancestors 'none'" {
@@ -44,24 +44,20 @@ func TestNoResponseCanBeFramed(t *testing.T) {
 	}
 }
 
-func TestASameOriginWriteSucceeds(t *testing.T) {
-	ta := newTestApp(t)
-	r := ta.postFrom("same-origin", "/categories", url.Values{"list": {"category"}, "name": {"Groceries"}})
-	if r.Status != http.StatusSeeOther {
-		t.Fatalf("status = %d, want 303", r.Status)
-	}
-	if !strings.Contains(ta.get("/categories").Body, "Groceries") {
-		t.Error("a same-origin write did not add the category")
-	}
-}
-
-func TestAWriteWithoutBrowserFetchHeadersSucceeds(t *testing.T) {
-	ta := newTestApp(t)
-	r := ta.post("/categories", url.Values{"list": {"category"}, "name": {"Groceries"}})
-	if r.Status != http.StatusSeeOther {
-		t.Fatalf("status = %d, want 303", r.Status)
-	}
-	if !strings.Contains(ta.get("/categories").Body, "Groceries") {
-		t.Error("a write without fetch headers did not add the category")
+func TestAWriteNotFromAnotherSiteSucceeds(t *testing.T) {
+	for name, header := range map[string]http.Header{
+		"same-origin":             fetchSite("same-origin"),
+		"no browser fetch header": nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			ta := newTestApp(t)
+			r := ta.postWithHeader("/categories", newCategory("Groceries"), header)
+			if r.Status != http.StatusSeeOther {
+				t.Fatalf("status = %d, want 303", r.Status)
+			}
+			if !strings.Contains(ta.get("/categories").Body, "Groceries") {
+				t.Error("the write did not add the category")
+			}
+		})
 	}
 }

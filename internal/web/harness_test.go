@@ -83,7 +83,17 @@ func (ta *testApp) get(path string) response {
 
 func (ta *testApp) post(path string, form url.Values) response {
 	ta.t.Helper()
+	return ta.postWithHeader(path, form, nil)
+}
+
+// postWithHeader POSTs a form with extra request headers, such as the
+// Sec-Fetch-Site a browser sends.
+func (ta *testApp) postWithHeader(path string, form url.Values, header http.Header) response {
+	ta.t.Helper()
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	for k, vs := range header {
+		req.Header[k] = vs
+	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	return ta.do(req)
 }
