@@ -60,6 +60,7 @@ type response struct {
 	Status   int
 	Body     string
 	Location string
+	Header   http.Header
 }
 
 func (ta *testApp) do(req *http.Request) response {
@@ -72,7 +73,7 @@ func (ta *testApp) do(req *http.Request) response {
 	if err != nil {
 		ta.t.Fatalf("read body: %v", err)
 	}
-	return response{Status: res.StatusCode, Body: string(b), Location: res.Header.Get("Location")}
+	return response{Status: res.StatusCode, Body: string(b), Location: res.Header.Get("Location"), Header: res.Header}
 }
 
 func (ta *testApp) get(path string) response {
@@ -82,7 +83,17 @@ func (ta *testApp) get(path string) response {
 
 func (ta *testApp) post(path string, form url.Values) response {
 	ta.t.Helper()
+	return ta.postWithHeader(path, form, nil)
+}
+
+// postWithHeader POSTs a form with extra request headers, such as the
+// Sec-Fetch-Site a browser sends.
+func (ta *testApp) postWithHeader(path string, form url.Values, header http.Header) response {
+	ta.t.Helper()
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	for k, vs := range header {
+		req.Header[k] = vs
+	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	return ta.do(req)
 }

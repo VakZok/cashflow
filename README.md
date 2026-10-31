@@ -47,7 +47,7 @@ go run ./cmd/import -from finances.db -db new_finances.db
 
 ## Deployment
 
-**Never expose the app publicly**; it has no login. It listens on `127.0.0.1` only; how you reach it is up to you.
+**Never expose the app publicly**; it has no login. It listens on `127.0.0.1` only; how you reach it is up to you, but never make it reachable from the internet (e.g. `tailscale funnel`, or a port forward on your router): limit access to your own devices.
 
 The app runs as your own user from your clone; if you want isolation, set up a dedicated service user yourself. Replace `/path/to/cashflow` below and in `deploy/cashflow.service` with the path of your clone.
 

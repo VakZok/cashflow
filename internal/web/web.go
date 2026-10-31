@@ -37,6 +37,8 @@ type App struct {
 	tmpl  *template.Template
 	now   func() time.Time
 	mux   *http.ServeMux
+	// handler wraps mux; built once in New and served by Handler.
+	handler http.Handler
 }
 
 // New opens the database (migrating it) and builds the app.
@@ -67,11 +69,23 @@ func New(cfg Config) (*App, error) {
 	a.mux.HandleFunc("POST /categories/{id}/delete", a.deleteCategory)
 	a.mux.HandleFunc("GET /repeating", a.repeating)
 	a.mux.HandleFunc("POST /repeating", a.saveRepeating)
+	a.handler = protect(a.mux)
 	return a, nil
 }
 
+// protect rejects cross-origin writes and forbids framing of every response,
+// including rejections (ADR 0003: the access path does not cover other sites
+// open in the user's own browser).
+func protect(next http.Handler) http.Handler {
+	protected := http.NewCrossOriginProtection().Handler(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+		protected.ServeHTTP(w, r)
+	})
+}
+
 // Handler returns the HTTP handler serving the app.
-func (a *App) Handler() http.Handler { return a.mux }
+func (a *App) Handler() http.Handler { return a.handler }
 
 // Close releases the database.
 func (a *App) Close() error { return a.store.Close() }
