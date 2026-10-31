@@ -70,8 +70,12 @@ func New(cfg Config) (*App, error) {
 	return a, nil
 }
 
-// Handler returns the HTTP handler serving the app.
-func (a *App) Handler() http.Handler { return a.mux }
+// Handler returns the HTTP handler serving the app. It rejects cross-origin
+// writes (ADR 0003: the access path does not cover other sites open in the
+// user's own browser).
+func (a *App) Handler() http.Handler {
+	return http.NewCrossOriginProtection().Handler(a.mux)
+}
 
 // Close releases the database.
 func (a *App) Close() error { return a.store.Close() }
