@@ -33,10 +33,10 @@ It serves on http://127.0.0.1:47613.
 
 The SQLite database is created and migrated on startup.
 
-Dummy data for trying out the Report (refuses a non-empty database):
+Demo data ready for screenshots: every page, at phone width, shows one plausible person paid in euros in Germany. It fills whole months ending with the current one (12 by default, `-months` changes it), with every Type, a saved Repeating list and some seasonal one-offs. It refuses a database that already has transactions:
 
 ```zsh
-go run ./cmd/seed -db test.db -months 3
+go run ./cmd/seed -db test.db
 ```
 
 `cmd/import` is a one-time migration of an older `finances.db` (Einnahme/Ausgabe rows) into a new database, not part of the app. It writes nothing if any row breaks the app's rules and lists each problem instead:
