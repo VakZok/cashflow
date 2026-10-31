@@ -60,6 +60,7 @@ type response struct {
 	Status   int
 	Body     string
 	Location string
+	Header   http.Header
 }
 
 func (ta *testApp) do(req *http.Request) response {
@@ -72,7 +73,7 @@ func (ta *testApp) do(req *http.Request) response {
 	if err != nil {
 		ta.t.Fatalf("read body: %v", err)
 	}
-	return response{Status: res.StatusCode, Body: string(b), Location: res.Header.Get("Location")}
+	return response{Status: res.StatusCode, Body: string(b), Location: res.Header.Get("Location"), Header: res.Header}
 }
 
 func (ta *testApp) get(path string) response {

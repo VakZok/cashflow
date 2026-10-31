@@ -71,10 +71,14 @@ func New(cfg Config) (*App, error) {
 }
 
 // Handler returns the HTTP handler serving the app. It rejects cross-origin
-// writes (ADR 0003: the access path does not cover other sites open in the
-// user's own browser).
+// writes and forbids framing (ADR 0003: the access path does not cover other
+// sites open in the user's own browser).
 func (a *App) Handler() http.Handler {
-	return http.NewCrossOriginProtection().Handler(a.mux)
+	protected := http.NewCrossOriginProtection().Handler(a.mux)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+		protected.ServeHTTP(w, r)
+	})
 }
 
 // Close releases the database.

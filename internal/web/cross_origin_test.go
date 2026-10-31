@@ -28,6 +28,22 @@ func TestACrossSiteWriteIsRejectedAndChangesNothing(t *testing.T) {
 	}
 }
 
+func TestNoResponseCanBeFramed(t *testing.T) {
+	ta := newTestApp(t)
+	responses := map[string]response{
+		"page":                ta.get("/transactions"),
+		"static file":         ta.get("/static/chart.umd.js"),
+		"not found":           ta.get("/nope"),
+		"write":               ta.post("/categories", url.Values{"list": {"category"}, "name": {"Groceries"}}),
+		"rejected cross-site": ta.postFrom("cross-site", "/categories", url.Values{"list": {"category"}, "name": {"Forged"}}),
+	}
+	for name, r := range responses {
+		if got := r.Header.Get("Content-Security-Policy"); got != "frame-ancestors 'none'" {
+			t.Errorf("%s: Content-Security-Policy = %q, want frame-ancestors 'none'", name, got)
+		}
+	}
+}
+
 func TestASameOriginWriteSucceeds(t *testing.T) {
 	ta := newTestApp(t)
 	r := ta.postFrom("same-origin", "/categories", url.Values{"list": {"category"}, "name": {"Groceries"}})
