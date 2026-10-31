@@ -2,6 +2,10 @@
 
 Personal finance manager. Purposefully simple.
 
+| Repeating | Add | Transactions | Report | Categories |
+| --- | --- | --- | --- | --- |
+| <img src="assets/01_repeating.png" width="160" alt="Repeating page"> | <img src="assets/02_add.png" width="160" alt="Add page"> | <img src="assets/03_transactions.png" width="160" alt="Transactions page"> | <img src="assets/04_report.png" width="160" alt="Report page"> | <img src="assets/05_categories.png" width="160" alt="Categories page"> |
+
 ## Features
 
 - Track your income, expense, levy, rebate, investment, and divestment
@@ -73,6 +77,12 @@ The app runs as your own user from your clone; if you want isolation, set up a d
    The database is `/path/to/cashflow/finances.db`; it is created and migrated on first start.
 
 Logs: `journalctl --user -u cashflow`.
+
+**Changing the unit** (e.g. a wrong path): edit it in place, then restart. `cat` shows what systemd actually runs:
+
+    systemctl --user edit --full cashflow
+    systemctl --user restart cashflow
+    systemctl --user cat cashflow
 
 **Updating**:
 
