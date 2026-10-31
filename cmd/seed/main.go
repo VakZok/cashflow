@@ -13,10 +13,11 @@ import (
 	"github.com/VakZok/Cashflow/internal/store"
 )
 
-// entry is a Transaction without its date. cat and sub name a Category and
-// Subcategory for Income and Expense, a Levy Category and Levy Subcategory for
-// Levy and Rebate; holding names the Holding of an Investment or Divestment.
-type entry struct {
+// row is a Transaction to book on a day of a month. cat and sub name a
+// Category and Subcategory for Income and Expense, a Levy Category and Levy
+// Subcategory for Levy and Rebate; holding names the Holding of an Investment
+// or Divestment.
+type row struct {
 	typ      string
 	day      int   // day of the month, at most 28 so every month has it
 	amount   int64 // whole euros
@@ -26,20 +27,24 @@ type entry struct {
 	holding  string
 }
 
-func income(day int, amount, step int64, desc, cat, sub string) entry {
-	return entry{typ: store.TypeIncome, day: day, amount: amount, step: step, desc: desc, cat: cat, sub: sub}
+func income(day int, amount, step int64, desc, cat, sub string) row {
+	return row{typ: store.TypeIncome, day: day, amount: amount, step: step, desc: desc, cat: cat, sub: sub}
 }
 
-func expense(day int, amount, step int64, desc, cat, sub string) entry {
-	return entry{typ: store.TypeExpense, day: day, amount: amount, step: step, desc: desc, cat: cat, sub: sub}
+func expense(day int, amount, step int64, desc, cat, sub string) row {
+	return row{typ: store.TypeExpense, day: day, amount: amount, step: step, desc: desc, cat: cat, sub: sub}
 }
 
-func levy(day int, amount int64, desc, cat, sub string) entry {
-	return entry{typ: store.TypeLevy, day: day, amount: amount, desc: desc, cat: cat, sub: sub}
+func levy(day int, amount int64, desc, cat, sub string) row {
+	return row{typ: store.TypeLevy, day: day, amount: amount, desc: desc, cat: cat, sub: sub}
 }
 
-func invest(typ string, day int, amount int64, holding string) entry {
-	return entry{typ: typ, day: day, amount: amount, holding: holding}
+func rebate(day int, amount int64, desc, cat, sub string) row {
+	return row{typ: store.TypeRebate, day: day, amount: amount, desc: desc, cat: cat, sub: sub}
+}
+
+func invest(typ string, day int, amount int64, holding string) row {
+	return row{typ: typ, day: day, amount: amount, holding: holding}
 }
 
 // Booked every month.
@@ -51,7 +56,7 @@ var (
 	wageTax  = levy(27, 560, "Wage tax", "Income tax", "Payroll")
 )
 
-var monthly = []entry{
+var monthly = []row{
 	salary,
 	income(28, 6, 2, "Savings interest", "Other", "Interest"),
 
@@ -84,39 +89,40 @@ var monthly = []entry{
 }
 
 // repeating is the saved Repeating list.
-var repeating = []entry{salary, rent, netflix, worldETF, wageTax}
+var repeating = []row{salary, rent, netflix, worldETF, wageTax}
 
 // seasonal returns the one-offs of a month.
-func seasonal(year int, month time.Month) []entry {
+func seasonal(year int, month time.Month) []row {
 	switch month {
 	case time.March:
-		return []entry{expense(8, 120, 0, "Spring jacket", "Shopping", "Clothing")}
+		return []row{expense(8, 120, 0, "Spring jacket", "Shopping", "Clothing")}
 	case time.June:
 		// A Divestment with its profit booked as Income (ADR 0002) and the
 		// Levies taken off that profit before it arrived.
-		return []entry{
+		return []row{
 			invest(store.TypeDivestment, 20, 600, "World ETF"),
-			income(20, 140, 0, "World ETF sale profit", "Investments", "Capital gains"),
+			income(20, 140, 0, "World ETF profit", "Investments", "Capital gains"),
 			levy(20, 45, "Capital gains tax", "Income tax", "Capital gains"),
 			levy(20, 2, "Solidarity surcharge", "Solidarity surcharge", "Capital gains"),
 		}
 	case time.July:
 		// A Rebate and the Income that carries its money.
 		desc := fmt.Sprintf("Tax refund %d", year-1)
-		return []entry{
-			{typ: store.TypeRebate, day: 14, amount: 640, desc: desc, cat: "Income tax", sub: "Tax return"},
+		return []row{
+			rebate(14, 640, desc, "Income tax", "Tax return"),
 			income(14, 640, 0, desc, "Other", "Tax refund"),
 		}
 	case time.August:
-		return []entry{
+		return []row{
 			expense(1, 320, 0, "Flights to Lisbon", "Travel", "Holiday"),
 			expense(10, 1150, 0, "Summer holiday", "Travel", "Holiday"),
 		}
 	case time.November:
-		return []entry{expense(24, 180, 0, "Winter boots", "Shopping", "Clothing")}
+		return []row{expense(24, 180, 0, "Winter boots", "Shopping", "Clothing")}
 	case time.December:
-		return []entry{
+		return []row{
 			income(27, 1200, 0, "Christmas bonus", "Work", "Bonus"),
+			levy(27, 520, "Wage tax on bonus", "Income tax", "Payroll"),
 			expense(12, 340, 0, "Christmas gifts", "Gifts", "Christmas"),
 			expense(23, 95, 0, "Christmas dinner", "Food", "Restaurants"),
 		}
@@ -162,14 +168,15 @@ func run(dbPath string, months int, today time.Time) (int, error) {
 	for m := months - 1; m >= 0; m-- {
 		month := time.Date(today.Year(), today.Month()-time.Month(m), 1, 0, 0, 0, 0, time.UTC)
 		k := int64(month.Year()*12 + int(month.Month()))
-		entries := append(append([]entry(nil), monthly...), seasonal(month.Year(), month.Month())...)
-		for _, e := range entries {
+		rows := append(append([]row(nil), monthly...), seasonal(month.Year(), month.Month())...)
+		for _, e := range rows {
 			t, err := resolve(s, e)
 			if err != nil {
 				return n, err
 			}
 			t.Date = month.AddDate(0, 0, e.day-1).Format("2006-01-02")
-			// A simple deterministic wobble so months differ.
+			// Add 0 to 4 steps so months differ; k*7 walks through all
+			// remainders of 5, and the day shifts the pattern per row.
 			t.Amount = e.amount + e.step*((k*7+int64(e.day))%5)
 			if _, err := s.AddTransaction(t); err != nil {
 				return n, fmt.Errorf("%s %s %q: %w", t.Date, e.typ, e.desc+e.holding, err)
@@ -193,7 +200,7 @@ func run(dbPath string, months int, today time.Time) (int, error) {
 
 // resolve turns e into a Transaction without date and amount, creating the
 // list entries it names.
-func resolve(s *store.Store, e entry) (store.NewTransaction, error) {
+func resolve(s *store.Store, e row) (store.NewTransaction, error) {
 	t := store.NewTransaction{Type: e.typ, Description: e.desc}
 	spec, ok := store.SpecFor(e.typ)
 	if !ok {

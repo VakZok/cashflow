@@ -73,8 +73,8 @@ func TestSeedDefaultLength(t *testing.T) {
 				t.Errorf("%s list has %d entries (err %v), want some", l.Label, n, err)
 			}
 		}
-		if holdings, _ := s.CountNamed(store.HoldingList); holdings < 2 || holdings > 3 {
-			t.Errorf("%d Holdings, want 2 or 3", holdings)
+		if holdings, err := s.CountNamed(store.HoldingList); err != nil || holdings != 3 {
+			t.Errorf("%d Holdings (err %v), want 3", holdings, err)
 		}
 	})
 
@@ -83,8 +83,8 @@ func TestSeedDefaultLength(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(entries) < 4 || len(entries) > 6 {
-			t.Fatalf("Repeating list has %d entries, want about 5", len(entries))
+		if len(entries) != 5 {
+			t.Fatalf("Repeating list has %d entries, want 5", len(entries))
 		}
 		seen := map[string]bool{}
 		for _, e := range entries {
@@ -128,11 +128,14 @@ func TestSeedMonthsFlagOverridesTheLength(t *testing.T) {
 func TestSeedRefusesANonEmptyDatabase(t *testing.T) {
 	t.Parallel()
 	s, path := seeded(t, 1)
-	before, _ := s.CountTransactions(store.Filter{})
+	before, err := s.CountTransactions(store.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := run(path, 1, today); err == nil {
 		t.Fatal("second seed succeeded, want it refused")
 	}
-	if after, _ := s.CountTransactions(store.Filter{}); after != before {
-		t.Errorf("refused seed changed the Transactions: %d before, %d after", before, after)
+	if after, err := s.CountTransactions(store.Filter{}); err != nil || after != before {
+		t.Errorf("refused seed changed the Transactions: %d before, %d after (err %v)", before, after, err)
 	}
 }
