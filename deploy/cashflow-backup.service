@@ -1,5 +1,5 @@
-# systemd user unit for the Cashflow backup. Install: see "Nightly backup" in
-# README.md. Replace /path/to/cashflow with the path of your clone.
+# systemd user unit for the Cashflow backup. Install (untested): see
+# deploy/BACKUP.md. Replace /path/to/cashflow with the path of your clone.
 
 [Unit]
 Description=Cashflow database backup

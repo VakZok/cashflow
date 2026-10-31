@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Nightly backup of the Cashflow database. Install: see "Nightly backup" in
-# README.md.
+# Nightly backup of the Cashflow database. Install (untested): see
+# deploy/BACKUP.md.
 #
 # 1. Take a consistent copy of the live database with SQLite's online backup.
 # 2. Check the copy with PRAGMA integrity_check; anything but "ok" fails the run.

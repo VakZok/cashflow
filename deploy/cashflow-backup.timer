@@ -1,5 +1,5 @@
-# systemd user timer for the Cashflow backup. Install: see "Nightly backup" in
-# README.md.
+# systemd user timer for the Cashflow backup. Install (untested): see
+# deploy/BACKUP.md.
 
 [Unit]
 Description=Run the Cashflow database backup nightly at 03:00
