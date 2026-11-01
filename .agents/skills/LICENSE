@@ -1,6 +1,3 @@
-The skills in this folder come from https://github.com/mattpocock/skills (mattpocock/skills).
-The `pr` skill also borrows Apache-2.0 content from humanlayer; see pr/CREDITS.md.
-
 MIT License
 
 Copyright (c) 2026 Matt Pocock
@@ -22,3 +19,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+Source: the skills in this folder come from https://github.com/mattpocock/skills (mattpocock/skills).
+The `pr` skill also borrows Apache-2.0 content from humanlayer; see pr/CREDITS.md.
