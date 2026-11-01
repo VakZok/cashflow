@@ -2,8 +2,6 @@
 
 Personal finance manager. Purposefully simple.
 
-This is a personal tool: issues and pull requests may not be reviewed or accepted.
-
 | Repeating | Add | Transactions | Report | Categories |
 | --- | --- | --- | --- | --- |
 | <img src="assets/01_repeating.png" width="160" alt="Repeating page"> | <img src="assets/02_add.png" width="160" alt="Add page"> | <img src="assets/03_transactions.png" width="160" alt="Transactions page"> | <img src="assets/04_report.png" width="160" alt="Report page"> | <img src="assets/05_categories.png" width="160" alt="Categories page"> |
@@ -100,6 +98,10 @@ An automated nightly backup with integrity check and alerting is in [`deploy/BAC
 ## Known limitations
 
 - Search only ignores case for ASCII letters: "a" matches "A", but "ä" does not match "Ä".
+
+## Contributions
+
+This is a personal tool: issues and pull requests may not be reviewed or accepted.
 
 ## License
 
