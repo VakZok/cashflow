@@ -1,6 +1,6 @@
 # Cashflow
 
-Personal finance manager. Purposefully simple. Built for one person paid in euros.
+Personal finance manager. Purposefully simple.
 
 This is a personal tool: issues are welcome, but pull requests may not be accepted.
 
@@ -101,6 +101,6 @@ An automated nightly backup with integrity check and alerting is in [`deploy/BAC
 
 - Search only ignores case for ASCII letters: "a" matches "A", but "ä" does not match "Ä".
 
-## Licence
+## License
 
-MIT, see [`LICENSE`](LICENSE). The vendored agent skills in `.agents/skills` come from [mattpocock/skills](https://github.com/mattpocock/skills) under their own MIT licence, see [`.agents/skills/LICENSE`](.agents/skills/LICENSE).
+MIT, see [`LICENSE`](LICENSE). The vendored agent skills in `.agents/skills` come from [mattpocock/skills](https://github.com/mattpocock/skills) under their own MIT license, see [`.agents/skills/LICENSE`](.agents/skills/LICENSE).
