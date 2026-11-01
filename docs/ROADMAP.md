@@ -18,6 +18,5 @@
 - Reassign all Transactions and Repeating entries of one Category, Subcategory, Levy Category, Levy Subcategory or Holding to another of the same list in one step, which also serves as merging two entries. For now an entry in use cannot be deleted and its Transactions are edited one by one.
 - Tags (filter-only, never summed).
 - Budgeting and forecasting.
-- One-off import script for existing Income and Expense history (`date, description, value, main_category, subcategory, type`).
 - Installable home-screen app (PWA).
 - Named accounts.

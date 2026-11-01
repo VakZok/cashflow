@@ -1,6 +1,8 @@
 # Cashflow
 
-Personal finance manager. Purposefully simple.
+Personal finance manager. Purposefully simple. Built for one person paid in euros.
+
+This is a personal tool: issues are welcome, but pull requests may not be accepted.
 
 | Repeating | Add | Transactions | Report | Categories |
 | --- | --- | --- | --- | --- |
@@ -41,12 +43,6 @@ Demo data ready for screenshots: every page, at phone width, shows one plausible
 
 ```zsh
 go run ./cmd/seed -db test.db
-```
-
-`cmd/import` is a one-time migration of an older `finances.db` (Einnahme/Ausgabe rows) into a new database, not part of the app. It writes nothing if any row breaks the app's rules and lists each problem instead:
-
-```zsh
-go run ./cmd/import -from finances.db -db new_finances.db
 ```
 
 ## Deployment
@@ -104,3 +100,7 @@ An automated nightly backup with integrity check and alerting is in [`deploy/BAC
 ## Known limitations
 
 - Search only ignores case for ASCII letters: "a" matches "A", but "ä" does not match "Ä".
+
+## Licence
+
+MIT, see [`LICENSE`](LICENSE). The vendored agent skills in `.agents/skills` come from [mattpocock/skills](https://github.com/mattpocock/skills) under their own MIT licence, see [`.agents/skills/LICENSE`](.agents/skills/LICENSE).
