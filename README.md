@@ -2,7 +2,7 @@
 
 Personal finance manager. Purposefully simple.
 
-This is a personal tool: issues are welcome, but pull requests may not be accepted.
+This is a personal tool: issues and pull requests may not be reviewed or accepted.
 
 | Repeating | Add | Transactions | Report | Categories |
 | --- | --- | --- | --- | --- |
